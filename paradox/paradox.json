@@ -1,0 +1,149 @@
+{
+  "packageName": "@ankhorage/renovate",
+  "packageId": "@ankhorage/renovate",
+  "description": "Ankhorage dependency update policy and automation powered by Renovate.",
+  "collaborators": null,
+  "donation": null,
+  "badges": [
+    {
+      "id": "license",
+      "label": "license",
+      "value": "MIT",
+      "color": "2563eb"
+    },
+    {
+      "id": "npm",
+      "label": "npm",
+      "value": "v0.0.0",
+      "color": "cb3837"
+    },
+    {
+      "id": "runtime",
+      "label": "runtime",
+      "value": "bun",
+      "color": "f59e0b"
+    },
+    {
+      "id": "typescript",
+      "label": "typescript",
+      "value": "strict",
+      "color": "2563eb"
+    },
+    {
+      "id": "eslint",
+      "label": "eslint",
+      "value": "checked",
+      "color": "0a7f3f"
+    },
+    {
+      "id": "prettier",
+      "label": "prettier",
+      "value": "checked",
+      "color": "0a7f3f"
+    },
+    {
+      "id": "build",
+      "label": "build",
+      "value": "checked",
+      "color": "0a7f3f"
+    },
+    {
+      "id": "tests",
+      "label": "tests",
+      "value": "checked",
+      "color": "0a7f3f"
+    },
+    {
+      "id": "docs",
+      "label": "docs",
+      "value": "paradox",
+      "color": "0f766e"
+    }
+  ],
+  "usage": null,
+  "readmeUsageDescription": "Extend the repository-hosted preset from each Ankhorage repository that Renovate manages.",
+  "readmeUsage": [
+    {
+      "title": "Repository configuration",
+      "description": "Repository configuration\n\nLoads the canonical Ankhorage dependency-update policy from its default branch.",
+      "language": "",
+      "code": "{\n  $schema: 'https://docs.renovatebot.com/renovate-schema.json',\n  extends: ['github>ankhorage/renovate'],\n}",
+      "sourcePath": "examples/renovate.json5"
+    }
+  ],
+  "readmeCli": null,
+  "readmeConfig": null,
+  "config": null,
+  "entrypoints": [
+    "src/index.ts"
+  ],
+  "modules": [
+    {
+      "path": "src/config/default.test.ts",
+      "isEntrypoint": false,
+      "dependencies": [],
+      "exports": []
+    },
+    {
+      "path": "src/index.test.ts",
+      "isEntrypoint": false,
+      "dependencies": [
+        "src/index.ts"
+      ],
+      "exports": []
+    },
+    {
+      "path": "src/index.ts",
+      "isEntrypoint": true,
+      "dependencies": [],
+      "exports": []
+    }
+  ],
+  "exports": [],
+  "components": [],
+  "sourceFunctions": [],
+  "sequenceScenarios": [],
+  "graphs": {
+    "imports": [
+      {
+        "fromPath": "src/index.test.ts",
+        "toPath": "src/index.ts",
+        "sourcePath": "src/index.test.ts"
+      }
+    ],
+    "calls": [
+      {
+        "fromSymbol": "src/index.test.ts",
+        "toSymbol": "test",
+        "callExpression": "test",
+        "sourcePath": "src/index.test.ts"
+      },
+      {
+        "fromSymbol": "src/index.test.ts",
+        "toSymbol": "expect",
+        "callExpression": "expect",
+        "sourcePath": "src/index.test.ts"
+      },
+      {
+        "fromSymbol": "src/config/default.test.ts",
+        "toSymbol": "readFileSync",
+        "callExpression": "readFileSync",
+        "sourcePath": "src/config/default.test.ts"
+      },
+      {
+        "fromSymbol": "src/config/default.test.ts",
+        "toSymbol": "test",
+        "callExpression": "test",
+        "sourcePath": "src/config/default.test.ts"
+      },
+      {
+        "fromSymbol": "src/config/default.test.ts",
+        "toSymbol": "expect",
+        "callExpression": "expect",
+        "sourcePath": "src/config/default.test.ts"
+      }
+    ],
+    "typeReferences": [],
+    "componentComposition": []
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": ["Canonical dependency update policy for Ankhorage repositories."],
+  "extends": ["config:recommended", ":dependencyDashboard"],
+  "labels": ["dependencies"],
+  "packageRules": [
+    {
+      "description": "Group Ankhorage package updates and preserve compatible ranges.",
+      "matchDatasources": ["npm"],
+      "matchPackageNames": ["@ankhorage/**"],
+      "groupName": "Ankhorage packages",
+      "rangeStrategy": "update-lockfile"
+    }
+  ]
+}
