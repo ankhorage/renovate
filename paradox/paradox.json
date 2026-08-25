@@ -79,7 +79,7 @@
   ],
   "modules": [
     {
-      "path": "src/config/default.test.ts",
+      "path": "src/default.test.ts",
       "isEntrypoint": false,
       "dependencies": [],
       "exports": []
@@ -113,34 +113,34 @@
     ],
     "calls": [
       {
-        "fromSymbol": "src/index.test.ts",
-        "toSymbol": "test",
-        "callExpression": "test",
-        "sourcePath": "src/index.test.ts"
-      },
-      {
-        "fromSymbol": "src/index.test.ts",
-        "toSymbol": "expect",
-        "callExpression": "expect",
-        "sourcePath": "src/index.test.ts"
-      },
-      {
-        "fromSymbol": "src/config/default.test.ts",
+        "fromSymbol": "src/default.test.ts",
         "toSymbol": "readFileSync",
         "callExpression": "readFileSync",
-        "sourcePath": "src/config/default.test.ts"
+        "sourcePath": "src/default.test.ts"
       },
       {
-        "fromSymbol": "src/config/default.test.ts",
+        "fromSymbol": "src/default.test.ts",
         "toSymbol": "test",
         "callExpression": "test",
-        "sourcePath": "src/config/default.test.ts"
+        "sourcePath": "src/default.test.ts"
       },
       {
-        "fromSymbol": "src/config/default.test.ts",
+        "fromSymbol": "src/default.test.ts",
         "toSymbol": "expect",
         "callExpression": "expect",
-        "sourcePath": "src/config/default.test.ts"
+        "sourcePath": "src/default.test.ts"
+      },
+      {
+        "fromSymbol": "src/index.test.ts",
+        "toSymbol": "test",
+        "callExpression": "test",
+        "sourcePath": "src/index.test.ts"
+      },
+      {
+        "fromSymbol": "src/index.test.ts",
+        "toSymbol": "expect",
+        "callExpression": "expect",
+        "sourcePath": "src/index.test.ts"
       }
     ],
     "typeReferences": [],
