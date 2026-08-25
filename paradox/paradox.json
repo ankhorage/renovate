@@ -79,6 +79,12 @@
   ],
   "modules": [
     {
+      "path": "src/changeset-workflow.test.ts",
+      "isEntrypoint": false,
+      "dependencies": [],
+      "exports": []
+    },
+    {
       "path": "src/default.test.ts",
       "isEntrypoint": false,
       "dependencies": [],
@@ -112,6 +118,24 @@
       }
     ],
     "calls": [
+      {
+        "fromSymbol": "src/changeset-workflow.test.ts",
+        "toSymbol": "readFileSync",
+        "callExpression": "readFileSync",
+        "sourcePath": "src/changeset-workflow.test.ts"
+      },
+      {
+        "fromSymbol": "src/changeset-workflow.test.ts",
+        "toSymbol": "test",
+        "callExpression": "test",
+        "sourcePath": "src/changeset-workflow.test.ts"
+      },
+      {
+        "fromSymbol": "src/changeset-workflow.test.ts",
+        "toSymbol": "expect",
+        "callExpression": "expect",
+        "sourcePath": "src/changeset-workflow.test.ts"
+      },
       {
         "fromSymbol": "src/default.test.ts",
         "toSymbol": "readFileSync",

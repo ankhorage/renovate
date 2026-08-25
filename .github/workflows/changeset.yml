@@ -1,0 +1,87 @@
+name: Add Renovate Changeset
+
+on:
+  workflow_call:
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: read
+
+jobs:
+  changeset:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add Changeset and dispatch CI
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const pullNumber = context.payload.pull_request?.number;
+            if (!pullNumber || context.actor !== 'renovate[bot]') {
+              core.setFailed('This workflow only accepts Renovate pull requests.');
+              return;
+            }
+
+            const { owner, repo } = context.repo;
+            const { data: pull } = await github.rest.pulls.get({
+              owner,
+              repo,
+              pull_number: pullNumber,
+            });
+            if (pull.head.repo?.full_name !== `${owner}/${repo}` || !pull.head.ref.startsWith('renovate/')) {
+              core.setFailed('The Renovate branch must belong to the target repository.');
+              return;
+            }
+
+            const readManifest = async (ref) => {
+              const { data } = await github.rest.repos.getContent({ owner, repo, path: 'package.json', ref });
+              if (Array.isArray(data) || data.type !== 'file' || !data.content) {
+                throw new Error('package.json is not a readable file.');
+              }
+              return JSON.parse(Buffer.from(data.content, 'base64').toString('utf8'));
+            };
+            const base = await readManifest(pull.base.sha);
+            const head = await readManifest(pull.head.sha);
+            const releaseSections = ['dependencies', 'optionalDependencies', 'peerDependencies'];
+            const allSections = [...releaseSections, 'devDependencies'];
+            const changed = allSections.flatMap((section) => {
+              const names = new Set([...Object.keys(base[section] ?? {}), ...Object.keys(head[section] ?? {})]);
+              return [...names].filter((name) => name.startsWith('@ankhorage/') && base[section]?.[name] !== head[section]?.[name]).map((name) => ({ name, section }));
+            });
+            if (changed.length === 0) {
+              core.info('No Ankhorage dependency update found.');
+              return;
+            }
+
+            const release = !head.private && typeof head.name === 'string' && changed.some(({ section }) => releaseSections.includes(section));
+            const frontmatter = release ? `---\n'${head.name}': patch\n---` : '---\n---';
+            const names = [...new Set(changed.map(({ name }) => `\`${name}\``))].sort().join(', ');
+            const content = `${frontmatter}\n\nUpdate Ankhorage dependencies: ${names}.\n`;
+            const path = `.changeset/renovate-${pullNumber}.md`;
+            let current;
+            try {
+              const response = await github.rest.repos.getContent({ owner, repo, path, ref: pull.head.ref });
+              if (!Array.isArray(response.data) && response.data.type === 'file') current = response.data;
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
+            if (current?.content && Buffer.from(current.content, 'base64').toString('utf8') === content) {
+              core.info('Changeset is already current.');
+              return;
+            }
+
+            await github.rest.repos.createOrUpdateFileContents({
+              owner,
+              repo,
+              path,
+              branch: pull.head.ref,
+              message: 'chore: add changeset for Ankhorage updates',
+              content: Buffer.from(content).toString('base64'),
+              sha: current?.sha,
+            });
+            await github.rest.actions.createWorkflowDispatch({
+              owner,
+              repo,
+              workflow_id: 'ci.yml',
+              ref: pull.head.ref,
+            });

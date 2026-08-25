@@ -2,6 +2,7 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "description": ["Canonical dependency update policy for Ankhorage repositories."],
   "extends": ["config:recommended", ":dependencyDashboard"],
+  "gitIgnoredAuthors": ["41898282+github-actions[bot]@users.noreply.github.com"],
   "labels": ["dependencies"],
   "packageRules": [
     {
@@ -9,7 +10,10 @@
       "matchDatasources": ["npm"],
       "matchPackageNames": ["@ankhorage/**"],
       "groupName": "Ankhorage packages",
-      "rangeStrategy": "bump"
+      "rangeStrategy": "bump",
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": false
     }
   ]
 }

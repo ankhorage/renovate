@@ -9,12 +9,16 @@ const preset = JSON.parse(
 test('publishes the canonical Ankhorage preset at the repository root', () => {
   expect(preset).toMatchObject({
     extends: ['config:recommended', ':dependencyDashboard'],
+    gitIgnoredAuthors: ['41898282+github-actions[bot]@users.noreply.github.com'],
     labels: ['dependencies'],
     packageRules: [
       {
+        automerge: true,
+        automergeType: 'pr',
         groupName: 'Ankhorage packages',
         matchDatasources: ['npm'],
         matchPackageNames: ['@ankhorage/**'],
+        platformAutomerge: false,
         rangeStrategy: 'bump',
       },
     ],

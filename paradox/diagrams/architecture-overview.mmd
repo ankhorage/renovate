@@ -2,6 +2,8 @@ graph TD
   package__ankhorage_renovate["@ankhorage/renovate"]
   entrypoint_src_index_ts["src/index.ts"]
   package__ankhorage_renovate --> entrypoint_src_index_ts
+  module_src_changeset_workflow_test_ts["src/changeset-workflow.test.ts"]
+  package__ankhorage_renovate -.-> module_src_changeset_workflow_test_ts
   module_src_default_test_ts["src/default.test.ts"]
   package__ankhorage_renovate -.-> module_src_default_test_ts
   module_src_index_test_ts["src/index.test.ts"]
