@@ -15,7 +15,7 @@ test('publishes the canonical Ankhorage preset at the repository root', () => {
         groupName: 'Ankhorage packages',
         matchDatasources: ['npm'],
         matchPackageNames: ['@ankhorage/**'],
-        rangeStrategy: 'update-lockfile',
+        rangeStrategy: 'bump',
       },
     ],
   });

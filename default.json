@@ -5,11 +5,11 @@
   "labels": ["dependencies"],
   "packageRules": [
     {
-      "description": "Group Ankhorage package updates and preserve compatible ranges.",
+      "description": "Group Ankhorage package updates and propagate every release downstream.",
       "matchDatasources": ["npm"],
       "matchPackageNames": ["@ankhorage/**"],
       "groupName": "Ankhorage packages",
-      "rangeStrategy": "update-lockfile"
+      "rangeStrategy": "bump"
     }
   ]
 }
