@@ -11,11 +11,12 @@
       "enabled": false
     },
     {
-      "description": "Group Ankhorage package updates and propagate every release downstream.",
+      "description": "Group Ankhorage library updates and propagate every release downstream.",
       "matchDatasources": ["npm"],
       "matchPackageNames": ["@ankhorage/**"],
       "enabled": true,
-      "groupName": "Ankhorage packages",
+      "groupName": "Ankhorage libraries",
+      "groupSlug": "ankhorage-libraries",
       "rangeStrategy": "bump",
       "automerge": true,
       "automergeType": "pr",
@@ -27,6 +28,7 @@
       "matchPackageNames": ["@ankhorage/ankh", "@ankhorage/devtools"],
       "enabled": true,
       "groupName": "Ankhorage CLI and Devtools toolchain",
+      "groupSlug": "ankhorage-cli-and-devtools-toolchain",
       "rangeStrategy": "bump",
       "automerge": true,
       "automergeType": "pr",

@@ -16,6 +16,7 @@ interface PackageRule {
   readonly description: string;
   readonly enabled?: boolean;
   readonly groupName?: string;
+  readonly groupSlug?: string;
   readonly matchDatasources?: readonly string[];
   readonly matchFileNames?: readonly string[];
   readonly matchManagers?: readonly string[];
@@ -56,7 +57,8 @@ describe('consumer preset', () => {
     ).toMatchObject({
       automerge: true,
       enabled: true,
-      groupName: 'Ankhorage packages',
+      groupName: 'Ankhorage libraries',
+      groupSlug: 'ankhorage-libraries',
       rangeStrategy: 'bump',
     });
   });
@@ -68,10 +70,28 @@ describe('consumer preset', () => {
         automergeType: 'pr',
         enabled: true,
         groupName: 'Ankhorage CLI and Devtools toolchain',
+        groupSlug: 'ankhorage-cli-and-devtools-toolchain',
         platformAutomerge: false,
         rangeStrategy: 'bump',
       });
     }
+  });
+});
+
+describe('consumer policy migration', () => {
+  test('replaces the closed pre-split group with distinct clean branch identities', () => {
+    const closedPreSplitBranch = 'renovate/ankhorage-packages';
+    const replacementBranches = [
+      branchName(resolveRules(consumerPreset.packageRules, dependency('@ankhorage/paradox'))),
+      branchName(resolveRules(consumerPreset.packageRules, dependency('@ankhorage/devtools'))),
+    ];
+
+    expect(replacementBranches).toEqual([
+      'renovate/ankhorage-libraries',
+      'renovate/ankhorage-cli-and-devtools-toolchain',
+    ]);
+    expect(replacementBranches).not.toContain(closedPreSplitBranch);
+    expect(new Set(replacementBranches).size).toBe(replacementBranches.length);
   });
 });
 
@@ -163,6 +183,13 @@ function dependency(packageName: string, overrides: Partial<Dependency> = {}): D
   };
 }
 
+function branchName(rule: Partial<PackageRule>): string {
+  if (typeof rule.groupSlug !== 'string') {
+    throw new Error('Grouped policy rules must declare a stable branch identity.');
+  }
+  return 'renovate/' + rule.groupSlug;
+}
+
 function matchesRule(rule: PackageRule, candidate: Dependency): boolean {
   return (
     matches(rule.matchDatasources, candidate.datasource) &&
@@ -197,6 +224,7 @@ function resolveRules(rules: readonly PackageRule[], candidate: Dependency): Par
         ...(rule.automergeType === undefined ? {} : { automergeType: rule.automergeType }),
         ...(rule.enabled === undefined ? {} : { enabled: rule.enabled }),
         ...(rule.groupName === undefined ? {} : { groupName: rule.groupName }),
+        ...(rule.groupSlug === undefined ? {} : { groupSlug: rule.groupSlug }),
         ...(rule.platformAutomerge === undefined
           ? {}
           : { platformAutomerge: rule.platformAutomerge }),
