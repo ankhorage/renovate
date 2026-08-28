@@ -15,7 +15,11 @@ Extend the repository-hosted preset from each Ankhorage repository that Renovate
 
 Loads the owner-specific policy that enables and groups the root Bun, ESLint, Knip, Prettier,
 TypeScript, and validation/publishing dependencies maintained by @ankhorage/devtools. Major
-upgrades remain reviewable. Do not use this profile in normal consumer repositories.
+upgrades remain reviewable. The trusted reusable workflow detects owner updates, runs the fixed
+owner synchronization entrypoint from the Devtools base commit in a read-only preparation job,
+requires byte stability and current status, then commits only the validated owner-managed output.
+Pull-request code never executes in the write-capable job. Do not use this profile in normal
+consumer repositories.
 
 Source: `examples/devtools-renovate.json5`
 
