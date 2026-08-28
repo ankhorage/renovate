@@ -4,6 +4,20 @@
   "extends": ["config:recommended", ":dependencyDashboard"],
   "gitIgnoredAuthors": ["41898282+github-actions[bot]@users.noreply.github.com"],
   "labels": ["dependencies"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Bootstrap the legacy consumer workflow to the released synchronization implementation.",
+      "managerFilePatterns": ["/^\\.github\\/workflows\\/renovate\\.yml$/"],
+      "matchStrings": [
+        "uses:\\s+ankhorage/renovate/\\.github/workflows/changeset\\.yml@(?<currentDigest>b7305e8f17f9b07238f6b827bbc9f866fd498a0f)"
+      ],
+      "currentValueTemplate": "main",
+      "depNameTemplate": "ankhorage/renovate",
+      "datasourceTemplate": "github-digest",
+      "autoReplaceStringTemplate": "uses: ankhorage/renovate/.github/workflows/changeset.yml@{{{newDigest}}}"
+    }
+  ],
   "packageRules": [
     {
       "description": "Disable dependency updates unless a later Ankhorage rule explicitly enables them.",
@@ -50,6 +64,19 @@
         ".github/workflows/release.yml"
       ],
       "enabled": false
+    },
+    {
+      "description": "Bootstrap the released Renovate synchronization workflow exactly once.",
+      "matchDatasources": ["github-digest"],
+      "matchManagers": ["custom.regex"],
+      "matchPackageNames": ["ankhorage/renovate"],
+      "matchFileNames": [".github/workflows/renovate.yml"],
+      "enabled": true,
+      "groupName": "Ankhorage Renovate workflow bootstrap",
+      "groupSlug": "ankhorage-renovate-workflow-bootstrap",
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": false
     }
   ]
 }

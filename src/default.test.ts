@@ -26,7 +26,19 @@ interface PackageRule {
   readonly rangeStrategy?: string;
 }
 
+interface CustomManager {
+  readonly autoReplaceStringTemplate: string;
+  readonly currentValueTemplate: string;
+  readonly customType: string;
+  readonly datasourceTemplate: string;
+  readonly depNameTemplate: string;
+  readonly description: string;
+  readonly managerFilePatterns: readonly string[];
+  readonly matchStrings: readonly string[];
+}
+
 interface Preset {
+  readonly customManagers?: readonly CustomManager[];
   readonly description: readonly string[];
   readonly extends: readonly string[];
   readonly gitIgnoredAuthors?: readonly string[];
@@ -92,6 +104,72 @@ describe('consumer policy migration', () => {
     ]);
     expect(replacementBranches).not.toContain(closedPreSplitBranch);
     expect(new Set(replacementBranches).size).toBe(replacementBranches.length);
+  });
+});
+
+describe('consumer workflow bootstrap', () => {
+  test('bootstraps only the legacy immutable consumer workflow pin', () => {
+    const [bootstrapManager] = consumerPreset.customManagers ?? [];
+    expect(bootstrapManager).toMatchObject({
+      autoReplaceStringTemplate:
+        'uses: ankhorage/renovate/.github/workflows/changeset.yml@{{{newDigest}}}',
+      currentValueTemplate: 'main',
+      customType: 'regex',
+      datasourceTemplate: 'github-digest',
+      depNameTemplate: 'ankhorage/renovate',
+      managerFilePatterns: ['/^\\.github\\/workflows\\/renovate\\.yml$/'],
+    });
+
+    const [matchString] = bootstrapManager?.matchStrings ?? [];
+    expect(matchString).toBeDefined();
+    const legacyWorkflow =
+      'uses: ankhorage/renovate/.github/workflows/changeset.yml@' +
+      'b7305e8f17f9b07238f6b827bbc9f866fd498a0f';
+    const releasedWorkflow =
+      'uses: ankhorage/renovate/.github/workflows/changeset.yml@' +
+      '7d4a5104b94e763ca5be34919f4fcfbb12efd526';
+    const matcher = new RegExp(matchString ?? '');
+
+    expect(matcher.test(legacyWorkflow)).toBe(true);
+    expect(matcher.test(releasedWorkflow)).toBe(false);
+    expect(matcher.test('uses: actions/checkout@b7305e8f17f9b07238f6b827bbc9f866fd498a0f')).toBe(
+      false,
+    );
+  });
+});
+
+describe('consumer workflow bootstrap permissions', () => {
+  test('enables only the one-time workflow bootstrap dependency', () => {
+    expect(
+      resolveRules(
+        consumerPreset.packageRules,
+        dependency('ankhorage/renovate', {
+          datasource: 'github-digest',
+          fileName: '.github/workflows/renovate.yml',
+          manager: 'custom.regex',
+          updateType: 'digest',
+        }),
+      ),
+    ).toMatchObject({
+      automerge: true,
+      automergeType: 'pr',
+      enabled: true,
+      groupName: 'Ankhorage Renovate workflow bootstrap',
+      groupSlug: 'ankhorage-renovate-workflow-bootstrap',
+      platformAutomerge: false,
+    });
+
+    expect(
+      resolveRules(
+        consumerPreset.packageRules,
+        dependency('ankhorage/renovate', {
+          datasource: 'github-digest',
+          fileName: '.github/workflows/renovate.yml',
+          manager: 'github-actions',
+          updateType: 'digest',
+        }),
+      ),
+    ).toEqual({ enabled: false });
   });
 });
 
