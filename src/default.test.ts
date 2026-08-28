@@ -6,15 +6,20 @@ const preset = JSON.parse(
   readFileSync(new URL('../default.json', import.meta.url), 'utf8'),
 ) as unknown;
 
-test('publishes the canonical Ankhorage preset at the repository root', () => {
+test('publishes the canonical Ankhorage-only preset at the repository root', () => {
   expect(preset).toMatchObject({
     extends: ['config:recommended', ':dependencyDashboard'],
     gitIgnoredAuthors: ['41898282+github-actions[bot]@users.noreply.github.com'],
     labels: ['dependencies'],
     packageRules: [
       {
+        enabled: false,
+        matchPackageNames: ['*'],
+      },
+      {
         automerge: true,
         automergeType: 'pr',
+        enabled: true,
         groupName: 'Ankhorage packages',
         matchDatasources: ['npm'],
         matchPackageNames: ['@ankhorage/**'],
