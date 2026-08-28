@@ -17,10 +17,12 @@ preset instead of copying dependency rules locally.
 The shared policy must prevent competing writers:
 
 - Renovate updates dependencies owned by the target repository.
-- Normal consumers receive released `@ankhorage/*` packages, including
-  `@ankhorage/devtools`, through Renovate.
-- Devtools-owned Bun metadata, toolchain configuration, and canonical workflows are changed by
-  Devtools synchronization, not independently in every consumer.
+- Normal consumers receive compatible released `@ankhorage/ankh` and
+  `@ankhorage/devtools` versions through Renovate as the canonical CLI/provider toolchain.
+- Renovate automation runs the exact selected toolchain's `ankh devtools sync .` in every
+  consumer branch; Devtools-owned Bun metadata, toolchain configuration, and canonical workflows
+  change only as deterministic sync output, never as independent consumer updates.
+- Neither Devtools itself nor any consumer requires a manual repository synchronization step.
 - The Devtools owner repository may use an explicit owner-specific policy to update the third-party
   toolchain it publishes for consumers.
 - Repository-specific workflows outside the exact Devtools-managed inventory stay repository-owned.
@@ -77,9 +79,12 @@ Do not confuse Dependency Dashboard manager headings with update ownership:
 
 ### Consumer and owner policies
 
-Normal consumer policy must keep `@ankhorage/devtools` eligible for ordinary Renovate updates. A
-released Devtools version is the unit consumers should receive; canonical sync then applies the Bun,
-tooling, package-script, workflow, and editor policy shipped by that version.
+Normal consumer policy must keep compatible `@ankhorage/ankh` and `@ankhorage/devtools`
+releases eligible and grouped for ordinary Renovate updates. Renovate automation must then execute
+`ankh devtools sync .` with that exact CLI/provider pair and commit the complete deterministic
+Bun, tooling, package-script, workflow, editor, lockfile, and Changeset result in the same branch.
+Never require the user to run sync repository by repository, and never resolve an ambient global or
+unpinned `latest` CLI.
 
 Do not enable direct consumer updates for packages or values owned by Devtools, including its Bun
 runtime contract, ESLint toolchain, Knip, Prettier, and canonical workflows.
@@ -121,9 +126,12 @@ intentionally changed.
 Consumer workflows should call trusted reusable workflow revisions by immutable commit SHA. Do not
 replace a SHA pin with a mutable branch or tag.
 
-If future automation synchronizes Devtools-managed files on a Renovate branch, it must preserve the
-same trust boundary: do not execute arbitrary PR-head code with a write token, use an exact released
-first-party provider, restrict the writable file inventory, and fail on unexpected changes.
+Automatic Devtools synchronization on Renovate branches must preserve the same trust boundary: do
+not execute arbitrary PR-head code with a write token, use exact released first-party Ankh and
+Devtools versions, restrict the writable file inventory, fail on unexpected changes, and require a
+second sync to be byte-stable. Prefer Renovate `postUpgradeTasks` only when the active host
+explicitly permits the command; otherwise use the centrally managed reusable Renovate workflow.
+Manual synchronization is not an acceptable fallback.
 
 ## Source organization
 
