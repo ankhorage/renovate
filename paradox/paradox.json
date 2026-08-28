@@ -14,7 +14,7 @@
     {
       "id": "npm",
       "label": "npm",
-      "value": "v0.1.1",
+      "value": "v0.1.2",
       "color": "cb3837"
     },
     {
@@ -129,30 +129,12 @@
       "description": null,
       "sourceLocation": {
         "filePath": "src/default.test.ts",
-        "line": 155,
+        "line": 175,
         "column": 1
       }
     },
     {
-      "name": "matchesRule",
-      "description": null,
-      "sourceLocation": {
-        "filePath": "src/default.test.ts",
-        "line": 166,
-        "column": 1
-      }
-    },
-    {
-      "name": "matches",
-      "description": null,
-      "sourceLocation": {
-        "filePath": "src/default.test.ts",
-        "line": 176,
-        "column": 1
-      }
-    },
-    {
-      "name": "readPreset",
+      "name": "branchName",
       "description": null,
       "sourceLocation": {
         "filePath": "src/default.test.ts",
@@ -161,11 +143,38 @@
       }
     },
     {
+      "name": "matchesRule",
+      "description": null,
+      "sourceLocation": {
+        "filePath": "src/default.test.ts",
+        "line": 193,
+        "column": 1
+      }
+    },
+    {
+      "name": "matches",
+      "description": null,
+      "sourceLocation": {
+        "filePath": "src/default.test.ts",
+        "line": 203,
+        "column": 1
+      }
+    },
+    {
+      "name": "readPreset",
+      "description": null,
+      "sourceLocation": {
+        "filePath": "src/default.test.ts",
+        "line": 213,
+        "column": 1
+      }
+    },
+    {
       "name": "resolveRules",
       "description": null,
       "sourceLocation": {
         "filePath": "src/default.test.ts",
-        "line": 190,
+        "line": 217,
         "column": 1
       }
     }
@@ -244,6 +253,12 @@
         "fromSymbol": "src/default.test.ts",
         "toSymbol": "dependency",
         "callExpression": "dependency",
+        "sourcePath": "src/default.test.ts"
+      },
+      {
+        "fromSymbol": "src/default.test.ts",
+        "toSymbol": "branchName",
+        "callExpression": "branchName",
         "sourcePath": "src/default.test.ts"
       },
       {
