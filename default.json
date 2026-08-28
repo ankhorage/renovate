@@ -1,6 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": ["Canonical dependency update policy for Ankhorage repositories."],
+  "description": ["Canonical dependency update policy for Ankhorage consumer repositories."],
   "extends": ["config:recommended", ":dependencyDashboard"],
   "gitIgnoredAuthors": ["41898282+github-actions[bot]@users.noreply.github.com"],
   "labels": ["dependencies"],
@@ -20,6 +20,34 @@
       "automerge": true,
       "automergeType": "pr",
       "platformAutomerge": false
+    },
+    {
+      "description": "Update the canonical Ankh CLI and Devtools provider as one toolchain.",
+      "matchDatasources": ["npm"],
+      "matchPackageNames": ["@ankhorage/ankh", "@ankhorage/devtools"],
+      "enabled": true,
+      "groupName": "Ankhorage CLI and Devtools toolchain",
+      "rangeStrategy": "bump",
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": false
+    },
+    {
+      "description": "Require review for major CLI and Devtools toolchain upgrades.",
+      "matchDatasources": ["npm"],
+      "matchPackageNames": ["@ankhorage/ankh", "@ankhorage/devtools"],
+      "matchUpdateTypes": ["major"],
+      "automerge": false
+    },
+    {
+      "description": "Keep canonical Devtools workflows under deterministic Devtools sync ownership.",
+      "matchManagers": ["github-actions"],
+      "matchFileNames": [
+        ".github/workflows/ci.yml",
+        ".github/workflows/renovate.yml",
+        ".github/workflows/release.yml"
+      ],
+      "enabled": false
     }
   ]
 }

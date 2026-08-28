@@ -3,7 +3,7 @@
 
 # @ankhorage/renovate
 
-![license: MIT](./paradox/badges/license.svg) ![npm: v0.0.0](./paradox/badges/npm.svg) ![runtime: bun](./paradox/badges/runtime.svg) ![typescript: strict](./paradox/badges/typescript.svg) ![eslint: checked](./paradox/badges/eslint.svg) ![prettier: checked](./paradox/badges/prettier.svg) ![build: checked](./paradox/badges/build.svg) ![tests: checked](./paradox/badges/tests.svg) ![docs: paradox](./paradox/badges/docs.svg)
+![license: MIT](./paradox/badges/license.svg) ![npm: v0.1.0](./paradox/badges/npm.svg) ![runtime: bun](./paradox/badges/runtime.svg) ![typescript: strict](./paradox/badges/typescript.svg) ![eslint: checked](./paradox/badges/eslint.svg) ![prettier: checked](./paradox/badges/prettier.svg) ![build: checked](./paradox/badges/build.svg) ![tests: checked](./paradox/badges/tests.svg) ![docs: paradox](./paradox/badges/docs.svg)
 
 Ankhorage dependency update policy and automation powered by Renovate.
 
@@ -11,9 +11,29 @@ Ankhorage dependency update policy and automation powered by Renovate.
 
 Extend the repository-hosted preset from each Ankhorage repository that Renovate manages.
 
+### Devtools owner repository configuration
+
+Loads the owner-specific policy that enables and groups the root Bun, ESLint, Knip, Prettier,
+TypeScript, and validation/publishing dependencies maintained by @ankhorage/devtools. Major
+upgrades remain reviewable. Do not use this profile in normal consumer repositories.
+
+Source: `examples/devtools-renovate.json5`
+
+```
+{
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  extends: ['github>ankhorage/renovate:devtools-owner'],
+}
+```
+
 ### Repository configuration
 
-Loads the canonical Ankhorage dependency-update policy from its default branch.
+Loads the normal consumer policy from its default branch. The policy keeps Devtools-owned
+packages and canonical workflows out of independent Renovate updates, and groups compatible
+@ankhorage/ankh and @ankhorage/devtools releases for the trusted automatic synchronization
+workflow. The workflow runs the exact lock-selected Devtools provider with either the consumer's
+lock-selected Ankh CLI or its own exact canonical CLI pin, requires byte stability, and commits
+the complete managed result without a manual repository sync.
 
 Source: `examples/renovate.json5`
 

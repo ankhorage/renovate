@@ -81,10 +81,12 @@ Do not confuse Dependency Dashboard manager headings with update ownership:
 
 Normal consumer policy must keep compatible `@ankhorage/ankh` and `@ankhorage/devtools`
 releases eligible and grouped for ordinary Renovate updates. Renovate automation must then execute
-`ankh devtools sync .` with that exact CLI/provider pair and commit the complete deterministic
-Bun, tooling, package-script, workflow, editor, lockfile, and Changeset result in the same branch.
-Never require the user to run sync repository by repository, and never resolve an ambient global or
-unpinned `latest` CLI.
+`ankh devtools sync .` with the exact lock-selected provider and either the consumer's exact
+lock-selected CLI or an exact canonical CLI version pinned by the immutable trusted workflow. This
+supports consumers that intentionally declare only `@ankhorage/devtools`, such as Surface. Commit
+the complete deterministic Bun, tooling, package-script, workflow, editor, lockfile, and Changeset
+result in the same branch. Never require the user to run sync repository by repository, and never
+resolve an ambient global or unpinned `latest` CLI.
 
 Do not enable direct consumer updates for packages or values owned by Devtools, including its Bun
 runtime contract, ESLint toolchain, Knip, Prettier, and canonical workflows.
@@ -180,7 +182,7 @@ Preferred full validation:
 bun run build
 bun run lint:fix
 bun run test
-bun run knip
+bun run knip:check
 bun run typecheck
 bun run format:check
 bun run docs
