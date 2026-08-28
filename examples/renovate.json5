@@ -6,7 +6,9 @@
  * @ankhorage/ankh and @ankhorage/devtools releases for the trusted automatic synchronization
  * workflow. The workflow runs the exact lock-selected Devtools provider with either the consumer's
  * lock-selected Ankh CLI or its own exact canonical CLI pin, requires byte stability, and commits
- * the complete managed result without a manual repository sync.
+ * the complete managed result without a manual repository sync. The shared preset also performs a
+ * one-time migration of the legacy immutable workflow pin to the released synchronization
+ * implementation; all other canonical workflow changes remain owned by Devtools sync.
  *
  * @usage
  * @readme
