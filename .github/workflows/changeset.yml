@@ -86,13 +86,25 @@ jobs:
         if: steps.metadata.outputs.toolchain-changed == 'true'
         id: toolchain
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          CANONICAL_ANKH_VERSION: '0.4.0'
         with:
           script: |
             const fs = require('node:fs');
             const lock = fs.readFileSync('repository/bun.lock', 'utf8');
             const manifest = JSON.parse(fs.readFileSync('repository/package.json', 'utf8'));
             const sections = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'];
-            const resolveVersion = (name) => {
+            const resolveVersion = (name, fallbackVersion) => {
+              const declarations = sections
+                .map((section) => manifest[section]?.[name])
+                .filter((value) => typeof value === 'string');
+              if (declarations.length === 0 && fallbackVersion) {
+                // This immutable workflow owns the CLI version for Devtools-only consumers.
+                if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(fallbackVersion)) {
+                  throw new Error('The trusted workflow must pin an exact fallback ' + name + ' version.');
+                }
+                return fallbackVersion;
+              }
               const escaped = name.replace(/[.*+?^$()|[\]\\]/g, '\\$&');
               const match = new RegExp(
                 '^    "' + escaped + '": \\["' + escaped + '@([^"]+)"',
@@ -101,9 +113,6 @@ jobs:
               if (!match || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(match[1])) {
                 throw new Error('bun.lock must select one exact root ' + name + ' version.');
               }
-              const declarations = sections
-                .map((section) => manifest[section]?.[name])
-                .filter((value) => typeof value === 'string');
               const declared = declarations.length === 1
                 ? /^[~^]?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/.exec(declarations[0])
                 : null;
@@ -114,7 +123,10 @@ jobs:
               }
               return match[1];
             };
-            core.setOutput('ankh-version', resolveVersion('@ankhorage/ankh'));
+            core.setOutput(
+              'ankh-version',
+              resolveVersion('@ankhorage/ankh', process.env.CANONICAL_ANKH_VERSION),
+            );
             core.setOutput('devtools-version', resolveVersion('@ankhorage/devtools'));
 
       - name: Set up the trusted Bun runtime

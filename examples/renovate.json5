@@ -4,8 +4,9 @@
  * Loads the normal consumer policy from its default branch. The policy keeps Devtools-owned
  * packages and canonical workflows out of independent Renovate updates, and groups compatible
  * @ankhorage/ankh and @ankhorage/devtools releases for the trusted automatic synchronization
- * workflow. The workflow runs the exact lock-selected toolchain twice, requires byte stability,
- * and commits the complete managed result without a manual repository sync.
+ * workflow. The workflow runs the exact lock-selected Devtools provider with either the consumer's
+ * lock-selected Ankh CLI or its own exact canonical CLI pin, requires byte stability, and commits
+ * the complete managed result without a manual repository sync.
  *
  * @usage
  * @readme

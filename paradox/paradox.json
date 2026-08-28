@@ -72,7 +72,7 @@
     },
     {
       "title": "Repository configuration",
-      "description": "Repository configuration\n\nLoads the normal consumer policy from its default branch. The policy keeps Devtools-owned\npackages and canonical workflows out of independent Renovate updates, and groups compatible\n@ankhorage/ankh and @ankhorage/devtools releases for the trusted automatic synchronization\nworkflow. The workflow runs the exact lock-selected toolchain twice, requires byte stability,\nand commits the complete managed result without a manual repository sync.",
+      "description": "Repository configuration\n\nLoads the normal consumer policy from its default branch. The policy keeps Devtools-owned\npackages and canonical workflows out of independent Renovate updates, and groups compatible\n@ankhorage/ankh and @ankhorage/devtools releases for the trusted automatic synchronization\nworkflow. The workflow runs the exact lock-selected Devtools provider with either the consumer's\nlock-selected Ankh CLI or its own exact canonical CLI pin, requires byte stability, and commits\nthe complete managed result without a manual repository sync.",
       "language": "",
       "code": "{\n  $schema: 'https://docs.renovatebot.com/renovate-schema.json',\n  extends: ['github>ankhorage/renovate'],\n}",
       "sourcePath": "examples/renovate.json5"
@@ -115,6 +115,15 @@
   "exports": [],
   "components": [],
   "sourceFunctions": [
+    {
+      "name": "resolveFixtureVersion",
+      "description": null,
+      "sourceLocation": {
+        "filePath": "src/changeset-workflow.test.ts",
+        "line": 88,
+        "column": 1
+      }
+    },
     {
       "name": "dependency",
       "description": null,
@@ -193,6 +202,12 @@
         "fromSymbol": "src/changeset-workflow.test.ts",
         "toSymbol": "expect",
         "callExpression": "expect",
+        "sourcePath": "src/changeset-workflow.test.ts"
+      },
+      {
+        "fromSymbol": "src/changeset-workflow.test.ts",
+        "toSymbol": "resolveFixtureVersion",
+        "callExpression": "resolveFixtureVersion",
         "sourcePath": "src/changeset-workflow.test.ts"
       },
       {
