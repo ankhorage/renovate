@@ -1,5 +1,11 @@
 # @ankhorage/renovate
 
+## 0.1.4
+
+### Patch Changes
+
+- a798ac9: Bootstrap consumers from the legacy Changeset-only workflow pin to the released automatic Devtools synchronization workflow.
+
 ## 0.1.3
 
 ### Patch Changes
