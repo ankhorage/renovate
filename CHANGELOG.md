@@ -1,5 +1,11 @@
 # @ankhorage/renovate
 
+## 0.1.3
+
+### Patch Changes
+
+- 7d4a510: Recreate split Ankhorage library and Devtools toolchain updates on distinct clean Renovate branches.
+
 ## 0.1.2
 
 ### Patch Changes
