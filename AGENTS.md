@@ -180,7 +180,7 @@ Preferred full validation:
 bun run build
 bun run lint:fix
 bun run test
-bun run knip
+bun run knip:check
 bun run typecheck
 bun run format:check
 bun run docs
