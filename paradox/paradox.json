@@ -14,7 +14,7 @@
     {
       "id": "npm",
       "label": "npm",
-      "value": "v0.0.0",
+      "value": "v0.1.0",
       "color": "cb3837"
     },
     {
@@ -64,8 +64,15 @@
   "readmeUsageDescription": "Extend the repository-hosted preset from each Ankhorage repository that Renovate manages.",
   "readmeUsage": [
     {
+      "title": "Devtools owner repository configuration",
+      "description": "Devtools owner repository configuration\n\nLoads the owner-specific policy that enables and groups the root Bun, ESLint, Knip, Prettier,\nTypeScript, and validation/publishing dependencies maintained by @ankhorage/devtools. Major\nupgrades remain reviewable. Do not use this profile in normal consumer repositories.",
+      "language": "",
+      "code": "{\n  $schema: 'https://docs.renovatebot.com/renovate-schema.json',\n  extends: ['github>ankhorage/renovate:devtools-owner'],\n}",
+      "sourcePath": "examples/devtools-renovate.json5"
+    },
+    {
       "title": "Repository configuration",
-      "description": "Repository configuration\n\nLoads the canonical Ankhorage dependency-update policy from its default branch.",
+      "description": "Repository configuration\n\nLoads the normal consumer policy from its default branch. The policy keeps Devtools-owned\npackages and canonical workflows out of independent Renovate updates, and groups compatible\n@ankhorage/ankh and @ankhorage/devtools releases for the trusted automatic synchronization\nworkflow. The workflow runs the exact lock-selected toolchain twice, requires byte stability,\nand commits the complete managed result without a manual repository sync.",
       "language": "",
       "code": "{\n  $schema: 'https://docs.renovatebot.com/renovate-schema.json',\n  extends: ['github>ankhorage/renovate'],\n}",
       "sourcePath": "examples/renovate.json5"
@@ -107,7 +114,53 @@
   ],
   "exports": [],
   "components": [],
-  "sourceFunctions": [],
+  "sourceFunctions": [
+    {
+      "name": "dependency",
+      "description": null,
+      "sourceLocation": {
+        "filePath": "src/default.test.ts",
+        "line": 155,
+        "column": 1
+      }
+    },
+    {
+      "name": "matchesRule",
+      "description": null,
+      "sourceLocation": {
+        "filePath": "src/default.test.ts",
+        "line": 166,
+        "column": 1
+      }
+    },
+    {
+      "name": "matches",
+      "description": null,
+      "sourceLocation": {
+        "filePath": "src/default.test.ts",
+        "line": 176,
+        "column": 1
+      }
+    },
+    {
+      "name": "readPreset",
+      "description": null,
+      "sourceLocation": {
+        "filePath": "src/default.test.ts",
+        "line": 186,
+        "column": 1
+      }
+    },
+    {
+      "name": "resolveRules",
+      "description": null,
+      "sourceLocation": {
+        "filePath": "src/default.test.ts",
+        "line": 190,
+        "column": 1
+      }
+    }
+  ],
   "sequenceScenarios": [],
   "graphs": {
     "imports": [
@@ -126,6 +179,12 @@
       },
       {
         "fromSymbol": "src/changeset-workflow.test.ts",
+        "toSymbol": "describe",
+        "callExpression": "describe",
+        "sourcePath": "src/changeset-workflow.test.ts"
+      },
+      {
+        "fromSymbol": "src/changeset-workflow.test.ts",
         "toSymbol": "test",
         "callExpression": "test",
         "sourcePath": "src/changeset-workflow.test.ts"
@@ -138,8 +197,14 @@
       },
       {
         "fromSymbol": "src/default.test.ts",
-        "toSymbol": "readFileSync",
-        "callExpression": "readFileSync",
+        "toSymbol": "readPreset",
+        "callExpression": "readPreset",
+        "sourcePath": "src/default.test.ts"
+      },
+      {
+        "fromSymbol": "src/default.test.ts",
+        "toSymbol": "describe",
+        "callExpression": "describe",
         "sourcePath": "src/default.test.ts"
       },
       {
@@ -152,6 +217,36 @@
         "fromSymbol": "src/default.test.ts",
         "toSymbol": "expect",
         "callExpression": "expect",
+        "sourcePath": "src/default.test.ts"
+      },
+      {
+        "fromSymbol": "src/default.test.ts",
+        "toSymbol": "resolveRules",
+        "callExpression": "resolveRules",
+        "sourcePath": "src/default.test.ts"
+      },
+      {
+        "fromSymbol": "src/default.test.ts",
+        "toSymbol": "dependency",
+        "callExpression": "dependency",
+        "sourcePath": "src/default.test.ts"
+      },
+      {
+        "fromSymbol": "matchesRule",
+        "toSymbol": "matches",
+        "callExpression": "matches",
+        "sourcePath": "src/default.test.ts"
+      },
+      {
+        "fromSymbol": "readPreset",
+        "toSymbol": "readFileSync",
+        "callExpression": "readFileSync",
+        "sourcePath": "src/default.test.ts"
+      },
+      {
+        "fromSymbol": "src/default.test.ts",
+        "toSymbol": "matchesRule",
+        "callExpression": "matchesRule",
         "sourcePath": "src/default.test.ts"
       },
       {

@@ -1,4 +1,4 @@
-name: Add Renovate Changeset
+name: Synchronize Renovate Update
 
 on:
   workflow_call:
@@ -9,11 +9,20 @@ permissions:
   pull-requests: read
 
 jobs:
-  changeset:
+  prepare:
+    permissions:
+      contents: read
+      pull-requests: read
     runs-on: ubuntu-latest
+    outputs:
+      bun-version: ${{ steps.metadata.outputs.bun-version }}
+      head-ref: ${{ steps.metadata.outputs.head-ref }}
+      head-sha: ${{ steps.metadata.outputs.head-sha }}
+      toolchain-changed: ${{ steps.metadata.outputs.toolchain-changed }}
     steps:
-      - name: Add Changeset and dispatch CI
-        uses: actions/github-script@v8
+      - name: Validate Renovate metadata
+        id: metadata
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         with:
           script: |
             const pullNumber = context.payload.pull_request?.number;
@@ -28,13 +37,325 @@ jobs:
               repo,
               pull_number: pullNumber,
             });
-            if (pull.head.repo?.full_name !== `${owner}/${repo}` || !pull.head.ref.startsWith('renovate/')) {
+            if (pull.head.repo?.full_name !== owner + '/' + repo || !pull.head.ref.startsWith('renovate/')) {
               core.setFailed('The Renovate branch must belong to the target repository.');
               return;
             }
 
             const readManifest = async (ref) => {
-              const { data } = await github.rest.repos.getContent({ owner, repo, path: 'package.json', ref });
+              const { data } = await github.rest.repos.getContent({
+                owner,
+                repo,
+                path: 'package.json',
+                ref,
+              });
+              if (Array.isArray(data) || data.type !== 'file' || !data.content) {
+                throw new Error('package.json is not a readable file.');
+              }
+              return JSON.parse(Buffer.from(data.content, 'base64').toString('utf8'));
+            };
+            const base = await readManifest(pull.base.sha);
+            const head = await readManifest(pull.head.sha);
+            const packageManager = typeof base.packageManager === 'string'
+              ? /^bun@(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/.exec(base.packageManager)
+              : null;
+            if (!packageManager) {
+              throw new Error('The trusted base packageManager must pin an exact Bun version.');
+            }
+
+            const sections = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'];
+            const toolchainNames = new Set(['@ankhorage/ankh', '@ankhorage/devtools']);
+            const toolchainChanged = sections.some((section) =>
+              [...toolchainNames].some((name) => base[section]?.[name] !== head[section]?.[name])
+            );
+
+            core.setOutput('bun-version', packageManager[1]);
+            core.setOutput('head-ref', pull.head.ref);
+            core.setOutput('head-sha', pull.head.sha);
+            core.setOutput('toolchain-changed', toolchainChanged ? 'true' : 'false');
+
+      - name: Check out the Renovate commit without credentials
+        if: steps.metadata.outputs.toolchain-changed == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ steps.metadata.outputs.head-sha }}
+          path: repository
+          persist-credentials: false
+
+      - name: Resolve the exact selected toolchain
+        if: steps.metadata.outputs.toolchain-changed == 'true'
+        id: toolchain
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const fs = require('node:fs');
+            const lock = fs.readFileSync('repository/bun.lock', 'utf8');
+            const manifest = JSON.parse(fs.readFileSync('repository/package.json', 'utf8'));
+            const sections = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'];
+            const resolveVersion = (name) => {
+              const escaped = name.replace(/[.*+?^$()|[\]\\]/g, '\\$&');
+              const match = new RegExp(
+                '^    "' + escaped + '": \\["' + escaped + '@([^"]+)"',
+                'm',
+              ).exec(lock);
+              if (!match || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(match[1])) {
+                throw new Error('bun.lock must select one exact root ' + name + ' version.');
+              }
+              const declarations = sections
+                .map((section) => manifest[section]?.[name])
+                .filter((value) => typeof value === 'string');
+              const declared = declarations.length === 1
+                ? /^[~^]?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/.exec(declarations[0])
+                : null;
+              if (!declared || declared[1] !== match[1]) {
+                throw new Error(
+                  'package.json and bun.lock must select the same exact root ' + name + ' version.',
+                );
+              }
+              return match[1];
+            };
+            core.setOutput('ankh-version', resolveVersion('@ankhorage/ankh'));
+            core.setOutput('devtools-version', resolveVersion('@ankhorage/devtools'));
+
+      - name: Set up the trusted Bun runtime
+        if: steps.metadata.outputs.toolchain-changed == 'true'
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: ${{ steps.metadata.outputs.bun-version }}
+
+      - name: Install the exact released toolchain
+        if: steps.metadata.outputs.toolchain-changed == 'true'
+        env:
+          ANKH_VERSION: ${{ steps.toolchain.outputs.ankh-version }}
+          DEVTOOLS_VERSION: ${{ steps.toolchain.outputs.devtools-version }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/toolchain"
+          ANKH_VERSION="$ANKH_VERSION" DEVTOOLS_VERSION="$DEVTOOLS_VERSION" bun -e '
+            import { writeFileSync } from "node:fs";
+            writeFileSync(
+              process.env.RUNNER_TEMP + "/toolchain/package.json",
+              JSON.stringify({
+                private: true,
+                dependencies: {
+                  "@ankhorage/ankh": process.env.ANKH_VERSION,
+                  "@ankhorage/devtools": process.env.DEVTOOLS_VERSION,
+                },
+              }, null, 2) + "\n",
+            );
+          '
+          bun install \
+            --cwd "$RUNNER_TEMP/toolchain" \
+            --ignore-scripts \
+            --registry=https://registry.npmjs.org
+
+      - name: Synchronize and prove byte stability
+        if: steps.metadata.outputs.toolchain-changed == 'true'
+        run: |
+          mkdir -p "$RUNNER_TEMP/safe-bin"
+          printf '%s\n' \
+            '#!/usr/bin/env bash' \
+            'set -euo pipefail' \
+            'if [ "$1" = "install" ]; then' \
+            '  shift' \
+            '  exec "$SAFE_REAL_BUN" install --ignore-scripts --lockfile-only --registry=https://registry.npmjs.org "$@"' \
+            'fi' \
+            'exec "$SAFE_REAL_BUN" "$@"' \
+            > "$RUNNER_TEMP/safe-bin/bun"
+          chmod +x "$RUNNER_TEMP/safe-bin/bun"
+          ln -s "$RUNNER_TEMP/toolchain/node_modules" repository/node_modules
+          export SAFE_REAL_BUN
+          SAFE_REAL_BUN="$(command -v bun)"
+          export PATH="$RUNNER_TEMP/safe-bin:$PATH"
+          cd repository
+          managed_paths=(
+            .github/workflows/ci.yml
+            .github/workflows/release.yml
+            .github/workflows/renovate.yml
+            .prettierrc.js
+            .vscode/extensions.json
+            .vscode/settings.json
+            bun.lock
+            eslint.config.mjs
+            eslint.local.config.mjs
+            knip.config.ts
+            package.json
+            prettier.local.config.js
+          )
+          "$RUNNER_TEMP/toolchain/node_modules/.bin/ankh" devtools sync .
+          rm node_modules
+          git add -N -f -- "${managed_paths[@]}"
+          first_hash="$(git diff --binary | shasum -a 256)"
+          ln -s "$RUNNER_TEMP/toolchain/node_modules" node_modules
+          "$RUNNER_TEMP/toolchain/node_modules/.bin/ankh" devtools sync .
+          "$RUNNER_TEMP/toolchain/node_modules/.bin/ankh" devtools status .
+          rm node_modules
+          git add -N -f -- "${managed_paths[@]}"
+          second_hash="$(git diff --binary | shasum -a 256)"
+          test "$first_hash" = "$second_hash"
+
+      - name: Package deterministic managed changes
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          HEAD_REF: ${{ steps.metadata.outputs.head-ref }}
+          HEAD_SHA: ${{ steps.metadata.outputs.head-sha }}
+          TOOLCHAIN_CHANGED: ${{ steps.metadata.outputs.toolchain-changed }}
+        with:
+          script: |
+            const childProcess = require('node:child_process');
+            const fs = require('node:fs');
+            const path = require('node:path');
+            const allowed = new Set([
+              '.github/workflows/ci.yml',
+              '.github/workflows/release.yml',
+              '.github/workflows/renovate.yml',
+              '.prettierrc.js',
+              '.vscode/extensions.json',
+              '.vscode/settings.json',
+              'bun.lock',
+              'eslint.config.mjs',
+              'eslint.local.config.mjs',
+              'knip.config.ts',
+              'package.json',
+              'prettier.local.config.js',
+            ]);
+            const files = [];
+            if (process.env.TOOLCHAIN_CHANGED === 'true') {
+              const root = path.resolve('repository');
+              const output = childProcess.execFileSync(
+                'git',
+                ['-C', root, 'diff', '--name-only', '--diff-filter=ACMRTUXB', '-z'],
+              ).toString('utf8');
+              const deleted = childProcess.execFileSync(
+                'git',
+                ['-C', root, 'diff', '--name-only', '--diff-filter=D', '-z'],
+              ).toString('utf8');
+              if (deleted !== '') throw new Error('Devtools sync must not delete managed files.');
+              const untracked = [
+                childProcess.execFileSync(
+                  'git',
+                  ['-C', root, 'ls-files', '--others', '--exclude-standard', '-z'],
+                ),
+                childProcess.execFileSync(
+                  'git',
+                  ['-C', root, 'ls-files', '--others', '--ignored', '--exclude-standard', '-z'],
+                ),
+              ].map((value) => value.toString('utf8')).join('');
+              for (const relativePath of untracked.split('\0').filter(Boolean)) {
+                if (!allowed.has(relativePath)) {
+                  throw new Error('Devtools sync created an unexpected path: ' + relativePath);
+                }
+              }
+              for (const relativePath of output.split('\0').filter(Boolean)) {
+                if (!allowed.has(relativePath)) {
+                  throw new Error('Devtools sync changed an unexpected path: ' + relativePath);
+                }
+                const absolutePath = path.join(root, relativePath);
+                if (!fs.lstatSync(absolutePath).isFile()) {
+                  throw new Error('Managed output must be a regular file: ' + relativePath);
+                }
+                files.push({
+                  path: relativePath,
+                  content: fs.readFileSync(absolutePath).toString('base64'),
+                });
+              }
+            }
+            const artifactPath = path.join(process.env.RUNNER_TEMP, 'renovate-managed.json');
+            fs.writeFileSync(artifactPath, JSON.stringify({
+              headRef: process.env.HEAD_REF,
+              headSha: process.env.HEAD_SHA,
+              files,
+            }));
+
+      - name: Upload deterministic managed changes
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: renovate-managed
+          path: ${{ runner.temp }}/renovate-managed.json
+          retention-days: 1
+
+  commit:
+    needs: prepare
+    permissions:
+      actions: write
+      contents: write
+      pull-requests: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download deterministic managed changes
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: renovate-managed
+          path: ${{ runner.temp }}/renovate-managed
+
+      - name: Commit managed changes and dispatch CI
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          ARTIFACT_PATH: ${{ runner.temp }}/renovate-managed/renovate-managed.json
+        with:
+          script: |
+            const fs = require('node:fs');
+            const pullNumber = context.payload.pull_request?.number;
+            if (!pullNumber || context.actor !== 'renovate[bot]') {
+              core.setFailed('This workflow only accepts Renovate pull requests.');
+              return;
+            }
+
+            const { owner, repo } = context.repo;
+            const { data: pull } = await github.rest.pulls.get({
+              owner,
+              repo,
+              pull_number: pullNumber,
+            });
+            const artifact = JSON.parse(fs.readFileSync(process.env.ARTIFACT_PATH, 'utf8'));
+            if (
+              pull.head.repo?.full_name !== owner + '/' + repo ||
+              !pull.head.ref.startsWith('renovate/') ||
+              artifact.headRef !== pull.head.ref ||
+              artifact.headSha !== pull.head.sha
+            ) {
+              throw new Error('The Renovate branch changed after managed output was prepared.');
+            }
+
+            const allowed = new Set([
+              '.github/workflows/ci.yml',
+              '.github/workflows/release.yml',
+              '.github/workflows/renovate.yml',
+              '.prettierrc.js',
+              '.vscode/extensions.json',
+              '.vscode/settings.json',
+              'bun.lock',
+              'eslint.config.mjs',
+              'eslint.local.config.mjs',
+              'knip.config.ts',
+              'package.json',
+              'prettier.local.config.js',
+            ]);
+            if (!Array.isArray(artifact.files)) throw new Error('Managed artifact files are invalid.');
+            const managedFiles = new Map();
+            for (const file of artifact.files) {
+              if (
+                !file ||
+                typeof file.path !== 'string' ||
+                !allowed.has(file.path) ||
+                typeof file.content !== 'string' ||
+                managedFiles.has(file.path)
+              ) {
+                throw new Error('Managed artifact contains an invalid file.');
+              }
+              const content = Buffer.from(file.content, 'base64');
+              if (content.byteLength > 2_000_000) {
+                throw new Error('Managed artifact file exceeds the size limit: ' + file.path);
+              }
+              managedFiles.set(file.path, content);
+            }
+
+            const readManifest = async (ref) => {
+              const { data } = await github.rest.repos.getContent({
+                owner,
+                repo,
+                path: 'package.json',
+                ref,
+              });
               if (Array.isArray(data) || data.type !== 'file' || !data.content) {
                 throw new Error('package.json is not a readable file.');
               }
@@ -44,40 +365,110 @@ jobs:
             const head = await readManifest(pull.head.sha);
             const releaseSections = ['dependencies', 'optionalDependencies', 'peerDependencies'];
             const allSections = [...releaseSections, 'devDependencies'];
+            const isDevtoolsOwner = owner + '/' + repo === 'ankhorage/devtools';
             const changed = allSections.flatMap((section) => {
-              const names = new Set([...Object.keys(base[section] ?? {}), ...Object.keys(head[section] ?? {})]);
-              return [...names].filter((name) => name.startsWith('@ankhorage/') && base[section]?.[name] !== head[section]?.[name]).map((name) => ({ name, section }));
+              const names = new Set([
+                ...Object.keys(base[section] ?? {}),
+                ...Object.keys(head[section] ?? {}),
+              ]);
+              return [...names]
+                .filter((name) =>
+                  (isDevtoolsOwner || name.startsWith('@ankhorage/')) &&
+                  base[section]?.[name] !== head[section]?.[name]
+                )
+                .map((name) => ({ name, section }));
             });
-            if (changed.length === 0) {
-              core.info('No Ankhorage dependency update found.');
+            if (isDevtoolsOwner && base.packageManager !== head.packageManager) {
+              changed.push({ name: 'bun', section: 'packageManager' });
+            }
+
+            if (changed.length > 0) {
+              const release =
+                !head.private &&
+                typeof head.name === 'string' &&
+                (isDevtoolsOwner ||
+                  changed.some(({ section }) => releaseSections.includes(section)));
+              const frontmatter = release
+                ? '---\n' + "'" + head.name + "': patch\n---"
+                : '---\n---';
+              const tick = String.fromCharCode(96);
+              const names = [...new Set(changed.map(({ name }) => tick + name + tick))]
+                .sort()
+                .join(', ');
+              const subject = isDevtoolsOwner
+                ? 'Update Devtools-owned dependencies: '
+                : 'Update Ankhorage dependencies: ';
+              const content = frontmatter + '\n\n' + subject + names + '.\n';
+              const changesetPath = '.changeset/renovate-' + pullNumber + '.md';
+              let currentContent = null;
+              try {
+                const response = await github.rest.repos.getContent({
+                  owner,
+                  repo,
+                  path: changesetPath,
+                  ref: pull.head.sha,
+                });
+                if (
+                  !Array.isArray(response.data) &&
+                  response.data.type === 'file' &&
+                  response.data.content
+                ) {
+                  currentContent = Buffer.from(response.data.content, 'base64').toString('utf8');
+                }
+              } catch (error) {
+                if (error.status !== 404) throw error;
+              }
+              if (currentContent !== content) {
+                managedFiles.set(changesetPath, Buffer.from(content));
+              }
+            }
+
+            if (managedFiles.size === 0) {
+              core.info('No managed synchronization or Changeset update is required.');
               return;
             }
 
-            const release = !head.private && typeof head.name === 'string' && changed.some(({ section }) => releaseSections.includes(section));
-            const frontmatter = release ? `---\n'${head.name}': patch\n---` : '---\n---';
-            const names = [...new Set(changed.map(({ name }) => `\`${name}\``))].sort().join(', ');
-            const content = `${frontmatter}\n\nUpdate Ankhorage dependencies: ${names}.\n`;
-            const path = `.changeset/renovate-${pullNumber}.md`;
-            let current;
-            try {
-              const response = await github.rest.repos.getContent({ owner, repo, path, ref: pull.head.ref });
-              if (!Array.isArray(response.data) && response.data.type === 'file') current = response.data;
-            } catch (error) {
-              if (error.status !== 404) throw error;
+            const treeEntries = [];
+            for (const [path, content] of managedFiles) {
+              const { data: blob } = await github.rest.git.createBlob({
+                owner,
+                repo,
+                content: content.toString('base64'),
+                encoding: 'base64',
+              });
+              treeEntries.push({
+                path,
+                mode: '100644',
+                type: 'blob',
+                sha: blob.sha,
+              });
             }
-            if (current?.content && Buffer.from(current.content, 'base64').toString('utf8') === content) {
-              core.info('Changeset is already current.');
-              return;
-            }
-
-            await github.rest.repos.createOrUpdateFileContents({
+            const { data: headCommit } = await github.rest.git.getCommit({
               owner,
               repo,
-              path,
-              branch: pull.head.ref,
-              message: 'chore: add changeset for Ankhorage updates',
-              content: Buffer.from(content).toString('base64'),
-              sha: current?.sha,
+              commit_sha: pull.head.sha,
+            });
+            const { data: tree } = await github.rest.git.createTree({
+              owner,
+              repo,
+              base_tree: headCommit.tree.sha,
+              tree: treeEntries,
+            });
+            const { data: commit } = await github.rest.git.createCommit({
+              owner,
+              repo,
+              message: artifact.files.length > 0
+                ? 'chore: synchronize Devtools-managed repository state'
+                : 'chore: add changeset for dependency updates',
+              tree: tree.sha,
+              parents: [pull.head.sha],
+            });
+            await github.rest.git.updateRef({
+              owner,
+              repo,
+              ref: 'heads/' + pull.head.ref,
+              sha: commit.sha,
+              force: false,
             });
             await github.rest.actions.createWorkflowDispatch({
               owner,

@@ -1,16 +1,95 @@
 import { readFileSync } from 'node:fs';
 
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 
 const workflow = readFileSync(
   new URL('../.github/workflows/changeset.yml', import.meta.url),
   'utf8',
 );
+const [prepareJob, commitJob = ''] = workflow.split('\n  commit:');
 
-test('keeps Renovate Changeset writes constrained and revalidates their commit', () => {
-  expect(workflow).toContain("context.actor !== 'renovate[bot]'");
-  expect(workflow).toContain("pull.head.ref.startsWith('renovate/')");
-  expect(workflow).toContain("name.startsWith('@ankhorage/')");
-  expect(workflow).toContain("workflow_id: 'ci.yml'");
-  expect(workflow).not.toContain('actions/checkout');
+describe('trusted Renovate integration', () => {
+  test('accepts only same-repository Renovate branches', () => {
+    expect(workflow).toContain("context.actor !== 'renovate[bot]'");
+    expect(workflow).toContain("pull.head.ref.startsWith('renovate/')");
+    expect(workflow).toContain("pull.head.repo?.full_name !== owner + '/' + repo");
+    expect(workflow).toContain('artifact.headSha !== pull.head.sha');
+  });
+
+  test('isolates untrusted branch preparation from write credentials', () => {
+    expect(prepareJob).toContain('contents: read');
+    expect(prepareJob).toContain('persist-credentials: false');
+    expect(prepareJob).toContain('actions/checkout@11d5960a326750d5838078e36cf38b85af677262');
+    expect(commitJob).toContain('contents: write');
+    expect(commitJob).not.toContain('actions/checkout');
+    expect(commitJob).not.toContain('\n        run: |');
+  });
+
+  test('uses the exact lock-selected CLI and provider without package scripts', () => {
+    expect(workflow).toContain("resolveVersion('@ankhorage/ankh')");
+    expect(workflow).toContain("resolveVersion('@ankhorage/devtools')");
+    expect(workflow).toContain('"@ankhorage/ankh": process.env.ANKH_VERSION');
+    expect(workflow).toContain('"@ankhorage/devtools": process.env.DEVTOOLS_VERSION');
+    expect(workflow).toContain('package.json and bun.lock must select the same exact root');
+    expect(workflow).toContain('--ignore-scripts --lockfile-only');
+    expect(workflow).toContain('--registry=https://registry.npmjs.org');
+    expect(workflow).not.toContain('@latest');
+  });
+
+  test('requires a byte-stable second sync and current status', () => {
+    const syncCommand = '"$RUNNER_TEMP/toolchain/node_modules/.bin/ankh" devtools sync .';
+    expect(workflow.split(syncCommand)).toHaveLength(3);
+    expect(workflow).toContain('test "$first_hash" = "$second_hash"');
+    expect(workflow).toContain('"$RUNNER_TEMP/toolchain/node_modules/.bin/ankh" devtools status .');
+  });
+});
+
+describe('trusted Renovate write boundary', () => {
+  test('limits derived writes to the Devtools-managed inventory', () => {
+    for (const path of [
+      '.github/workflows/ci.yml',
+      '.github/workflows/release.yml',
+      '.github/workflows/renovate.yml',
+      '.prettierrc.js',
+      '.vscode/extensions.json',
+      '.vscode/settings.json',
+      'bun.lock',
+      'eslint.config.mjs',
+      'eslint.local.config.mjs',
+      'knip.config.ts',
+      'package.json',
+      'prettier.local.config.js',
+    ]) {
+      expect(workflow).toContain("'" + path + "'");
+    }
+    expect(workflow).not.toContain("'.github/workflows/studio-acceptance.yml'");
+    expect(workflow).toContain('Devtools sync changed an unexpected path:');
+    expect(workflow).toContain('Devtools sync created an unexpected path:');
+  });
+
+  test('commits through the Git API and revalidates the exact commit', () => {
+    expect(workflow).toContain('github.rest.git.createBlob');
+    expect(workflow).toContain('github.rest.git.getCommit');
+    expect(workflow).toContain('github.rest.git.createTree');
+    expect(workflow).toContain('github.rest.git.createCommit');
+    expect(workflow).toContain('github.rest.git.updateRef');
+    expect(workflow).toContain("workflow_id: 'ci.yml'");
+    expect(workflow).toContain('if (currentContent !== content)');
+  });
+
+  test('creates release metadata for Devtools-owned dependency updates', () => {
+    expect(workflow).toContain(
+      "const isDevtoolsOwner = owner + '/' + repo === 'ankhorage/devtools';",
+    );
+    expect(workflow).toContain('Update Devtools-owned dependencies:');
+    expect(workflow).toContain("changed.push({ name: 'bun', section: 'packageManager' })");
+  });
+
+  test('pins every third-party action by immutable commit', () => {
+    const uses = [...workflow.matchAll(/^\s*uses: ([^\s#]+)/gm)].map((match) => match[1]);
+    expect(uses.length).toBeGreaterThan(0);
+    for (const action of uses) {
+      expect(action).toMatch(/@[0-9a-f]{40}$/);
+    }
+  });
 });

@@ -1,0 +1,14 @@
+/***
+ * Devtools owner repository configuration
+ *
+ * Loads the owner-specific policy that enables and groups the root Bun, ESLint, Knip, Prettier,
+ * TypeScript, and validation/publishing dependencies maintained by @ankhorage/devtools. Major
+ * upgrades remain reviewable. Do not use this profile in normal consumer repositories.
+ *
+ * @usage
+ * @readme
+ */
+{
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  extends: ['github>ankhorage/renovate:devtools-owner'],
+}

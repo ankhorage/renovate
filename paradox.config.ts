@@ -8,7 +8,7 @@ export default defineParadoxConfig({
     usage: {
       description:
         'Extend the repository-hosted preset from each Ankhorage repository that Renovate manages.',
-      entrypoints: ['examples/renovate.json5'],
+      entrypoints: ['examples/renovate.json5', 'examples/devtools-renovate.json5'],
     },
   },
   package: {

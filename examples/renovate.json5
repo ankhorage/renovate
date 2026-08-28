@@ -1,7 +1,11 @@
 /***
  * Repository configuration
  *
- * Loads the canonical Ankhorage dependency-update policy from its default branch.
+ * Loads the normal consumer policy from its default branch. The policy keeps Devtools-owned
+ * packages and canonical workflows out of independent Renovate updates, and groups compatible
+ * @ankhorage/ankh and @ankhorage/devtools releases for the trusted automatic synchronization
+ * workflow. The workflow runs the exact lock-selected toolchain twice, requires byte stability,
+ * and commits the complete managed result without a manual repository sync.
  *
  * @usage
  * @readme

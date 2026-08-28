@@ -26,6 +26,7 @@
   "files": [
     "dist",
     "default.json",
+    "devtools-owner.json",
     "examples",
     "paradox",
     "README.md",
@@ -38,6 +39,7 @@
       "default": "./dist/index.js"
     },
     "./default.json": "./default.json",
+    "./devtools-owner.json": "./devtools-owner.json",
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -48,7 +50,7 @@
     "changeset": "changeset",
     "changeset:status": "changeset status --since=origin/main",
     "docs": "paradox",
-    "test": "bun test src && RENOVATE_X_IGNORE_RE2=true renovate-config-validator default.json",
+    "test": "bun test src && RENOVATE_X_IGNORE_RE2=true renovate-config-validator default.json devtools-owner.json",
     "typecheck": "bun x tsc --noEmit -p tsconfig.json",
     "version-packages": "changeset version",
     "lint": "ankhorage-eslint . --max-warnings=0",
