@@ -15,10 +15,11 @@ jobs:
       pull-requests: read
     runs-on: ubuntu-latest
     outputs:
+      base-sha: ${{ steps.metadata.outputs.base-sha }}
       bun-version: ${{ steps.metadata.outputs.bun-version }}
       head-ref: ${{ steps.metadata.outputs.head-ref }}
       head-sha: ${{ steps.metadata.outputs.head-sha }}
-      toolchain-changed: ${{ steps.metadata.outputs.toolchain-changed }}
+      sync-mode: ${{ steps.metadata.outputs.sync-mode }}
     steps:
       - name: Validate Renovate metadata
         id: metadata
@@ -68,22 +69,57 @@ jobs:
             const toolchainChanged = sections.some((section) =>
               [...toolchainNames].some((name) => base[section]?.[name] !== head[section]?.[name])
             );
+            const isDevtoolsOwner = owner + '/' + repo === 'ankhorage/devtools';
+            const ownerDependencyChanged = isDevtoolsOwner && sections.some((section) => {
+              const names = new Set([
+                ...Object.keys(base[section] ?? {}),
+                ...Object.keys(head[section] ?? {}),
+              ]);
+              return [...names].some((name) => base[section]?.[name] !== head[section]?.[name]);
+            });
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner,
+              repo,
+              pull_number: pullNumber,
+              per_page: 100,
+            });
+            const ownerPolicyChanged = isDevtoolsOwner && files.some(
+              ({ filename }) => filename === 'src/policy/bunRuntimePolicy.ts',
+            );
+            const ownerUpdate =
+              ownerDependencyChanged ||
+              (isDevtoolsOwner && base.packageManager !== head.packageManager) ||
+              ownerPolicyChanged;
+            const syncMode = ownerUpdate
+              ? 'devtools-owner'
+              : toolchainChanged
+                ? 'consumer'
+                : 'none';
 
+            core.setOutput('base-sha', pull.base.sha);
             core.setOutput('bun-version', packageManager[1]);
             core.setOutput('head-ref', pull.head.ref);
             core.setOutput('head-sha', pull.head.sha);
-            core.setOutput('toolchain-changed', toolchainChanged ? 'true' : 'false');
+            core.setOutput('sync-mode', syncMode);
 
       - name: Check out the Renovate commit without credentials
-        if: steps.metadata.outputs.toolchain-changed == 'true'
+        if: steps.metadata.outputs.sync-mode != 'none'
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ steps.metadata.outputs.head-sha }}
           path: repository
           persist-credentials: false
 
+      - name: Check out the trusted Devtools owner base without credentials
+        if: steps.metadata.outputs.sync-mode == 'devtools-owner'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ steps.metadata.outputs.base-sha }}
+          path: trusted-owner
+          persist-credentials: false
+
       - name: Resolve the exact selected toolchain
-        if: steps.metadata.outputs.toolchain-changed == 'true'
+        if: steps.metadata.outputs.sync-mode == 'consumer'
         id: toolchain
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
@@ -130,13 +166,13 @@ jobs:
             core.setOutput('devtools-version', resolveVersion('@ankhorage/devtools'));
 
       - name: Set up the trusted Bun runtime
-        if: steps.metadata.outputs.toolchain-changed == 'true'
+        if: steps.metadata.outputs.sync-mode != 'none'
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: ${{ steps.metadata.outputs.bun-version }}
 
       - name: Install the exact released toolchain
-        if: steps.metadata.outputs.toolchain-changed == 'true'
+        if: steps.metadata.outputs.sync-mode == 'consumer'
         env:
           ANKH_VERSION: ${{ steps.toolchain.outputs.ankh-version }}
           DEVTOOLS_VERSION: ${{ steps.toolchain.outputs.devtools-version }}
@@ -160,8 +196,12 @@ jobs:
             --ignore-scripts \
             --registry=https://registry.npmjs.org
 
-      - name: Synchronize and prove byte stability
-        if: steps.metadata.outputs.toolchain-changed == 'true'
+      - name: Install the trusted Devtools owner base
+        if: steps.metadata.outputs.sync-mode == 'devtools-owner'
+        run: bun install --cwd trusted-owner --frozen-lockfile --ignore-scripts
+
+      - name: Synchronize the consumer and prove byte stability
+        if: steps.metadata.outputs.sync-mode == 'consumer'
         run: |
           mkdir -p "$RUNNER_TEMP/safe-bin"
           printf '%s\n' \
@@ -205,18 +245,38 @@ jobs:
           second_hash="$(git diff --binary | shasum -a 256)"
           test "$first_hash" = "$second_hash"
 
+      - name: Synchronize the Devtools owner and prove byte stability
+        if: steps.metadata.outputs.sync-mode == 'devtools-owner'
+        run: |
+          managed_paths=(
+            .github/workflows/ci.yml
+            .github/workflows/release.yml
+            .github/workflows/renovate.yml
+            README.md
+            bun.lock
+            package.json
+          )
+          bun trusted-owner/scripts/sync-renovate-owner.ts sync repository
+          git -C repository add -N -f -- "${managed_paths[@]}"
+          first_hash="$(git -C repository diff --binary | shasum -a 256)"
+          bun trusted-owner/scripts/sync-renovate-owner.ts sync repository
+          bun trusted-owner/scripts/sync-renovate-owner.ts status repository
+          git -C repository add -N -f -- "${managed_paths[@]}"
+          second_hash="$(git -C repository diff --binary | shasum -a 256)"
+          test "$first_hash" = "$second_hash"
+
       - name: Package deterministic managed changes
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           HEAD_REF: ${{ steps.metadata.outputs.head-ref }}
           HEAD_SHA: ${{ steps.metadata.outputs.head-sha }}
-          TOOLCHAIN_CHANGED: ${{ steps.metadata.outputs.toolchain-changed }}
+          SYNC_MODE: ${{ steps.metadata.outputs.sync-mode }}
         with:
           script: |
             const childProcess = require('node:child_process');
             const fs = require('node:fs');
             const path = require('node:path');
-            const allowed = new Set([
+            const consumerAllowed = [
               '.github/workflows/ci.yml',
               '.github/workflows/release.yml',
               '.github/workflows/renovate.yml',
@@ -229,9 +289,25 @@ jobs:
               'knip.config.ts',
               'package.json',
               'prettier.local.config.js',
-            ]);
+            ];
+            const ownerAllowed = [
+              '.github/workflows/ci.yml',
+              '.github/workflows/release.yml',
+              '.github/workflows/renovate.yml',
+              'README.md',
+              'bun.lock',
+              'package.json',
+            ];
+            const allowedByMode = {
+              consumer: new Set(consumerAllowed),
+              'devtools-owner': new Set(ownerAllowed),
+              none: new Set(),
+            };
+            const syncMode = process.env.SYNC_MODE;
+            const allowed = allowedByMode[syncMode];
+            if (!allowed) throw new Error('The prepared sync mode is invalid.');
             const files = [];
-            if (process.env.TOOLCHAIN_CHANGED === 'true') {
+            if (syncMode !== 'none') {
               const root = path.resolve('repository');
               const output = childProcess.execFileSync(
                 'git',
@@ -275,6 +351,7 @@ jobs:
             fs.writeFileSync(artifactPath, JSON.stringify({
               headRef: process.env.HEAD_REF,
               headSha: process.env.HEAD_SHA,
+              syncMode,
               files,
             }));
 
@@ -328,7 +405,8 @@ jobs:
               throw new Error('The Renovate branch changed after managed output was prepared.');
             }
 
-            const allowed = new Set([
+            const isDevtoolsOwner = owner + '/' + repo === 'ankhorage/devtools';
+            const consumerAllowed = [
               '.github/workflows/ci.yml',
               '.github/workflows/release.yml',
               '.github/workflows/renovate.yml',
@@ -341,7 +419,24 @@ jobs:
               'knip.config.ts',
               'package.json',
               'prettier.local.config.js',
-            ]);
+            ];
+            const ownerAllowed = [
+              '.github/workflows/ci.yml',
+              '.github/workflows/release.yml',
+              '.github/workflows/renovate.yml',
+              'README.md',
+              'bun.lock',
+              'package.json',
+            ];
+            const allowedByMode = {
+              consumer: new Set(consumerAllowed),
+              'devtools-owner': new Set(ownerAllowed),
+              none: new Set(),
+            };
+            const allowed = allowedByMode[artifact.syncMode];
+            if (!allowed || (artifact.syncMode === 'devtools-owner' && !isDevtoolsOwner)) {
+              throw new Error('Managed artifact contains an invalid sync mode.');
+            }
             if (!Array.isArray(artifact.files)) throw new Error('Managed artifact files are invalid.');
             const managedFiles = new Map();
             for (const file of artifact.files) {
@@ -377,31 +472,66 @@ jobs:
             const head = await readManifest(pull.head.sha);
             const releaseSections = ['dependencies', 'optionalDependencies', 'peerDependencies'];
             const allSections = [...releaseSections, 'devDependencies'];
-            const isDevtoolsOwner = owner + '/' + repo === 'ankhorage/devtools';
-            const changed = allSections.flatMap((section) => {
+            const toolchainNames = new Set(['@ankhorage/ankh', '@ankhorage/devtools']);
+            const toolchainChanged = allSections.some((section) =>
+              [...toolchainNames].some((name) => base[section]?.[name] !== head[section]?.[name])
+            );
+            const ownerDependencyChanged = isDevtoolsOwner && allSections.some((section) => {
               const names = new Set([
                 ...Object.keys(base[section] ?? {}),
                 ...Object.keys(head[section] ?? {}),
               ]);
+              return [...names].some((name) => base[section]?.[name] !== head[section]?.[name]);
+            });
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner,
+              repo,
+              pull_number: pullNumber,
+              per_page: 100,
+            });
+            const ownerPolicyChanged = isDevtoolsOwner && files.some(
+              ({ filename }) => filename === 'src/policy/bunRuntimePolicy.ts',
+            );
+            const ownerUpdate =
+              ownerDependencyChanged ||
+              (isDevtoolsOwner && base.packageManager !== head.packageManager) ||
+              ownerPolicyChanged;
+            const expectedSyncMode = ownerUpdate
+              ? 'devtools-owner'
+              : toolchainChanged
+                ? 'consumer'
+                : 'none';
+            if (artifact.syncMode !== expectedSyncMode) {
+              throw new Error('Managed artifact sync mode no longer matches the pull request.');
+            }
+
+            const effectiveHead = managedFiles.has('package.json')
+              ? JSON.parse(managedFiles.get('package.json').toString('utf8'))
+              : head;
+            const changed = allSections.flatMap((section) => {
+              const names = new Set([
+                ...Object.keys(base[section] ?? {}),
+                ...Object.keys(effectiveHead[section] ?? {}),
+              ]);
               return [...names]
                 .filter((name) =>
                   (isDevtoolsOwner || name.startsWith('@ankhorage/')) &&
-                  base[section]?.[name] !== head[section]?.[name]
+                  base[section]?.[name] !== effectiveHead[section]?.[name]
                 )
                 .map((name) => ({ name, section }));
             });
-            if (isDevtoolsOwner && base.packageManager !== head.packageManager) {
+            if (isDevtoolsOwner && base.packageManager !== effectiveHead.packageManager) {
               changed.push({ name: 'bun', section: 'packageManager' });
             }
 
             if (changed.length > 0) {
               const release =
-                !head.private &&
-                typeof head.name === 'string' &&
+                !effectiveHead.private &&
+                typeof effectiveHead.name === 'string' &&
                 (isDevtoolsOwner ||
                   changed.some(({ section }) => releaseSections.includes(section)));
               const frontmatter = release
-                ? '---\n' + "'" + head.name + "': patch\n---"
+                ? '---\n' + "'" + effectiveHead.name + "': patch\n---"
                 : '---\n---';
               const tick = String.fromCharCode(96);
               const names = [...new Set(changed.map(({ name }) => tick + name + tick))]

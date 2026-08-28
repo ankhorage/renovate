@@ -85,6 +85,27 @@ describe('trusted Renovate integration', () => {
   });
 });
 
+describe('trusted Devtools owner preparation', () => {
+  test('runs Devtools owner synchronization only from the trusted base commit', () => {
+    const ownerSyncCommand = 'bun trusted-owner/scripts/sync-renovate-owner.ts sync repository';
+
+    expect(workflow).toContain("owner + '/' + repo === 'ankhorage/devtools'");
+    expect(workflow).toContain("filename === 'src/policy/bunRuntimePolicy.ts'");
+    expect(workflow).toContain("core.setOutput('base-sha', pull.base.sha)");
+    expect(workflow).toContain('ref: ${{ steps.metadata.outputs.base-sha }}');
+    expect(workflow).toContain('path: trusted-owner');
+    expect(workflow).toContain(
+      'bun install --cwd trusted-owner --frozen-lockfile --ignore-scripts',
+    );
+    expect(workflow.split(ownerSyncCommand)).toHaveLength(3);
+    expect(workflow).toContain(
+      'bun trusted-owner/scripts/sync-renovate-owner.ts status repository',
+    );
+    expect(workflow).not.toContain('bun repository/scripts/sync-renovate-owner.ts');
+    expect(workflow).not.toContain('bun run --cwd repository');
+  });
+});
+
 function resolveFixtureVersion(
   manifest: FixtureManifest,
   lock: string,
@@ -155,19 +176,30 @@ describe('trusted Renovate write boundary', () => {
     expect(workflow).toContain('if (currentContent !== content)');
   });
 
-  test('creates release metadata for Devtools-owned dependency updates', () => {
-    expect(workflow).toContain(
-      "const isDevtoolsOwner = owner + '/' + repo === 'ankhorage/devtools';",
-    );
-    expect(workflow).toContain('Update Devtools-owned dependencies:');
-    expect(workflow).toContain("changed.push({ name: 'bun', section: 'packageManager' })");
-  });
-
   test('pins every third-party action by immutable commit', () => {
     const uses = [...workflow.matchAll(/^\s*uses: ([^\s#]+)/gm)].map((match) => match[1]);
     expect(uses.length).toBeGreaterThan(0);
     for (const action of uses) {
       expect(action).toMatch(/@[0-9a-f]{40}$/);
     }
+  });
+});
+
+describe('trusted Devtools owner write boundary', () => {
+  test('creates release metadata for Devtools-owned dependency updates', () => {
+    expect(workflow).toContain(
+      "const isDevtoolsOwner = owner + '/' + repo === 'ankhorage/devtools';",
+    );
+    expect(workflow).toContain('Update Devtools-owned dependencies:');
+    expect(workflow).toContain('base.packageManager !== effectiveHead.packageManager');
+    expect(workflow).toContain("changed.push({ name: 'bun', section: 'packageManager' })");
+    expect(workflow).toContain("managedFiles.has('package.json')");
+  });
+
+  test('revalidates the sync mode and uses separate owner output permissions', () => {
+    expect(workflow).toContain('Managed artifact sync mode no longer matches the pull request.');
+    expect(workflow).toContain("'devtools-owner': new Set(ownerAllowed)");
+    expect(workflow).toContain("'README.md'");
+    expect(workflow).toContain('Managed artifact contains an invalid sync mode.');
   });
 });

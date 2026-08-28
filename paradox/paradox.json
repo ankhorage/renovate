@@ -65,7 +65,7 @@
   "readmeUsage": [
     {
       "title": "Devtools owner repository configuration",
-      "description": "Devtools owner repository configuration\n\nLoads the owner-specific policy that enables and groups the root Bun, ESLint, Knip, Prettier,\nTypeScript, and validation/publishing dependencies maintained by @ankhorage/devtools. Major\nupgrades remain reviewable. Do not use this profile in normal consumer repositories.",
+      "description": "Devtools owner repository configuration\n\nLoads the owner-specific policy that enables and groups the root Bun, ESLint, Knip, Prettier,\nTypeScript, and validation/publishing dependencies maintained by @ankhorage/devtools. Major\nupgrades remain reviewable. The trusted reusable workflow detects owner updates, runs the fixed\nowner synchronization entrypoint from the Devtools base commit in a read-only preparation job,\nrequires byte stability and current status, then commits only the validated owner-managed output.\nPull-request code never executes in the write-capable job. Do not use this profile in normal\nconsumer repositories.",
       "language": "",
       "code": "{\n  $schema: 'https://docs.renovatebot.com/renovate-schema.json',\n  extends: ['github>ankhorage/renovate:devtools-owner'],\n}",
       "sourcePath": "examples/devtools-renovate.json5"
@@ -120,7 +120,7 @@
       "description": null,
       "sourceLocation": {
         "filePath": "src/changeset-workflow.test.ts",
-        "line": 88,
+        "line": 109,
         "column": 1
       }
     },
