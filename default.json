@@ -6,9 +6,15 @@
   "labels": ["dependencies"],
   "packageRules": [
     {
+      "description": "Disable dependency updates unless a later Ankhorage rule explicitly enables them.",
+      "matchPackageNames": ["*"],
+      "enabled": false
+    },
+    {
       "description": "Group Ankhorage package updates and propagate every release downstream.",
       "matchDatasources": ["npm"],
       "matchPackageNames": ["@ankhorage/**"],
+      "enabled": true,
       "groupName": "Ankhorage packages",
       "rangeStrategy": "bump",
       "automerge": true,
