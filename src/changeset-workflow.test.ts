@@ -48,7 +48,7 @@ describe('trusted Renovate integration', () => {
     expect(prepareJob).toContain('contents: read');
     expect(prepareJob).toContain('persist-credentials: false');
     expect(prepareJob).toContain('actions/checkout@11d5960a326750d5838078e36cf38b85af677262');
-    expect(commitJob).toContain('contents: write');
+    expect(commitJob).toContain('contents: read');
     expect(commitJob).not.toContain('actions/checkout');
     expect(commitJob).not.toContain('\n        run: |');
   });
@@ -83,6 +83,23 @@ describe('trusted Renovate integration', () => {
     expect(workflow).toContain('test "$first_hash" = "$second_hash"');
     expect(workflow).toContain('"$RUNNER_TEMP/toolchain/node_modules/.bin/ankh" devtools status .');
     expect(prepareJob.split('git add -N -f -- .')).toHaveLength(3);
+  });
+});
+
+describe('trusted Renovate App authentication', () => {
+  test('uses a repository-scoped token for writes and ordinary CI triggers', () => {
+    expect(workflow).toContain('renovate_sync_client_id:');
+    expect(workflow).toContain('renovate_sync_private_key:');
+    expect(commitJob).toContain(
+      'actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1',
+    );
+    expect(commitJob).toContain('owner: ${{ github.repository_owner }}');
+    expect(commitJob).toContain('repositories: ${{ github.event.repository.name }}');
+    expect(commitJob).toContain('permission-contents: write');
+    expect(commitJob).toContain('permission-pull-requests: read');
+    expect(commitJob).toContain('permission-workflows: write');
+    expect(commitJob).toContain('github-token: ${{ steps.renovate-sync-token.outputs.token }}');
+    expect(workflow).not.toContain('createWorkflowDispatch');
   });
 });
 
@@ -197,7 +214,6 @@ describe('trusted Renovate commit boundary', () => {
     expect(workflow).toContain('github.rest.git.createTree');
     expect(workflow).toContain('github.rest.git.createCommit');
     expect(workflow).toContain('github.rest.git.updateRef');
-    expect(workflow).toContain("workflow_id: 'ci.yml'");
     expect(workflow).toContain('if (currentContent !== content)');
   });
 

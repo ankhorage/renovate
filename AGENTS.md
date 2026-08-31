@@ -117,7 +117,8 @@ Required invariants:
 - inspect base and head files through the GitHub API
 - never check out or execute pull-request code in the privileged context
 - limit writes to the deterministic Changeset path on the validated Renovate branch
-- dispatch CI for the exact updated branch after a write
+- write through the repository-scoped Ankhorage Renovate Sync GitHub App token so the resulting
+  `pull_request` event starts every normal CI workflow without manual approval
 - remain idempotent when the expected Changeset already exists
 
 The workflow creates a release Changeset only when a non-private package changes an Ankhorage

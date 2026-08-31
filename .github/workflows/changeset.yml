@@ -2,10 +2,16 @@ name: Synchronize Renovate Update
 
 on:
   workflow_call:
+    inputs:
+      renovate_sync_client_id:
+        required: true
+        type: string
+    secrets:
+      renovate_sync_private_key:
+        required: true
 
 permissions:
-  actions: write
-  contents: write
+  contents: read
   pull-requests: read
 
 jobs:
@@ -371,8 +377,7 @@ jobs:
   commit:
     needs: prepare
     permissions:
-      actions: write
-      contents: write
+      contents: read
       pull-requests: read
     runs-on: ubuntu-latest
     steps:
@@ -382,11 +387,24 @@ jobs:
           name: renovate-managed
           path: ${{ runner.temp }}/renovate-managed
 
-      - name: Commit managed changes and dispatch CI
+      - name: Create repository-scoped Renovate synchronization token
+        id: renovate-sync-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ inputs.renovate_sync_client_id }}
+          private-key: ${{ secrets.renovate_sync_private_key }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: read
+          permission-workflows: write
+
+      - name: Commit managed changes and trigger pull request CI
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           ARTIFACT_PATH: ${{ runner.temp }}/renovate-managed/renovate-managed.json
         with:
+          github-token: ${{ steps.renovate-sync-token.outputs.token }}
           script: |
             const fs = require('node:fs');
             const pullNumber = context.payload.pull_request?.number;
@@ -656,10 +674,4 @@ jobs:
               ref: 'heads/' + pull.head.ref,
               sha: commit.sha,
               force: false,
-            });
-            await github.rest.actions.createWorkflowDispatch({
-              owner,
-              repo,
-              workflow_id: 'ci.yml',
-              ref: pull.head.ref,
             });

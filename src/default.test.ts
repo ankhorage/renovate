@@ -54,7 +54,7 @@ describe('consumer preset', () => {
     expect(consumerPreset).toMatchObject({
       description: ['Canonical dependency update policy for Ankhorage consumer repositories.'],
       extends: ['config:recommended', ':dependencyDashboard'],
-      gitIgnoredAuthors: ['41898282+github-actions[bot]@users.noreply.github.com'],
+      gitIgnoredAuthors: ['323340348+ankhorage-renovate-sync[bot]@users.noreply.github.com'],
       labels: ['dependencies'],
     });
     expect(consumerPreset.packageRules[0]).toMatchObject({
