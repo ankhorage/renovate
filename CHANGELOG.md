@@ -1,5 +1,11 @@
 # @ankhorage/renovate
 
+## 0.1.7
+
+### Patch Changes
+
+- 1721d24: Authorize the exact Devtools-managed `ankhorage-coding-rules` skill root in the trusted Renovate synchronization workflow while preserving the existing traversal and unexpected-path protections.
+
 ## 0.1.6
 
 ### Patch Changes
