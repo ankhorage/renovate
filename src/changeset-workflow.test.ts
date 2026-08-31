@@ -6,7 +6,7 @@ const workflow = readFileSync(
   new URL('../.github/workflows/changeset.yml', import.meta.url),
   'utf8',
 );
-const [prepareJob, commitJob = ''] = workflow.split('\n  commit:');
+const [prepareJob = '', commitJob = ''] = workflow.split('\n  commit:');
 const surfaceManifest: FixtureManifest = {
   name: '@ankhorage/surface',
   packageManager: 'bun@1.3.14',
@@ -82,6 +82,7 @@ describe('trusted Renovate integration', () => {
     expect(workflow.split(syncCommand)).toHaveLength(3);
     expect(workflow).toContain('test "$first_hash" = "$second_hash"');
     expect(workflow).toContain('"$RUNNER_TEMP/toolchain/node_modules/.bin/ankh" devtools status .');
+    expect(prepareJob.split('git add -N -f -- .')).toHaveLength(3);
   });
 });
 
@@ -149,9 +150,11 @@ describe('trusted Renovate write boundary', () => {
       '.github/workflows/ci.yml',
       '.github/workflows/release.yml',
       '.github/workflows/renovate.yml',
+      '.agents/.devtools-manifest.json',
       '.prettierrc.js',
       '.vscode/extensions.json',
       '.vscode/settings.json',
+      'AGENTS.md',
       'bun.lock',
       'eslint.config.mjs',
       'eslint.local.config.mjs',
@@ -164,8 +167,30 @@ describe('trusted Renovate write boundary', () => {
     expect(workflow).not.toContain("'.github/workflows/studio-acceptance.yml'");
     expect(workflow).toContain('Devtools sync changed an unexpected path:');
     expect(workflow).toContain('Devtools sync created an unexpected path:');
+    expect(workflow).toContain(
+      "const managedSkillRoot = '.agents/skills/ankhorage-project-structure/';",
+    );
   });
 
+  test('allows deletions only inside the managed project-structure skill', () => {
+    expect(workflow).toContain('Devtools sync deleted an unexpected path:');
+    expect(workflow).toContain("syncMode === 'consumer' && isManagedSkillPath(relativePath)");
+    expect(workflow).toContain(
+      "artifact.syncMode === 'consumer' && isManagedSkillPath(relativePath)",
+    );
+    expect(workflow).toContain("segment !== '' && segment !== '.' && segment !== '..'");
+    expect(workflow).toContain('Managed artifact deletions are invalid.');
+    expect(workflow).toContain('Managed artifact contains an invalid deletion.');
+    expect(workflow).toContain('Managed artifact exceeds the file-count limit.');
+    expect(workflow).toContain('for (const path of managedDeletions)');
+    expect(workflow).toContain('sha: null');
+    expect(workflow).toContain('managedFiles.size === 0 && managedDeletions.size === 0');
+    expect(workflow).toContain('artifact.files.length > 0 || artifact.deletions.length > 0');
+    expect(workflow).not.toContain('Devtools sync must not delete managed files.');
+  });
+});
+
+describe('trusted Renovate commit boundary', () => {
   test('commits through the Git API and revalidates the exact commit', () => {
     expect(workflow).toContain('github.rest.git.createBlob');
     expect(workflow).toContain('github.rest.git.getCommit');

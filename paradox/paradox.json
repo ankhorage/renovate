@@ -14,7 +14,7 @@
     {
       "id": "npm",
       "label": "npm",
-      "value": "v0.1.3",
+      "value": "v0.1.4",
       "color": "cb3837"
     },
     {
@@ -72,7 +72,7 @@
     },
     {
       "title": "Repository configuration",
-      "description": "Repository configuration\n\nLoads the normal consumer policy from its default branch. The policy keeps Devtools-owned\npackages and canonical workflows out of independent Renovate updates, and groups compatible\n@ankhorage/ankh and @ankhorage/devtools releases for the trusted automatic synchronization\nworkflow. The workflow runs the exact lock-selected Devtools provider with either the consumer's\nlock-selected Ankh CLI or its own exact canonical CLI pin, requires byte stability, and commits\nthe complete managed result without a manual repository sync. The shared preset also performs a\none-time migration of the legacy immutable workflow pin to the released synchronization\nimplementation; all other canonical workflow changes remain owned by Devtools sync.",
+      "description": "Repository configuration\n\nLoads the normal consumer policy from its default branch. The policy keeps Devtools-owned\npackages and canonical workflows out of independent Renovate updates, and groups compatible\n@ankhorage/ankh and @ankhorage/devtools releases for the trusted automatic synchronization\nworkflow. The workflow runs the exact lock-selected Devtools provider with either the consumer's\nlock-selected Ankh CLI or its own exact canonical CLI pin, requires byte stability, and commits\nthe complete managed result without a manual repository sync. Its write boundary permits the\nDevtools-managed root agent guide and canonical project-structure skill while rejecting other\nrepository-local skills; stale files may be deleted only inside that exact managed skill tree.\nThe shared preset also performs a\none-time migration of the legacy immutable workflow pin to the released synchronization\nimplementation; all other canonical workflow changes remain owned by Devtools sync.",
       "language": "",
       "code": "{\n  $schema: 'https://docs.renovatebot.com/renovate-schema.json',\n  extends: ['github>ankhorage/renovate'],\n}",
       "sourcePath": "examples/renovate.json5"
@@ -120,7 +120,7 @@
       "description": null,
       "sourceLocation": {
         "filePath": "src/changeset-workflow.test.ts",
-        "line": 109,
+        "line": 110,
         "column": 1
       }
     },
