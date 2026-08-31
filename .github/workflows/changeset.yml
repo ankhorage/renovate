@@ -300,9 +300,13 @@ jobs:
             const syncMode = process.env.SYNC_MODE;
             const allowed = allowedByMode[syncMode];
             if (!allowed) throw new Error('The prepared sync mode is invalid.');
-            const managedSkillRoot = '.agents/skills/ankhorage-project-structure/';
+            const managedSkillRoots = [
+              '.agents/skills/ankhorage-coding-rules/',
+              '.agents/skills/ankhorage-project-structure/',
+            ];
             const isManagedSkillPath = (relativePath) => {
-              if (!relativePath.startsWith(managedSkillRoot)) return false;
+              const managedSkillRoot = managedSkillRoots.find((root) => relativePath.startsWith(root));
+              if (managedSkillRoot === undefined) return false;
               const segments = relativePath.slice(managedSkillRoot.length).split('/');
               return segments.every((segment) => segment !== '' && segment !== '.' && segment !== '..');
             };
@@ -463,9 +467,13 @@ jobs:
             if (!allowed || (artifact.syncMode === 'devtools-owner' && !isDevtoolsOwner)) {
               throw new Error('Managed artifact contains an invalid sync mode.');
             }
-            const managedSkillRoot = '.agents/skills/ankhorage-project-structure/';
+            const managedSkillRoots = [
+              '.agents/skills/ankhorage-coding-rules/',
+              '.agents/skills/ankhorage-project-structure/',
+            ];
             const isManagedSkillPath = (relativePath) => {
-              if (!relativePath.startsWith(managedSkillRoot)) return false;
+              const managedSkillRoot = managedSkillRoots.find((root) => relativePath.startsWith(root));
+              if (managedSkillRoot === undefined) return false;
               const segments = relativePath.slice(managedSkillRoot.length).split('/');
               return segments.every((segment) => segment !== '' && segment !== '.' && segment !== '..');
             };

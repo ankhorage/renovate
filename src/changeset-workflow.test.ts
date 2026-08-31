@@ -184,18 +184,24 @@ describe('trusted Renovate write boundary', () => {
     expect(workflow).not.toContain("'.github/workflows/studio-acceptance.yml'");
     expect(workflow).toContain('Devtools sync changed an unexpected path:');
     expect(workflow).toContain('Devtools sync created an unexpected path:');
-    expect(workflow).toContain(
-      "const managedSkillRoot = '.agents/skills/ankhorage-project-structure/';",
-    );
+    for (const root of [
+      '.agents/skills/ankhorage-coding-rules/',
+      '.agents/skills/ankhorage-project-structure/',
+    ]) {
+      expect(prepareJob).toContain(`'${root}'`);
+      expect(commitJob).toContain(`'${root}'`);
+    }
+    expect(workflow).toContain('managedSkillRoots.find((root) => relativePath.startsWith(root))');
   });
 
-  test('allows deletions only inside the managed project-structure skill', () => {
+  test('allows deletions only inside exact managed skill roots', () => {
     expect(workflow).toContain('Devtools sync deleted an unexpected path:');
     expect(workflow).toContain("syncMode === 'consumer' && isManagedSkillPath(relativePath)");
     expect(workflow).toContain(
       "artifact.syncMode === 'consumer' && isManagedSkillPath(relativePath)",
     );
     expect(workflow).toContain("segment !== '' && segment !== '.' && segment !== '..'");
+    expect(workflow).not.toContain("relativePath.startsWith('.agents/skills/')");
     expect(workflow).toContain('Managed artifact deletions are invalid.');
     expect(workflow).toContain('Managed artifact contains an invalid deletion.');
     expect(workflow).toContain('Managed artifact exceeds the file-count limit.');
