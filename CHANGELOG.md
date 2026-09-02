@@ -1,5 +1,11 @@
 # @ankhorage/renovate
 
+## 0.1.9
+
+### Patch Changes
+
+- 70c6d2f: Authorize the exact Devtools-managed `zora-designer` skill tree only when its ownership manifest declares and hashes each synchronized file.
+
 ## 0.1.8
 
 ### Patch Changes
