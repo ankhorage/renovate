@@ -1,5 +1,11 @@
 # @ankhorage/renovate
 
+## 0.1.8
+
+### Patch Changes
+
+- df2d580: Automatically merge every green npm patch update while preserving synchronized Devtools ownership of the canonical development toolchain.
+
 ## 0.1.7
 
 ### Patch Changes
