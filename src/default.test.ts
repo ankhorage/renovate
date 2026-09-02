@@ -94,10 +94,10 @@ describe('consumer policy migration', () => {
   });
 });
 
-describe('consumer workflow bootstrap', () => {
-  test('bootstraps only the legacy immutable consumer workflow pin', () => {
-    const [bootstrapManager] = consumerPreset.customManagers ?? [];
-    expect(bootstrapManager).toMatchObject({
+describe('consumer workflow updates', () => {
+  test('tracks every current immutable consumer workflow pin', () => {
+    const [workflowManager] = consumerPreset.customManagers ?? [];
+    expect(workflowManager).toMatchObject({
       autoReplaceStringTemplate:
         'uses: ankhorage/renovate/.github/workflows/changeset.yml@{{{newDigest}}}',
       currentValueTemplate: 'main',
@@ -107,26 +107,29 @@ describe('consumer workflow bootstrap', () => {
       managerFilePatterns: ['/^\\.github\\/workflows\\/renovate\\.yml$/'],
     });
 
-    const [matchString] = bootstrapManager?.matchStrings ?? [];
+    const [matchString] = workflowManager?.matchStrings ?? [];
     expect(matchString).toBeDefined();
-    const legacyWorkflow =
+    const currentWorkflow =
       'uses: ankhorage/renovate/.github/workflows/changeset.yml@' +
-      'b7305e8f17f9b07238f6b827bbc9f866fd498a0f';
-    const releasedWorkflow =
+      '1721d245371e879301d7a2e5299d1c5790d97459';
+    const nextWorkflow =
       'uses: ankhorage/renovate/.github/workflows/changeset.yml@' +
       '7d4a5104b94e763ca5be34919f4fcfbb12efd526';
     const matcher = new RegExp(matchString ?? '');
 
-    expect(matcher.test(legacyWorkflow)).toBe(true);
-    expect(matcher.test(releasedWorkflow)).toBe(false);
+    expect(matcher.test(currentWorkflow)).toBe(true);
+    expect(matcher.test(nextWorkflow)).toBe(true);
     expect(matcher.test('uses: actions/checkout@b7305e8f17f9b07238f6b827bbc9f866fd498a0f')).toBe(
+      false,
+    );
+    expect(matcher.test('uses: ankhorage/renovate/.github/workflows/changeset.yml@main')).toBe(
       false,
     );
   });
 });
 
-describe('consumer workflow bootstrap permissions', () => {
-  test('enables only the one-time workflow bootstrap dependency', () => {
+describe('consumer workflow update permissions', () => {
+  test('enables only the canonical workflow digest dependency', () => {
     expect(
       resolveRules(
         consumerPreset.packageRules,
@@ -141,8 +144,8 @@ describe('consumer workflow bootstrap permissions', () => {
       automerge: true,
       automergeType: 'pr',
       enabled: true,
-      groupName: 'Ankhorage Renovate workflow bootstrap',
-      groupSlug: 'ankhorage-renovate-workflow-bootstrap',
+      groupName: 'Ankhorage Renovate workflow',
+      groupSlug: 'ankhorage-renovate-workflow',
       platformAutomerge: false,
     });
 
