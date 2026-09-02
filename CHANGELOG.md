@@ -1,5 +1,11 @@
 # @ankhorage/renovate
 
+## 0.1.11
+
+### Patch Changes
+
+- 5111b74: Allow trusted consumer synchronization to use the exact Devtools release selected by Bun for a compatible declared package range.
+
 ## 0.1.10
 
 ### Patch Changes
