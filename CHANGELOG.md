@@ -1,5 +1,12 @@
 # @ankhorage/renovate
 
+## 0.1.10
+
+### Patch Changes
+
+- dc0c050: Keep the immutable consumer synchronization workflow pin current through a dedicated Renovate
+  update before Devtools-managed skill synchronization runs.
+
 ## 0.1.9
 
 ### Patch Changes

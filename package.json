@@ -1,6 +1,6 @@
 {
   "name": "@ankhorage/renovate",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "Ankhorage dependency update policy and automation powered by Renovate.",
   "type": "module",
   "license": "MIT",
