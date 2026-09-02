@@ -139,6 +139,40 @@ jobs:
             const lock = fs.readFileSync('repository/bun.lock', 'utf8');
             const manifest = JSON.parse(fs.readFileSync('repository/package.json', 'utf8'));
             const sections = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'];
+            const parseVersion = (value) => {
+              const match = /^(?<major>0|[1-9]\d*)\.(?<minor>0|[1-9]\d*)\.(?<patch>0|[1-9]\d*)(?:-(?<prerelease>[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/.exec(value);
+              return match?.groups ? { ...match.groups, value } : null;
+            };
+            const compareNumber = (left, right) =>
+              left.length === right.length ? left.localeCompare(right) : left.length - right.length;
+            const compareCoreVersions = (left, right) => {
+              for (const part of ['major', 'minor', 'patch']) {
+                const comparison = compareNumber(left[part], right[part]);
+                if (comparison !== 0) return comparison;
+              }
+              return 0;
+            };
+            const isCompatibleSelection = (declaration, selected) => {
+              const match = /^(?<operator>[~^]?)(?<version>.+)$/.exec(declaration);
+              const declared = match?.groups ? parseVersion(match.groups.version) : null;
+              const selectedVersion = parseVersion(selected);
+              if (!declared || !selectedVersion) return false;
+              if (match.groups.operator === '') return declared.value === selectedVersion.value;
+              if (declared.prerelease || selectedVersion.prerelease || compareCoreVersions(selectedVersion, declared) < 0) {
+                return false;
+              }
+              if (match.groups.operator === '~') {
+                return selectedVersion.major === declared.major && selectedVersion.minor === declared.minor;
+              }
+              if (match.groups.operator === '^') {
+                if (declared.major !== '0') return selectedVersion.major === declared.major;
+                if (declared.minor !== '0') {
+                  return selectedVersion.major === declared.major && selectedVersion.minor === declared.minor;
+                }
+                return compareCoreVersions(selectedVersion, declared) === 0;
+              }
+              return false;
+            };
             const resolveVersion = (name, fallbackVersion) => {
               const declarations = sections
                 .map((section) => manifest[section]?.[name])
@@ -151,22 +185,21 @@ jobs:
                 return fallbackVersion;
               }
               const escaped = name.replace(/[.*+?^$()|[\]\\]/g, '\\$&');
-              const match = new RegExp(
+              const matches = [...lock.matchAll(new RegExp(
                 '^    "' + escaped + '": \\["' + escaped + '@([^"]+)"',
-                'm',
-              ).exec(lock);
-              if (!match || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(match[1])) {
+                'gm',
+              ))];
+              const selectedVersion = matches.length === 1 ? matches[0][1] : undefined;
+              if (typeof selectedVersion !== 'string' || !parseVersion(selectedVersion)) {
                 throw new Error('bun.lock must select one exact root ' + name + ' version.');
               }
-              const declared = declarations.length === 1
-                ? /^[~^]?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/.exec(declarations[0])
-                : null;
-              if (!declared || declared[1] !== match[1]) {
+              const declaration = declarations.length === 1 ? declarations[0] : undefined;
+              if (typeof declaration !== 'string' || !isCompatibleSelection(declaration, selectedVersion)) {
                 throw new Error(
-                  'package.json and bun.lock must select the same exact root ' + name + ' version.',
+                  'package.json must declare a compatible root ' + name + ' version range.',
                 );
               }
-              return match[1];
+              return selectedVersion;
             };
             core.setOutput(
               'ankh-version',

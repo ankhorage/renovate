@@ -44,6 +44,36 @@ export interface Preset {
   readonly packageRules: readonly PackageRule[];
 }
 
+export interface TrustedToolchainFixtureManifest {
+  readonly dependencies?: Readonly<Record<string, string>>;
+  readonly devDependencies?: Readonly<Record<string, string>>;
+  readonly name: string;
+  readonly optionalDependencies?: Readonly<Record<string, string>>;
+  readonly packageManager: string;
+  readonly peerDependencies?: Readonly<Record<string, string>>;
+}
+
+export const surfaceToolchainFixtureManifest: TrustedToolchainFixtureManifest = {
+  name: '@ankhorage/surface',
+  packageManager: 'bun@1.3.14',
+  devDependencies: {
+    '@ankhorage/devtools': '^1.7.0',
+  },
+};
+
+export const surfaceToolchainFixtureLock = `
+  workspaces: {
+    "": {
+      devDependencies: {
+        "@ankhorage/devtools": "^1.7.0",
+      },
+    },
+  },
+  packages: {
+    "@ankhorage/devtools": ["@ankhorage/devtools@1.7.0", "", {}],
+  },
+`;
+
 export function dependency(packageName: string, overrides: Partial<Dependency> = {}): Dependency {
   return {
     datasource: 'npm',
@@ -108,4 +138,118 @@ export function resolveRules(
       }),
       {},
     );
+}
+
+export function resolveTrustedToolchainFixtureVersion(
+  manifest: TrustedToolchainFixtureManifest,
+  lock: string,
+  name: string,
+  fallbackVersion?: string,
+): string {
+  const sections = [
+    manifest.dependencies,
+    manifest.devDependencies,
+    manifest.optionalDependencies,
+    manifest.peerDependencies,
+  ];
+  const declarations = sections
+    .map((section) => Object.entries(section ?? {}).find(([candidate]) => candidate === name)?.[1])
+    .filter((value): value is string => typeof value === 'string');
+  if (declarations.length === 0 && fallbackVersion) {
+    if (parseVersion(fallbackVersion) === null) {
+      throw new Error('The fixture fallback must be an exact version.');
+    }
+    return fallbackVersion;
+  }
+
+  const escaped = name.replace(/[.*+?^$()|[\]\\]/g, '\\$&');
+  const matches = [
+    ...lock.matchAll(new RegExp('^    "' + escaped + '": \\["' + escaped + '@([^"]+)"', 'gm')),
+  ];
+  const [selectedMatch] = matches;
+  const declaration = declarations.length === 1 ? declarations.at(0) : undefined;
+  const selectedVersion = matches.length === 1 ? selectedMatch?.at(1) : undefined;
+  if (typeof selectedVersion !== 'string' || parseVersion(selectedVersion) === null) {
+    throw new Error('The fixture does not select one exact root ' + name + ' version.');
+  }
+  if (typeof declaration !== 'string' || !isCompatibleSelection(declaration, selectedVersion)) {
+    throw new Error('The fixture does not declare a compatible root ' + name + ' version range.');
+  }
+  return selectedVersion;
+}
+
+interface ParsedVersion {
+  readonly major: string;
+  readonly minor: string;
+  readonly patch: string;
+  readonly prerelease?: string;
+  readonly value: string;
+}
+
+function isCompatibleSelection(declaration: string, selected: string): boolean {
+  const match = /^(?<operator>[~^]?)(?<version>.+)$/u.exec(declaration);
+  const operator = match?.groups?.operator;
+  const declaredValue = match?.groups?.version;
+  if (operator === undefined || declaredValue === undefined) {
+    return false;
+  }
+  const declared = parseVersion(declaredValue);
+  const selectedVersion = parseVersion(selected);
+  if (declared === null || selectedVersion === null) return false;
+  if (operator === '') return declared.value === selectedVersion.value;
+  if (!isStableAtOrAfter(declared, selectedVersion)) {
+    return false;
+  }
+  if (operator === '~') {
+    return selectedVersion.major === declared.major && selectedVersion.minor === declared.minor;
+  }
+  return operator === '^' && isCaretCompatibleSelection(declared, selectedVersion);
+}
+
+function isStableAtOrAfter(declared: ParsedVersion, selected: ParsedVersion): boolean {
+  return (
+    declared.prerelease === undefined &&
+    selected.prerelease === undefined &&
+    compareCoreVersions(selected, declared) >= 0
+  );
+}
+
+function isCaretCompatibleSelection(declared: ParsedVersion, selected: ParsedVersion): boolean {
+  if (declared.major !== '0') return selected.major === declared.major;
+  if (declared.minor !== '0') {
+    return selected.major === declared.major && selected.minor === declared.minor;
+  }
+  return compareCoreVersions(selected, declared) === 0;
+}
+
+function parseVersion(value: string): ParsedVersion | null {
+  const match =
+    /^(?<major>0|[1-9]\d*)\.(?<minor>0|[1-9]\d*)\.(?<patch>0|[1-9]\d*)(?:-(?<prerelease>[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u.exec(
+      value,
+    );
+  const major = match?.groups?.major;
+  const minor = match?.groups?.minor;
+  const patch = match?.groups?.patch;
+  const prerelease = match?.groups?.prerelease;
+  if (major === undefined || minor === undefined || patch === undefined) {
+    return null;
+  }
+  return {
+    major,
+    minor,
+    patch,
+    ...(prerelease === undefined ? {} : { prerelease }),
+    value,
+  };
+}
+
+function compareCoreVersions(left: ParsedVersion, right: ParsedVersion): number {
+  const major = compareNumber(left.major, right.major);
+  if (major !== 0) return major;
+  const minor = compareNumber(left.minor, right.minor);
+  return minor === 0 ? compareNumber(left.patch, right.patch) : minor;
+}
+
+function compareNumber(left: string, right: string): number {
+  return left.length === right.length ? left.localeCompare(right) : left.length - right.length;
 }

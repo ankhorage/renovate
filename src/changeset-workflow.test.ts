@@ -2,6 +2,12 @@ import { readFileSync } from 'node:fs';
 
 import { describe, expect, test } from 'bun:test';
 
+import {
+  resolveTrustedToolchainFixtureVersion,
+  surfaceToolchainFixtureLock,
+  surfaceToolchainFixtureManifest,
+} from './renovatePreset.testSupport';
+
 const workflow = readFileSync(
   new URL('../.github/workflows/changeset.yml', import.meta.url),
   'utf8',
@@ -9,35 +15,6 @@ const workflow = readFileSync(
 const [prepareJob = '', commitJob = ''] = workflow.split('\n  commit:');
 const managedSkillNames =
   /^ {2}DEVTOOLS_MANAGED_SKILL_NAMES: (.+)$/m.exec(workflow)?.[1]?.split(',') ?? [];
-const surfaceManifest: FixtureManifest = {
-  name: '@ankhorage/surface',
-  packageManager: 'bun@1.3.14',
-  devDependencies: {
-    '@ankhorage/devtools': '^1.7.0',
-  },
-};
-const surfaceLock = `
-  workspaces: {
-    "": {
-      devDependencies: {
-        "@ankhorage/devtools": "^1.7.0",
-      },
-    },
-  },
-  packages: {
-    "@ankhorage/devtools": ["@ankhorage/devtools@1.7.0", "", {}],
-  },
-`;
-
-interface FixtureManifest {
-  readonly dependencies?: Readonly<Record<string, string>>;
-  readonly devDependencies?: Readonly<Record<string, string>>;
-  readonly name: string;
-  readonly optionalDependencies?: Readonly<Record<string, string>>;
-  readonly packageManager: string;
-  readonly peerDependencies?: Readonly<Record<string, string>>;
-}
-
 describe('trusted Renovate integration', () => {
   test('accepts only same-repository Renovate branches', () => {
     expect(workflow).toContain("context.actor !== 'renovate[bot]'");
@@ -54,31 +31,113 @@ describe('trusted Renovate integration', () => {
     expect(commitJob).not.toContain('actions/checkout');
     expect(commitJob).not.toContain('\n        run: |');
   });
+});
 
+describe('trusted Renovate toolchain policy', () => {
   test('uses the exact lock-selected provider without package scripts', () => {
     expect(workflow).toContain("resolveVersion('@ankhorage/devtools')");
     expect(workflow).toContain('"@ankhorage/ankh": process.env.ANKH_VERSION');
     expect(workflow).toContain('"@ankhorage/devtools": process.env.DEVTOOLS_VERSION');
-    expect(workflow).toContain('package.json and bun.lock must select the same exact root');
+    expect(workflow).toContain('package.json must declare a compatible root');
     expect(workflow).toContain('--ignore-scripts --lockfile-only');
     expect(workflow).toContain('--registry=https://registry.npmjs.org');
     expect(workflow).not.toContain('@latest');
   });
 
   test('supports the real Surface shape with a canonical exact CLI fallback', () => {
-    expect(resolveFixtureVersion(surfaceManifest, surfaceLock, '@ankhorage/ankh', '0.4.0')).toBe(
-      '0.4.0',
-    );
-    expect(resolveFixtureVersion(surfaceManifest, surfaceLock, '@ankhorage/devtools')).toBe(
-      '1.7.0',
-    );
+    expect(
+      resolveTrustedToolchainFixtureVersion(
+        surfaceToolchainFixtureManifest,
+        surfaceToolchainFixtureLock,
+        '@ankhorage/ankh',
+        '0.4.0',
+      ),
+    ).toBe('0.4.0');
+    expect(
+      resolveTrustedToolchainFixtureVersion(
+        surfaceToolchainFixtureManifest,
+        surfaceToolchainFixtureLock,
+        '@ankhorage/devtools',
+      ),
+    ).toBe('1.7.0');
     expect(workflow).toContain("CANONICAL_ANKH_VERSION: '0.4.0'");
     expect(workflow).toContain('if (declarations.length === 0 && fallbackVersion)');
     expect(workflow).toContain(
       "resolveVersion('@ankhorage/ankh', process.env.CANONICAL_ANKH_VERSION)",
     );
   });
+});
 
+describe('trusted Renovate toolchain selection', () => {
+  test('uses Bun’s exact newer patch selection for a compatible declared range', () => {
+    expect(
+      resolveTrustedToolchainFixtureVersion(
+        {
+          name: '@ankhorage/templates',
+          packageManager: 'bun@1.4.0',
+          dependencies: { '@ankhorage/devtools': '^1.10.1' },
+        },
+        `
+  workspaces: {
+    "": {
+      dependencies: {
+        "@ankhorage/devtools": "^1.10.1",
+      },
+    },
+  },
+  packages: {
+    "@ankhorage/devtools": ["@ankhorage/devtools@1.10.2", "", {}],
+  },
+`,
+        '@ankhorage/devtools',
+      ),
+    ).toBe('1.10.2');
+  });
+});
+
+describe('trusted Renovate invalid toolchain selection', () => {
+  test('rejects incompatible ranges and malformed or missing exact lock selections', () => {
+    expect(() =>
+      resolveTrustedToolchainFixtureVersion(
+        {
+          ...surfaceToolchainFixtureManifest,
+          devDependencies: { '@ankhorage/devtools': '^2.0.0' },
+        },
+        surfaceToolchainFixtureLock,
+        '@ankhorage/devtools',
+      ),
+    ).toThrow('compatible root');
+    expect(() =>
+      resolveTrustedToolchainFixtureVersion(
+        {
+          ...surfaceToolchainFixtureManifest,
+          devDependencies: { '@ankhorage/devtools': 'latest' },
+        },
+        surfaceToolchainFixtureLock,
+        '@ankhorage/devtools',
+      ),
+    ).toThrow('compatible root');
+    expect(() =>
+      resolveTrustedToolchainFixtureVersion(
+        surfaceToolchainFixtureManifest,
+        surfaceToolchainFixtureLock.replace(
+          '@ankhorage/devtools@1.7.0',
+          '@ankhorage/devtools@not-a-version',
+        ),
+        '@ankhorage/devtools',
+      ),
+    ).toThrow('exact root');
+    expect(() =>
+      resolveTrustedToolchainFixtureVersion(
+        surfaceToolchainFixtureManifest,
+        `${surfaceToolchainFixtureLock}\n    "@ankhorage/devtools": ["@ankhorage/devtools@1.7.0", "", {}],`,
+        '@ankhorage/devtools',
+      ),
+    ).toThrow('exact root');
+  });
+});
+
+describe('trusted Renovate synchronization', () => {
   test('requires a byte-stable second sync and current status', () => {
     const syncCommand = '"$RUNNER_TEMP/toolchain/node_modules/.bin/ankh" devtools sync .';
     expect(workflow.split(syncCommand)).toHaveLength(3);
@@ -125,43 +184,6 @@ describe('trusted Devtools owner preparation', () => {
     expect(workflow).not.toContain('bun run --cwd repository');
   });
 });
-
-function resolveFixtureVersion(
-  manifest: FixtureManifest,
-  lock: string,
-  name: string,
-  fallbackVersion?: string,
-): string {
-  const sections = [
-    manifest.dependencies,
-    manifest.devDependencies,
-    manifest.optionalDependencies,
-    manifest.peerDependencies,
-  ];
-  const declarations = sections
-    .map((section) => Object.entries(section ?? {}).find(([candidate]) => candidate === name)?.[1])
-    .filter((value): value is string => typeof value === 'string');
-  if (declarations.length === 0 && fallbackVersion) {
-    if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(fallbackVersion)) {
-      throw new Error('The fixture fallback must be an exact version.');
-    }
-    return fallbackVersion;
-  }
-
-  const escaped = name.replace(/[.*+?^$()|[\]\\]/g, '\\$&');
-  const match = new RegExp('^    "' + escaped + '": \\["' + escaped + '@([^"]+)"', 'm').exec(lock);
-  const declaration = declarations.length === 1 ? declarations.at(0) : undefined;
-  const declared =
-    typeof declaration === 'string'
-      ? /^[~^]?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/.exec(declaration)
-      : null;
-  const selectedVersion = match?.at(1);
-  const declaredVersion = declared?.at(1);
-  if (typeof selectedVersion !== 'string' || declaredVersion !== selectedVersion) {
-    throw new Error('The fixture does not select one exact root ' + name + ' version.');
-  }
-  return selectedVersion;
-}
 
 describe('trusted Renovate write boundary', () => {
   test('limits derived writes to the Devtools-managed inventory', () => {
