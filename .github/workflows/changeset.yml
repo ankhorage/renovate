@@ -14,6 +14,9 @@ permissions:
   contents: read
   pull-requests: read
 
+env:
+  DEVTOOLS_MANAGED_SKILL_NAMES: ankhorage-coding-rules,ankhorage-project-structure,zora-designer
+
 jobs:
   prepare:
     permissions:
@@ -260,12 +263,14 @@ jobs:
       - name: Package deterministic managed changes
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
+          BASE_SHA: ${{ steps.metadata.outputs.base-sha }}
           HEAD_REF: ${{ steps.metadata.outputs.head-ref }}
           HEAD_SHA: ${{ steps.metadata.outputs.head-sha }}
           SYNC_MODE: ${{ steps.metadata.outputs.sync-mode }}
         with:
           script: |
             const childProcess = require('node:child_process');
+            const crypto = require('node:crypto');
             const fs = require('node:fs');
             const path = require('node:path');
             const consumerAllowed = [
@@ -300,25 +305,108 @@ jobs:
             const syncMode = process.env.SYNC_MODE;
             const allowed = allowedByMode[syncMode];
             if (!allowed) throw new Error('The prepared sync mode is invalid.');
-            const managedSkillRoots = [
-              '.agents/skills/ankhorage-coding-rules/',
-              '.agents/skills/ankhorage-project-structure/',
-            ];
-            const isManagedSkillPath = (relativePath) => {
+            const managedManifestPath = '.agents/.devtools-manifest.json';
+            const managedSkillRoots = process.env.DEVTOOLS_MANAGED_SKILL_NAMES
+              .split(',')
+              .map((name) => '.agents/skills/' + name + '/');
+            const isExactManagedSkillPath = (relativePath) => {
               const managedSkillRoot = managedSkillRoots.find((root) => relativePath.startsWith(root));
               if (managedSkillRoot === undefined) return false;
               const segments = relativePath.slice(managedSkillRoot.length).split('/');
               return segments.every((segment) => segment !== '' && segment !== '.' && segment !== '..');
             };
+            const readManagedSkillFiles = (contents) => {
+              const manifest = JSON.parse(contents);
+              if (
+                manifest?.schemaVersion !== 1 ||
+                typeof manifest.sourceDevtoolsVersion !== 'string' ||
+                !manifest.skills ||
+                typeof manifest.skills !== 'object' ||
+                Array.isArray(manifest.skills)
+              ) {
+                throw new Error('Devtools managed-skill manifest is invalid.');
+              }
+              const declaredFiles = new Map();
+              for (const [skillName, entry] of Object.entries(manifest.skills)) {
+                if (
+                  !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(skillName) ||
+                  !entry ||
+                  typeof entry !== 'object' ||
+                  Array.isArray(entry) ||
+                  !entry.files ||
+                  typeof entry.files !== 'object' ||
+                  Array.isArray(entry.files)
+                ) {
+                  throw new Error('Devtools managed-skill entry is invalid: ' + skillName);
+                }
+                const expectedRoot = '.agents/skills/' + skillName + '/';
+                for (const [relativePath, hash] of Object.entries(entry.files)) {
+                  if (
+                    !relativePath.startsWith(expectedRoot) ||
+                    !isExactManagedSkillPath(relativePath) ||
+                    typeof hash !== 'string' ||
+                    !/^sha256:[a-f0-9]{64}$/.test(hash) ||
+                    declaredFiles.has(relativePath)
+                  ) {
+                    throw new Error('Devtools managed-skill file is invalid: ' + relativePath);
+                  }
+                  declaredFiles.set(relativePath, hash);
+                }
+              }
+              return declaredFiles;
+            };
+            const readRepositoryFile = async (relativePath, ref) => {
+              try {
+                const { owner, repo } = context.repo;
+                const { data } = await github.rest.repos.getContent({
+                  owner,
+                  repo,
+                  path: relativePath,
+                  ref,
+                });
+                if (Array.isArray(data) || data.type !== 'file' || !data.content) {
+                  throw new Error('Repository file is not readable: ' + relativePath);
+                }
+                return Buffer.from(data.content, 'base64').toString('utf8');
+              } catch (error) {
+                if (error.status === 404) return null;
+                throw error;
+              }
+            };
+            const root = path.resolve('repository');
+            const declaredManagedSkillFiles = new Map();
+            const baseManagedSkillFiles = new Map();
+            if (syncMode === 'consumer') {
+              const managedManifestFile = path.join(root, managedManifestPath);
+              if (!fs.lstatSync(managedManifestFile).isFile()) {
+                throw new Error('Devtools ownership manifest must be a regular file.');
+              }
+              const managedManifest = fs.readFileSync(managedManifestFile, 'utf8');
+              for (const [relativePath, hash] of readManagedSkillFiles(managedManifest)) {
+                declaredManagedSkillFiles.set(relativePath, hash);
+              }
+              const baseManagedManifest = await readRepositoryFile(
+                managedManifestPath,
+                process.env.BASE_SHA,
+              );
+              if (baseManagedManifest !== null) {
+                for (const [relativePath, hash] of readManagedSkillFiles(baseManagedManifest)) {
+                  baseManagedSkillFiles.set(relativePath, hash);
+                }
+              }
+            }
+            const isManagedSkillPath = (relativePath) =>
+              isExactManagedSkillPath(relativePath) && declaredManagedSkillFiles.has(relativePath);
+            const isManagedSkillDeletion = (relativePath) =>
+              isExactManagedSkillPath(relativePath) && baseManagedSkillFiles.has(relativePath);
             const isAllowed = (relativePath) =>
               allowed.has(relativePath) ||
               (syncMode === 'consumer' && isManagedSkillPath(relativePath));
             const isDeletionAllowed = (relativePath) =>
-              syncMode === 'consumer' && isManagedSkillPath(relativePath);
+              syncMode === 'consumer' && isManagedSkillDeletion(relativePath);
             const files = [];
             const deletions = [];
             if (syncMode !== 'none') {
-              const root = path.resolve('repository');
               const output = childProcess.execFileSync(
                 'git',
                 ['-C', root, 'diff', '--name-only', '--diff-filter=ACMRTUXB', '-z'],
@@ -349,6 +437,14 @@ jobs:
                 const absolutePath = path.join(root, relativePath);
                 if (!fs.lstatSync(absolutePath).isFile()) {
                   throw new Error('Managed output must be a regular file: ' + relativePath);
+                }
+                if (isManagedSkillPath(relativePath)) {
+                  const expectedManagedHash = declaredManagedSkillFiles.get(relativePath);
+                  const actualManagedHash =
+                    'sha256:' + crypto.createHash('sha256').update(fs.readFileSync(absolutePath)).digest('hex');
+                  if (expectedManagedHash !== actualManagedHash) {
+                    throw new Error('Managed skill content does not match its ownership manifest: ' + relativePath);
+                  }
                 }
                 files.push({
                   path: relativePath,
@@ -410,6 +506,7 @@ jobs:
         with:
           github-token: ${{ steps.renovate-sync-token.outputs.token }}
           script: |
+            const crypto = require('node:crypto');
             const fs = require('node:fs');
             const pullNumber = context.payload.pull_request?.number;
             if (!pullNumber || context.actor !== 'renovate[bot]') {
@@ -467,21 +564,6 @@ jobs:
             if (!allowed || (artifact.syncMode === 'devtools-owner' && !isDevtoolsOwner)) {
               throw new Error('Managed artifact contains an invalid sync mode.');
             }
-            const managedSkillRoots = [
-              '.agents/skills/ankhorage-coding-rules/',
-              '.agents/skills/ankhorage-project-structure/',
-            ];
-            const isManagedSkillPath = (relativePath) => {
-              const managedSkillRoot = managedSkillRoots.find((root) => relativePath.startsWith(root));
-              if (managedSkillRoot === undefined) return false;
-              const segments = relativePath.slice(managedSkillRoot.length).split('/');
-              return segments.every((segment) => segment !== '' && segment !== '.' && segment !== '..');
-            };
-            const isAllowed = (relativePath) =>
-              allowed.has(relativePath) ||
-              (artifact.syncMode === 'consumer' && isManagedSkillPath(relativePath));
-            const isDeletionAllowed = (relativePath) =>
-              artifact.syncMode === 'consumer' && isManagedSkillPath(relativePath);
             if (!Array.isArray(artifact.files)) throw new Error('Managed artifact files are invalid.');
             if (!Array.isArray(artifact.deletions)) {
               throw new Error('Managed artifact deletions are invalid.');
@@ -489,6 +571,107 @@ jobs:
             if (artifact.files.length > 256 || artifact.deletions.length > 256) {
               throw new Error('Managed artifact exceeds the file-count limit.');
             }
+            const managedManifestPath = '.agents/.devtools-manifest.json';
+            const managedSkillRoots = process.env.DEVTOOLS_MANAGED_SKILL_NAMES
+              .split(',')
+              .map((name) => '.agents/skills/' + name + '/');
+            const isExactManagedSkillPath = (relativePath) => {
+              const managedSkillRoot = managedSkillRoots.find((root) => relativePath.startsWith(root));
+              if (managedSkillRoot === undefined) return false;
+              const segments = relativePath.slice(managedSkillRoot.length).split('/');
+              return segments.every((segment) => segment !== '' && segment !== '.' && segment !== '..');
+            };
+            const readManagedSkillFiles = (contents) => {
+              const manifest = JSON.parse(contents);
+              if (
+                manifest?.schemaVersion !== 1 ||
+                typeof manifest.sourceDevtoolsVersion !== 'string' ||
+                !manifest.skills ||
+                typeof manifest.skills !== 'object' ||
+                Array.isArray(manifest.skills)
+              ) {
+                throw new Error('Devtools managed-skill manifest is invalid.');
+              }
+              const declaredFiles = new Map();
+              for (const [skillName, entry] of Object.entries(manifest.skills)) {
+                if (
+                  !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(skillName) ||
+                  !entry ||
+                  typeof entry !== 'object' ||
+                  Array.isArray(entry) ||
+                  !entry.files ||
+                  typeof entry.files !== 'object' ||
+                  Array.isArray(entry.files)
+                ) {
+                  throw new Error('Devtools managed-skill entry is invalid: ' + skillName);
+                }
+                const expectedRoot = '.agents/skills/' + skillName + '/';
+                for (const [relativePath, hash] of Object.entries(entry.files)) {
+                  if (
+                    !relativePath.startsWith(expectedRoot) ||
+                    !isExactManagedSkillPath(relativePath) ||
+                    typeof hash !== 'string' ||
+                    !/^sha256:[a-f0-9]{64}$/.test(hash) ||
+                    declaredFiles.has(relativePath)
+                  ) {
+                    throw new Error('Devtools managed-skill file is invalid: ' + relativePath);
+                  }
+                  declaredFiles.set(relativePath, hash);
+                }
+              }
+              return declaredFiles;
+            };
+            const readRepositoryFile = async (relativePath, ref) => {
+              try {
+                const { data } = await github.rest.repos.getContent({
+                  owner,
+                  repo,
+                  path: relativePath,
+                  ref,
+                });
+                if (Array.isArray(data) || data.type !== 'file' || !data.content) {
+                  throw new Error('Repository file is not readable: ' + relativePath);
+                }
+                return Buffer.from(data.content, 'base64').toString('utf8');
+              } catch (error) {
+                if (error.status === 404) return null;
+                throw error;
+              }
+            };
+            const declaredManagedSkillFiles = new Map();
+            const baseManagedSkillFiles = new Map();
+            if (artifact.syncMode === 'consumer') {
+              const artifactManagedManifest = artifact.files.find(
+                (file) => file?.path === managedManifestPath && typeof file.content === 'string',
+              );
+              const headManagedManifest = artifactManagedManifest
+                ? Buffer.from(artifactManagedManifest.content, 'base64').toString('utf8')
+                : await readRepositoryFile(managedManifestPath, pull.head.sha);
+              if (headManagedManifest === null) {
+                throw new Error('Consumer synchronization requires a Devtools ownership manifest.');
+              }
+              for (const [relativePath, hash] of readManagedSkillFiles(headManagedManifest)) {
+                declaredManagedSkillFiles.set(relativePath, hash);
+              }
+              const baseManagedManifest = await readRepositoryFile(
+                managedManifestPath,
+                pull.base.sha,
+              );
+              if (baseManagedManifest !== null) {
+                for (const [relativePath, hash] of readManagedSkillFiles(baseManagedManifest)) {
+                  baseManagedSkillFiles.set(relativePath, hash);
+                }
+              }
+            }
+            const isManagedSkillPath = (relativePath) =>
+              isExactManagedSkillPath(relativePath) && declaredManagedSkillFiles.has(relativePath);
+            const isManagedSkillDeletion = (relativePath) =>
+              isExactManagedSkillPath(relativePath) && baseManagedSkillFiles.has(relativePath);
+            const isAllowed = (relativePath) =>
+              allowed.has(relativePath) ||
+              (artifact.syncMode === 'consumer' && isManagedSkillPath(relativePath));
+            const isDeletionAllowed = (relativePath) =>
+              artifact.syncMode === 'consumer' && isManagedSkillDeletion(relativePath);
             const managedFiles = new Map();
             for (const file of artifact.files) {
               if (
@@ -503,6 +686,14 @@ jobs:
               const content = Buffer.from(file.content, 'base64');
               if (content.byteLength > 2_000_000) {
                 throw new Error('Managed artifact file exceeds the size limit: ' + file.path);
+              }
+              if (isManagedSkillPath(file.path)) {
+                const expectedManagedHash = declaredManagedSkillFiles.get(file.path);
+                const actualManagedHash =
+                  'sha256:' + crypto.createHash('sha256').update(content).digest('hex');
+                if (expectedManagedHash !== actualManagedHash) {
+                  throw new Error('Managed skill content does not match its ownership manifest: ' + file.path);
+                }
               }
               managedFiles.set(file.path, content);
             }
