@@ -7,6 +7,8 @@ const workflow = readFileSync(
   'utf8',
 );
 const [prepareJob = '', commitJob = ''] = workflow.split('\n  commit:');
+const managedSkillNames =
+  /^ {2}DEVTOOLS_MANAGED_SKILL_NAMES: (.+)$/m.exec(workflow)?.[1]?.split(',') ?? [];
 const surfaceManifest: FixtureManifest = {
   name: '@ankhorage/surface',
   packageManager: 'bun@1.3.14',
@@ -184,21 +186,28 @@ describe('trusted Renovate write boundary', () => {
     expect(workflow).not.toContain("'.github/workflows/studio-acceptance.yml'");
     expect(workflow).toContain('Devtools sync changed an unexpected path:');
     expect(workflow).toContain('Devtools sync created an unexpected path:');
-    for (const root of [
-      '.agents/skills/ankhorage-coding-rules/',
-      '.agents/skills/ankhorage-project-structure/',
-    ]) {
-      expect(prepareJob).toContain(`'${root}'`);
-      expect(commitJob).toContain(`'${root}'`);
+    expect(managedSkillNames).toEqual([
+      'ankhorage-coding-rules',
+      'ankhorage-project-structure',
+      'zora-designer',
+    ]);
+    for (const job of [prepareJob, commitJob]) {
+      expect(job).toContain('process.env.DEVTOOLS_MANAGED_SKILL_NAMES');
+      expect(job).toContain('declaredManagedSkillFiles.has(relativePath)');
+      expect(job).toContain('baseManagedSkillFiles.has(relativePath)');
+      expect(job).toContain('Managed skill content does not match its ownership manifest:');
     }
+    expect(prepareJob).toContain('Devtools ownership manifest must be a regular file.');
     expect(workflow).toContain('managedSkillRoots.find((root) => relativePath.startsWith(root))');
   });
+});
 
+describe('trusted Renovate deletion boundary', () => {
   test('allows deletions only inside exact managed skill roots', () => {
     expect(workflow).toContain('Devtools sync deleted an unexpected path:');
-    expect(workflow).toContain("syncMode === 'consumer' && isManagedSkillPath(relativePath)");
+    expect(workflow).toContain("syncMode === 'consumer' && isManagedSkillDeletion(relativePath)");
     expect(workflow).toContain(
-      "artifact.syncMode === 'consumer' && isManagedSkillPath(relativePath)",
+      "artifact.syncMode === 'consumer' && isManagedSkillDeletion(relativePath)",
     );
     expect(workflow).toContain("segment !== '' && segment !== '.' && segment !== '..'");
     expect(workflow).not.toContain("relativePath.startsWith('.agents/skills/')");
@@ -210,6 +219,32 @@ describe('trusted Renovate write boundary', () => {
     expect(workflow).toContain('managedFiles.size === 0 && managedDeletions.size === 0');
     expect(workflow).toContain('artifact.files.length > 0 || artifact.deletions.length > 0');
     expect(workflow).not.toContain('Devtools sync must not delete managed files.');
+  });
+});
+
+describe('trusted managed skill ownership', () => {
+  test('requires exact manifest ownership for every skill fixture', () => {
+    const manifestFiles = new Set([
+      '.agents/skills/zora-designer/SKILL.md',
+      '.agents/skills/zora-designer/scripts/entry',
+    ]);
+    const isOwned = (relativePath: string) => {
+      const root = managedSkillNames
+        .map((name) => `.agents/skills/${name}/`)
+        .find((candidate) => relativePath.startsWith(candidate));
+      if (root === undefined || !manifestFiles.has(relativePath)) return false;
+      return relativePath
+        .slice(root.length)
+        .split('/')
+        .every((segment) => segment !== '' && segment !== '.' && segment !== '..');
+    };
+
+    expect(isOwned('.agents/skills/zora-designer/SKILL.md')).toBe(true);
+    expect(isOwned('.agents/skills/zora-designer/unowned.md')).toBe(false);
+    expect(isOwned('.agents/skills/arbitrary/SKILL.md')).toBe(false);
+    expect(isOwned('.agents/skills/zora-designer/../secret.md')).toBe(false);
+    expect(workflow).toContain('Managed output must be a regular file:');
+    expect(workflow).not.toContain("relativePath.startsWith('.agents/skills/')");
   });
 });
 
