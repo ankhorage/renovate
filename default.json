@@ -20,8 +20,35 @@
   ],
   "packageRules": [
     {
-      "description": "Disable dependency updates unless a later Ankhorage rule explicitly enables them.",
+      "description": "Disable dependency updates unless a later ownership rule explicitly enables them.",
       "matchPackageNames": ["*"],
+      "enabled": false
+    },
+    {
+      "description": "Automerge every validated npm patch release.",
+      "matchDatasources": ["npm"],
+      "matchUpdateTypes": ["patch"],
+      "enabled": true,
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": false
+    },
+    {
+      "description": "Keep the canonical development toolchain under Devtools release ownership.",
+      "matchPackageNames": [
+        "bun",
+        "@types/bun",
+        "@types/node",
+        "@eslint/**",
+        "eslint",
+        "eslint-*",
+        "knip",
+        "prettier",
+        "prettier-*",
+        "typescript",
+        "typescript-eslint",
+        "@typescript-eslint/**"
+      ],
       "enabled": false
     },
     {

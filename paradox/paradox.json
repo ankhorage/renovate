@@ -14,7 +14,7 @@
     {
       "id": "npm",
       "label": "npm",
-      "value": "v0.1.6",
+      "value": "v0.1.7",
       "color": "cb3837"
     },
     {
@@ -72,7 +72,7 @@
     },
     {
       "title": "Repository configuration",
-      "description": "Repository configuration\n\nLoads the normal consumer policy from its default branch. The policy keeps Devtools-owned\npackages and canonical workflows out of independent Renovate updates, and groups compatible\n@ankhorage/ankh and @ankhorage/devtools releases for the trusted automatic synchronization\nworkflow. The workflow runs the exact lock-selected Devtools provider with either the consumer's\nlock-selected Ankh CLI or its own exact canonical CLI pin, requires byte stability, and commits\nthe complete managed result without a manual repository sync. Its write boundary permits the\nDevtools-managed root agent guide and canonical project-structure skill while rejecting other\nrepository-local skills; stale files may be deleted only inside that exact managed skill tree.\nThe shared preset also performs a\none-time migration of the legacy immutable workflow pin to the released synchronization\nimplementation; all other canonical workflow changes remain owned by Devtools sync.",
+      "description": "Repository configuration\n\nLoads the normal consumer policy from its default branch. Every npm patch release is proposed,\nfully validated by repository CI, and automerged when green. Minor and major external upgrades\nstay disabled. The canonical development toolchain follows the same automatic patch policy\nthrough its Devtools owner release and synchronization chain instead of drifting independently\nin consumers. Compatible @ankhorage/ankh and @ankhorage/devtools releases are grouped for the\ntrusted synchronization workflow. The workflow runs the exact lock-selected provider, requires\nbyte stability and current status, and commits the complete managed result without a manual\nrepository sync. The shared preset also performs a one-time migration of the legacy immutable\nworkflow pin; all other canonical workflow changes remain owned by Devtools sync.",
       "language": "",
       "code": "{\n  $schema: 'https://docs.renovatebot.com/renovate-schema.json',\n  extends: ['github>ankhorage/renovate'],\n}",
       "sourcePath": "examples/renovate.json5"
@@ -94,7 +94,9 @@
     {
       "path": "src/default.test.ts",
       "isEntrypoint": false,
-      "dependencies": [],
+      "dependencies": [
+        "src/renovatePreset.testSupport.ts"
+      ],
       "exports": []
     },
     {
@@ -110,6 +112,18 @@
       "isEntrypoint": true,
       "dependencies": [],
       "exports": []
+    },
+    {
+      "path": "src/renovatePreset.testSupport.ts",
+      "isEntrypoint": false,
+      "dependencies": [],
+      "exports": [
+        "branchName",
+        "dependency",
+        "Preset",
+        "readPreset",
+        "resolveRules"
+      ]
     }
   ],
   "exports": [],
@@ -128,8 +142,8 @@
       "name": "dependency",
       "description": null,
       "sourceLocation": {
-        "filePath": "src/default.test.ts",
-        "line": 253,
+        "filePath": "src/renovatePreset.testSupport.ts",
+        "line": 47,
         "column": 1
       }
     },
@@ -137,8 +151,8 @@
       "name": "branchName",
       "description": null,
       "sourceLocation": {
-        "filePath": "src/default.test.ts",
-        "line": 264,
+        "filePath": "src/renovatePreset.testSupport.ts",
+        "line": 58,
         "column": 1
       }
     },
@@ -146,8 +160,8 @@
       "name": "matchesRule",
       "description": null,
       "sourceLocation": {
-        "filePath": "src/default.test.ts",
-        "line": 271,
+        "filePath": "src/renovatePreset.testSupport.ts",
+        "line": 65,
         "column": 1
       }
     },
@@ -155,8 +169,8 @@
       "name": "matches",
       "description": null,
       "sourceLocation": {
-        "filePath": "src/default.test.ts",
-        "line": 281,
+        "filePath": "src/renovatePreset.testSupport.ts",
+        "line": 75,
         "column": 1
       }
     },
@@ -164,8 +178,8 @@
       "name": "readPreset",
       "description": null,
       "sourceLocation": {
-        "filePath": "src/default.test.ts",
-        "line": 291,
+        "filePath": "src/renovatePreset.testSupport.ts",
+        "line": 86,
         "column": 1
       }
     },
@@ -173,8 +187,8 @@
       "name": "resolveRules",
       "description": null,
       "sourceLocation": {
-        "filePath": "src/default.test.ts",
-        "line": 295,
+        "filePath": "src/renovatePreset.testSupport.ts",
+        "line": 90,
         "column": 1
       }
     }
@@ -182,6 +196,11 @@
   "sequenceScenarios": [],
   "graphs": {
     "imports": [
+      {
+        "fromPath": "src/default.test.ts",
+        "toPath": "src/renovatePreset.testSupport.ts",
+        "sourcePath": "src/default.test.ts"
+      },
       {
         "fromPath": "src/index.test.ts",
         "toPath": "src/index.ts",
@@ -262,24 +281,6 @@
         "sourcePath": "src/default.test.ts"
       },
       {
-        "fromSymbol": "matchesRule",
-        "toSymbol": "matches",
-        "callExpression": "matches",
-        "sourcePath": "src/default.test.ts"
-      },
-      {
-        "fromSymbol": "readPreset",
-        "toSymbol": "readFileSync",
-        "callExpression": "readFileSync",
-        "sourcePath": "src/default.test.ts"
-      },
-      {
-        "fromSymbol": "src/default.test.ts",
-        "toSymbol": "matchesRule",
-        "callExpression": "matchesRule",
-        "sourcePath": "src/default.test.ts"
-      },
-      {
         "fromSymbol": "src/index.test.ts",
         "toSymbol": "test",
         "callExpression": "test",
@@ -290,6 +291,24 @@
         "toSymbol": "expect",
         "callExpression": "expect",
         "sourcePath": "src/index.test.ts"
+      },
+      {
+        "fromSymbol": "matchesRule",
+        "toSymbol": "matches",
+        "callExpression": "matches",
+        "sourcePath": "src/renovatePreset.testSupport.ts"
+      },
+      {
+        "fromSymbol": "readPreset",
+        "toSymbol": "readFileSync",
+        "callExpression": "readFileSync",
+        "sourcePath": "src/renovatePreset.testSupport.ts"
+      },
+      {
+        "fromSymbol": "src/renovatePreset.testSupport.ts",
+        "toSymbol": "matchesRule",
+        "callExpression": "matchesRule",
+        "sourcePath": "src/renovatePreset.testSupport.ts"
       }
     ],
     "typeReferences": [],

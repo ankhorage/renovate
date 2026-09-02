@@ -132,8 +132,8 @@
       <small>1 function</small>
     </button>
   </li><li>
-    <button class="nav-button" type="button" data-target="src/default.test.ts">
-      src/default.test.ts
+    <button class="nav-button" type="button" data-target="src/renovatePreset.testSupport.ts">
+      src/renovatePreset.testSupport.ts
       <small>6 functions</small>
     </button>
   </li>
@@ -148,7 +148,7 @@
       <div class="summary">
         <div><strong>0</strong><span class="muted">public exports</span></div>
         <div><strong>0</strong><span class="muted">components</span></div>
-        <div><strong>4</strong><span class="muted">modules</span></div>
+        <div><strong>5</strong><span class="muted">modules</span></div>
         <div><strong>1</strong><span class="muted">entrypoints</span></div>
       </div>
       <h3>Entrypoints</h3>
@@ -164,10 +164,10 @@
     <p class="muted">Referenced module</p>
     <p><strong>Dependencies:</strong> <span class="empty">None</span></p>
     <p><strong>Exports:</strong> <span class="empty">None</span></p>
-  </article><article class="item" data-search="src/default.test.ts">
+  </article><article class="item" data-search="src/default.test.ts src/renovatePreset.testSupport.ts">
     <h3>src/default.test.ts</h3>
     <p class="muted">Referenced module</p>
-    <p><strong>Dependencies:</strong> <span class="empty">None</span></p>
+    <p><strong>Dependencies:</strong> <code>src/renovatePreset.testSupport.ts</code></p>
     <p><strong>Exports:</strong> <span class="empty">None</span></p>
   </article><article class="item" data-search="src/index.test.ts src/index.ts">
     <h3>src/index.test.ts</h3>
@@ -179,6 +179,11 @@
     <p class="muted">Configured entrypoint</p>
     <p><strong>Dependencies:</strong> <span class="empty">None</span></p>
     <p><strong>Exports:</strong> <span class="empty">None</span></p>
+  </article><article class="item" data-search="src/renovatePreset.testSupport.ts branchName dependency Preset readPreset resolveRules">
+    <h3>src/renovatePreset.testSupport.ts</h3>
+    <p class="muted">Referenced module</p>
+    <p><strong>Dependencies:</strong> <span class="empty">None</span></p>
+    <p><strong>Exports:</strong> <code>branchName</code>, <code>dependency</code>, <code>Preset</code>, <code>readPreset</code>, <code>resolveRules</code></p>
   </article>
     </section>
     <section class="panel">
@@ -202,10 +207,13 @@
   package__ankhorage_renovate -.-&gt; module_src_changeset_workflow_test_ts
   module_src_default_test_ts[&quot;src/default.test.ts&quot;]
   package__ankhorage_renovate -.-&gt; module_src_default_test_ts
+  module_src_default_test_ts --&gt; module_src_renovatePreset_testSupport_ts
   module_src_index_test_ts[&quot;src/index.test.ts&quot;]
   package__ankhorage_renovate -.-&gt; module_src_index_test_ts
   module_src_index_test_ts --&gt; module_src_index_ts
   module_src_index_ts[&quot;src/index.ts&quot;]
+  module_src_renovatePreset_testSupport_ts[&quot;src/renovatePreset.testSupport.ts&quot;]
+  package__ankhorage_renovate -.-&gt; module_src_renovatePreset_testSupport_ts
 </div>
     <details>
       <summary>View Mermaid source</summary>
@@ -217,10 +225,13 @@
   package__ankhorage_renovate -.-&gt; module_src_changeset_workflow_test_ts
   module_src_default_test_ts[&quot;src/default.test.ts&quot;]
   package__ankhorage_renovate -.-&gt; module_src_default_test_ts
+  module_src_default_test_ts --&gt; module_src_renovatePreset_testSupport_ts
   module_src_index_test_ts[&quot;src/index.test.ts&quot;]
   package__ankhorage_renovate -.-&gt; module_src_index_test_ts
   module_src_index_test_ts --&gt; module_src_index_ts
   module_src_index_ts[&quot;src/index.ts&quot;]
+  module_src_renovatePreset_testSupport_ts[&quot;src/renovatePreset.testSupport.ts&quot;]
+  package__ankhorage_renovate -.-&gt; module_src_renovatePreset_testSupport_ts
 </pre>
     </details>
   </article><article class="item" data-search="Module relationships diagrams/module-relationships.mmd">
@@ -231,6 +242,8 @@
   module_src_default_test_ts[&quot;src/default.test.ts&quot;]
   module_src_index_test_ts[&quot;src/index.test.ts&quot;]
   module_src_index_ts[&quot;src/index.ts&quot;]
+  module_src_renovatePreset_testSupport_ts[&quot;src/renovatePreset.testSupport.ts&quot;]
+  module_src_default_test_ts --&gt; module_src_renovatePreset_testSupport_ts
   module_src_index_test_ts --&gt; module_src_index_ts
 </div>
     <details>
@@ -240,6 +253,8 @@
   module_src_default_test_ts[&quot;src/default.test.ts&quot;]
   module_src_index_test_ts[&quot;src/index.test.ts&quot;]
   module_src_index_ts[&quot;src/index.ts&quot;]
+  module_src_renovatePreset_testSupport_ts[&quot;src/renovatePreset.testSupport.ts&quot;]
+  module_src_default_test_ts --&gt; module_src_renovatePreset_testSupport_ts
   module_src_index_test_ts --&gt; module_src_index_ts
 </pre>
     </details>
@@ -251,6 +266,7 @@
   module_src_default_test_ts[&quot;src/default.test.ts&quot;]
   module_src_index_test_ts[&quot;src/index.test.ts&quot;]
   module_src_index_ts[&quot;src/index.ts&quot;]
+  module_src_renovatePreset_testSupport_ts[&quot;src/renovatePreset.testSupport.ts&quot;]
 </div>
     <details>
       <summary>View Mermaid source</summary>
@@ -259,6 +275,7 @@
   module_src_default_test_ts[&quot;src/default.test.ts&quot;]
   module_src_index_test_ts[&quot;src/index.test.ts&quot;]
   module_src_index_ts[&quot;src/index.ts&quot;]
+  module_src_renovatePreset_testSupport_ts[&quot;src/renovatePreset.testSupport.ts&quot;]
 </pre>
     </details>
   </article>
@@ -273,32 +290,32 @@
     <p class="empty">No description available.</p>
   </article>
     </section>
-  </section><section id="view-src-default-test-ts" class="view" data-view="src/default.test.ts" hidden>
+  </section><section id="view-src-renovatepreset-testsupport-ts" class="view" data-view="src/renovatePreset.testSupport.ts" hidden>
     <section class="panel">
-      <h2>src/default.test.ts</h2>
-      <article class="item" data-search="dependency src/default.test.ts ">
+      <h2>src/renovatePreset.testSupport.ts</h2>
+      <article class="item" data-search="dependency src/renovatePreset.testSupport.ts ">
     <h3>dependency</h3>
-    <p class="muted"><code>src/default.test.ts:253:1</code></p>
+    <p class="muted"><code>src/renovatePreset.testSupport.ts:47:1</code></p>
     <p class="empty">No description available.</p>
-  </article><article class="item" data-search="branchName src/default.test.ts ">
+  </article><article class="item" data-search="branchName src/renovatePreset.testSupport.ts ">
     <h3>branchName</h3>
-    <p class="muted"><code>src/default.test.ts:264:1</code></p>
+    <p class="muted"><code>src/renovatePreset.testSupport.ts:58:1</code></p>
     <p class="empty">No description available.</p>
-  </article><article class="item" data-search="matchesRule src/default.test.ts ">
+  </article><article class="item" data-search="matchesRule src/renovatePreset.testSupport.ts ">
     <h3>matchesRule</h3>
-    <p class="muted"><code>src/default.test.ts:271:1</code></p>
+    <p class="muted"><code>src/renovatePreset.testSupport.ts:65:1</code></p>
     <p class="empty">No description available.</p>
-  </article><article class="item" data-search="matches src/default.test.ts ">
+  </article><article class="item" data-search="matches src/renovatePreset.testSupport.ts ">
     <h3>matches</h3>
-    <p class="muted"><code>src/default.test.ts:281:1</code></p>
+    <p class="muted"><code>src/renovatePreset.testSupport.ts:75:1</code></p>
     <p class="empty">No description available.</p>
-  </article><article class="item" data-search="readPreset src/default.test.ts ">
+  </article><article class="item" data-search="readPreset src/renovatePreset.testSupport.ts ">
     <h3>readPreset</h3>
-    <p class="muted"><code>src/default.test.ts:291:1</code></p>
+    <p class="muted"><code>src/renovatePreset.testSupport.ts:86:1</code></p>
     <p class="empty">No description available.</p>
-  </article><article class="item" data-search="resolveRules src/default.test.ts ">
+  </article><article class="item" data-search="resolveRules src/renovatePreset.testSupport.ts ">
     <h3>resolveRules</h3>
-    <p class="muted"><code>src/default.test.ts:295:1</code></p>
+    <p class="muted"><code>src/renovatePreset.testSupport.ts:90:1</code></p>
     <p class="empty">No description available.</p>
   </article>
     </section>
