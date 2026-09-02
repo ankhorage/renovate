@@ -3,7 +3,7 @@
 
 # @ankhorage/renovate
 
-![license: MIT](./paradox/badges/license.svg) ![npm: v0.1.6](./paradox/badges/npm.svg) ![runtime: bun](./paradox/badges/runtime.svg) ![typescript: strict](./paradox/badges/typescript.svg) ![eslint: checked](./paradox/badges/eslint.svg) ![prettier: checked](./paradox/badges/prettier.svg) ![build: checked](./paradox/badges/build.svg) ![tests: checked](./paradox/badges/tests.svg) ![docs: paradox](./paradox/badges/docs.svg)
+![license: MIT](./paradox/badges/license.svg) ![npm: v0.1.7](./paradox/badges/npm.svg) ![runtime: bun](./paradox/badges/runtime.svg) ![typescript: strict](./paradox/badges/typescript.svg) ![eslint: checked](./paradox/badges/eslint.svg) ![prettier: checked](./paradox/badges/prettier.svg) ![build: checked](./paradox/badges/build.svg) ![tests: checked](./paradox/badges/tests.svg) ![docs: paradox](./paradox/badges/docs.svg)
 
 Ankhorage dependency update policy and automation powered by Renovate.
 
@@ -32,17 +32,15 @@ Source: `examples/devtools-renovate.json5`
 
 ### Repository configuration
 
-Loads the normal consumer policy from its default branch. The policy keeps Devtools-owned
-packages and canonical workflows out of independent Renovate updates, and groups compatible
-@ankhorage/ankh and @ankhorage/devtools releases for the trusted automatic synchronization
-workflow. The workflow runs the exact lock-selected Devtools provider with either the consumer's
-lock-selected Ankh CLI or its own exact canonical CLI pin, requires byte stability, and commits
-the complete managed result without a manual repository sync. Its write boundary permits the
-Devtools-managed root agent guide and canonical project-structure skill while rejecting other
-repository-local skills; stale files may be deleted only inside that exact managed skill tree.
-The shared preset also performs a
-one-time migration of the legacy immutable workflow pin to the released synchronization
-implementation; all other canonical workflow changes remain owned by Devtools sync.
+Loads the normal consumer policy from its default branch. Every npm patch release is proposed,
+fully validated by repository CI, and automerged when green. Minor and major external upgrades
+stay disabled. The canonical development toolchain follows the same automatic patch policy
+through its Devtools owner release and synchronization chain instead of drifting independently
+in consumers. Compatible @ankhorage/ankh and @ankhorage/devtools releases are grouped for the
+trusted synchronization workflow. The workflow runs the exact lock-selected provider, requires
+byte stability and current status, and commits the complete managed result without a manual
+repository sync. The shared preset also performs a one-time migration of the legacy immutable
+workflow pin; all other canonical workflow changes remain owned by Devtools sync.
 
 Source: `examples/renovate.json5`
 

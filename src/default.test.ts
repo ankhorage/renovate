@@ -1,50 +1,6 @@
-import { readFileSync } from 'node:fs';
-
 import { describe, expect, test } from 'bun:test';
 
-interface Dependency {
-  readonly datasource: string;
-  readonly fileName: string;
-  readonly manager: string;
-  readonly packageName: string;
-  readonly updateType: string;
-}
-
-interface PackageRule {
-  readonly automerge?: boolean;
-  readonly automergeType?: string;
-  readonly description: string;
-  readonly enabled?: boolean;
-  readonly groupName?: string;
-  readonly groupSlug?: string;
-  readonly matchDatasources?: readonly string[];
-  readonly matchFileNames?: readonly string[];
-  readonly matchManagers?: readonly string[];
-  readonly matchPackageNames?: readonly string[];
-  readonly matchUpdateTypes?: readonly string[];
-  readonly platformAutomerge?: boolean;
-  readonly rangeStrategy?: string;
-}
-
-interface CustomManager {
-  readonly autoReplaceStringTemplate: string;
-  readonly currentValueTemplate: string;
-  readonly customType: string;
-  readonly datasourceTemplate: string;
-  readonly depNameTemplate: string;
-  readonly description: string;
-  readonly managerFilePatterns: readonly string[];
-  readonly matchStrings: readonly string[];
-}
-
-interface Preset {
-  readonly customManagers?: readonly CustomManager[];
-  readonly description: readonly string[];
-  readonly extends: readonly string[];
-  readonly gitIgnoredAuthors?: readonly string[];
-  readonly labels?: readonly string[];
-  readonly packageRules: readonly PackageRule[];
-}
+import { branchName, dependency, readPreset, resolveRules } from './renovatePreset.testSupport';
 
 const consumerPreset = readPreset('../default.json');
 const devtoolsOwnerPreset = readPreset('../devtools-owner.json');
@@ -87,6 +43,37 @@ describe('consumer preset', () => {
         rangeStrategy: 'bump',
       });
     }
+  });
+});
+
+describe('consumer patch policy', () => {
+  test('automerges every validated npm patch without enabling broader upgrades', () => {
+    for (const packageName of ['expo', 'react', 'vitest']) {
+      expect(
+        resolveRules(
+          consumerPreset.packageRules,
+          dependency(packageName, {
+            fileName: 'examples/expo-showcase/package.json',
+            updateType: 'patch',
+          }),
+        ),
+      ).toMatchObject({
+        automerge: true,
+        automergeType: 'pr',
+        enabled: true,
+        platformAutomerge: false,
+      });
+    }
+
+    expect(
+      resolveRules(
+        consumerPreset.packageRules,
+        dependency('expo', {
+          fileName: 'examples/expo-showcase/package.json',
+          updateType: 'minor',
+        }),
+      ),
+    ).toEqual({ enabled: false });
   });
 });
 
@@ -188,12 +175,24 @@ describe('consumer toolchain safeguards', () => {
   });
 
   test('does not independently update consumer-owned Devtools packages', () => {
-    expect(resolveRules(consumerPreset.packageRules, dependency('eslint'))).toEqual({
-      enabled: false,
-    });
-    expect(resolveRules(consumerPreset.packageRules, dependency('@types/bun'))).toEqual({
-      enabled: false,
-    });
+    for (const packageName of [
+      'bun',
+      '@types/bun',
+      '@types/node',
+      '@eslint/js',
+      'eslint',
+      'eslint-plugin-react',
+      'knip',
+      'prettier',
+      'prettier-plugin-example',
+      'typescript',
+      'typescript-eslint',
+      '@typescript-eslint/parser',
+    ]) {
+      expect(
+        resolveRules(consumerPreset.packageRules, dependency(packageName, { updateType: 'patch' })),
+      ).toMatchObject({ enabled: false });
+    }
   });
 
   test('names only the canonical workflow inventory as Devtools-owned', () => {
@@ -249,65 +248,3 @@ describe('Devtools-owner preset', () => {
     ).toEqual({ enabled: false });
   });
 });
-
-function dependency(packageName: string, overrides: Partial<Dependency> = {}): Dependency {
-  return {
-    datasource: 'npm',
-    fileName: 'package.json',
-    manager: 'bun',
-    packageName,
-    updateType: 'minor',
-    ...overrides,
-  };
-}
-
-function branchName(rule: Partial<PackageRule>): string {
-  if (typeof rule.groupSlug !== 'string') {
-    throw new Error('Grouped policy rules must declare a stable branch identity.');
-  }
-  return 'renovate/' + rule.groupSlug;
-}
-
-function matchesRule(rule: PackageRule, candidate: Dependency): boolean {
-  return (
-    matches(rule.matchDatasources, candidate.datasource) &&
-    matches(rule.matchFileNames, candidate.fileName) &&
-    matches(rule.matchManagers, candidate.manager) &&
-    matches(rule.matchPackageNames, candidate.packageName) &&
-    matches(rule.matchUpdateTypes, candidate.updateType)
-  );
-}
-
-function matches(patterns: readonly string[] | undefined, value: string): boolean {
-  if (patterns === undefined) return true;
-  return patterns.some(
-    (pattern) =>
-      pattern === '*' ||
-      pattern === value ||
-      (pattern.endsWith('/**') && value.startsWith(pattern.slice(0, -2))),
-  );
-}
-
-function readPreset(relativePath: string): Preset {
-  return JSON.parse(readFileSync(new URL(relativePath, import.meta.url), 'utf8')) as Preset;
-}
-
-function resolveRules(rules: readonly PackageRule[], candidate: Dependency): Partial<PackageRule> {
-  return rules
-    .filter((rule) => matchesRule(rule, candidate))
-    .reduce<Partial<PackageRule>>(
-      (resolved, rule) => ({
-        ...resolved,
-        ...(rule.automerge === undefined ? {} : { automerge: rule.automerge }),
-        ...(rule.automergeType === undefined ? {} : { automergeType: rule.automergeType }),
-        ...(rule.enabled === undefined ? {} : { enabled: rule.enabled }),
-        ...(rule.groupName === undefined ? {} : { groupName: rule.groupName }),
-        ...(rule.groupSlug === undefined ? {} : { groupSlug: rule.groupSlug }),
-        ...(rule.platformAutomerge === undefined
-          ? {}
-          : { platformAutomerge: rule.platformAutomerge }),
-        ...(rule.rangeStrategy === undefined ? {} : { rangeStrategy: rule.rangeStrategy }),
-      }),
-      {},
-    );
-}
