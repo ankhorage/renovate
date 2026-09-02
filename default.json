@@ -7,10 +7,10 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "Bootstrap the legacy consumer workflow to the released synchronization implementation.",
+      "description": "Track the current immutable Renovate synchronization workflow digest.",
       "managerFilePatterns": ["/^\\.github\\/workflows\\/renovate\\.yml$/"],
       "matchStrings": [
-        "uses:\\s+ankhorage/renovate/\\.github/workflows/changeset\\.yml@(?<currentDigest>b7305e8f17f9b07238f6b827bbc9f866fd498a0f)"
+        "uses:\\s+ankhorage/renovate/\\.github/workflows/changeset\\.yml@(?<currentDigest>[0-9a-f]{40})"
       ],
       "currentValueTemplate": "main",
       "depNameTemplate": "ankhorage/renovate",
@@ -93,14 +93,14 @@
       "enabled": false
     },
     {
-      "description": "Bootstrap the released Renovate synchronization workflow exactly once.",
+      "description": "Update the immutable Renovate synchronization workflow before Devtools synchronization.",
       "matchDatasources": ["github-digest"],
       "matchManagers": ["custom.regex"],
       "matchPackageNames": ["ankhorage/renovate"],
       "matchFileNames": [".github/workflows/renovate.yml"],
       "enabled": true,
-      "groupName": "Ankhorage Renovate workflow bootstrap",
-      "groupSlug": "ankhorage-renovate-workflow-bootstrap",
+      "groupName": "Ankhorage Renovate workflow",
+      "groupSlug": "ankhorage-renovate-workflow",
       "automerge": true,
       "automergeType": "pr",
       "platformAutomerge": false
