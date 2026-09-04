@@ -3,7 +3,7 @@
 
 # @ankhorage/renovate
 
-![license: MIT](./paradox/badges/license.svg) ![npm: v0.1.7](./paradox/badges/npm.svg) ![runtime: bun](./paradox/badges/runtime.svg) ![typescript: strict](./paradox/badges/typescript.svg) ![eslint: checked](./paradox/badges/eslint.svg) ![prettier: checked](./paradox/badges/prettier.svg) ![build: checked](./paradox/badges/build.svg) ![tests: checked](./paradox/badges/tests.svg) ![docs: paradox](./paradox/badges/docs.svg)
+![license: MIT](./paradox/badges/license.svg) ![npm: v0.1.11](./paradox/badges/npm.svg) ![runtime: bun](./paradox/badges/runtime.svg) ![typescript: strict](./paradox/badges/typescript.svg) ![eslint: checked](./paradox/badges/eslint.svg) ![prettier: checked](./paradox/badges/prettier.svg) ![build: checked](./paradox/badges/build.svg) ![tests: checked](./paradox/badges/tests.svg) ![docs: paradox](./paradox/badges/docs.svg)
 
 Ankhorage dependency update policy and automation powered by Renovate.
 
@@ -39,8 +39,11 @@ through its Devtools owner release and synchronization chain instead of drifting
 in consumers. Compatible @ankhorage/ankh and @ankhorage/devtools releases are grouped for the
 trusted synchronization workflow. The workflow runs the exact lock-selected provider, requires
 byte stability and current status, and commits the complete managed result without a manual
-repository sync. The shared preset also performs a one-time migration of the legacy immutable
-workflow pin; all other canonical workflow changes remain owned by Devtools sync.
+repository sync. After the one-time release-rollout bootstrap, a published Devtools version
+immediately starts the same Renovate update flow for every repository in the reviewed consumer
+registry; Renovate remains the only dependency-branch writer. The shared preset also performs a
+one-time migration of the legacy immutable workflow pin; all other canonical workflow changes
+remain owned by Devtools sync.
 
 Source: `examples/renovate.json5`
 

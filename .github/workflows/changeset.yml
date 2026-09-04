@@ -36,7 +36,8 @@ jobs:
         with:
           script: |
             const pullNumber = context.payload.pull_request?.number;
-            if (!pullNumber || context.actor !== 'renovate[bot]') {
+            const permittedActors = new Set(['renovate[bot]', 'ankhorage-renovate-sync[bot]']);
+            if (!pullNumber || !permittedActors.has(context.actor)) {
               core.setFailed('This workflow only accepts Renovate pull requests.');
               return;
             }
@@ -542,7 +543,8 @@ jobs:
             const crypto = require('node:crypto');
             const fs = require('node:fs');
             const pullNumber = context.payload.pull_request?.number;
-            if (!pullNumber || context.actor !== 'renovate[bot]') {
+            const permittedActors = new Set(['renovate[bot]', 'ankhorage-renovate-sync[bot]']);
+            if (!pullNumber || !permittedActors.has(context.actor)) {
               core.setFailed('This workflow only accepts Renovate pull requests.');
               return;
             }

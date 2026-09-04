@@ -17,7 +17,8 @@ const managedSkillNames =
   /^ {2}DEVTOOLS_MANAGED_SKILL_NAMES: (.+)$/m.exec(workflow)?.[1]?.split(',') ?? [];
 describe('trusted Renovate integration', () => {
   test('accepts only same-repository Renovate branches', () => {
-    expect(workflow).toContain("context.actor !== 'renovate[bot]'");
+    expect(workflow).toContain("['renovate[bot]', 'ankhorage-renovate-sync[bot]']");
+    expect(workflow).toContain('!permittedActors.has(context.actor)');
     expect(workflow).toContain("pull.head.ref.startsWith('renovate/')");
     expect(workflow).toContain("pull.head.repo?.full_name !== owner + '/' + repo");
     expect(workflow).toContain('artifact.headSha !== pull.head.sha');
