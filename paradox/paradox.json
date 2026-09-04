@@ -14,7 +14,7 @@
     {
       "id": "npm",
       "label": "npm",
-      "value": "v0.1.7",
+      "value": "v0.1.11",
       "color": "cb3837"
     },
     {
@@ -72,7 +72,7 @@
     },
     {
       "title": "Repository configuration",
-      "description": "Repository configuration\n\nLoads the normal consumer policy from its default branch. Every npm patch release is proposed,\nfully validated by repository CI, and automerged when green. Minor and major external upgrades\nstay disabled. The canonical development toolchain follows the same automatic patch policy\nthrough its Devtools owner release and synchronization chain instead of drifting independently\nin consumers. Compatible @ankhorage/ankh and @ankhorage/devtools releases are grouped for the\ntrusted synchronization workflow. The workflow runs the exact lock-selected provider, requires\nbyte stability and current status, and commits the complete managed result without a manual\nrepository sync. The shared preset also performs a one-time migration of the legacy immutable\nworkflow pin; all other canonical workflow changes remain owned by Devtools sync.",
+      "description": "Repository configuration\n\nLoads the normal consumer policy from its default branch. Every npm patch release is proposed,\nfully validated by repository CI, and automerged when green. Minor and major external upgrades\nstay disabled. The canonical development toolchain follows the same automatic patch policy\nthrough its Devtools owner release and synchronization chain instead of drifting independently\nin consumers. Compatible @ankhorage/ankh and @ankhorage/devtools releases are grouped for the\ntrusted synchronization workflow. The workflow runs the exact lock-selected provider, requires\nbyte stability and current status, and commits the complete managed result without a manual\nrepository sync. After the one-time release-rollout bootstrap, a published Devtools version\nimmediately starts the same Renovate update flow for every repository in the reviewed consumer\nregistry; Renovate remains the only dependency-branch writer. The shared preset also performs a\none-time migration of the legacy immutable workflow pin; all other canonical workflow changes\nremain owned by Devtools sync.",
       "language": "",
       "code": "{\n  $schema: 'https://docs.renovatebot.com/renovate-schema.json',\n  extends: ['github>ankhorage/renovate'],\n}",
       "sourcePath": "examples/renovate.json5"
@@ -88,7 +88,9 @@
     {
       "path": "src/changeset-workflow.test.ts",
       "isEntrypoint": false,
-      "dependencies": [],
+      "dependencies": [
+        "src/renovatePreset.testSupport.ts"
+      ],
       "exports": []
     },
     {
@@ -97,6 +99,12 @@
       "dependencies": [
         "src/renovatePreset.testSupport.ts"
       ],
+      "exports": []
+    },
+    {
+      "path": "src/devtools-release-rollout.test.ts",
+      "isEntrypoint": false,
+      "dependencies": [],
       "exports": []
     },
     {
@@ -122,7 +130,11 @@
         "dependency",
         "Preset",
         "readPreset",
-        "resolveRules"
+        "resolveRules",
+        "resolveTrustedToolchainFixtureVersion",
+        "surfaceToolchainFixtureLock",
+        "surfaceToolchainFixtureManifest",
+        "TrustedToolchainFixtureManifest"
       ]
     }
   ],
@@ -130,12 +142,12 @@
   "components": [],
   "sourceFunctions": [
     {
-      "name": "resolveFixtureVersion",
+      "name": "isOwned",
       "description": null,
       "sourceLocation": {
         "filePath": "src/changeset-workflow.test.ts",
-        "line": 127,
-        "column": 1
+        "line": 254,
+        "column": 11
       }
     },
     {
@@ -143,7 +155,7 @@
       "description": null,
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 47,
+        "line": 77,
         "column": 1
       }
     },
@@ -152,7 +164,7 @@
       "description": null,
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 58,
+        "line": 88,
         "column": 1
       }
     },
@@ -161,7 +173,7 @@
       "description": null,
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 65,
+        "line": 95,
         "column": 1
       }
     },
@@ -170,7 +182,7 @@
       "description": null,
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 75,
+        "line": 105,
         "column": 1
       }
     },
@@ -179,7 +191,7 @@
       "description": null,
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 86,
+        "line": 116,
         "column": 1
       }
     },
@@ -188,7 +200,70 @@
       "description": null,
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 90,
+        "line": 120,
+        "column": 1
+      }
+    },
+    {
+      "name": "resolveTrustedToolchainFixtureVersion",
+      "description": null,
+      "sourceLocation": {
+        "filePath": "src/renovatePreset.testSupport.ts",
+        "line": 143,
+        "column": 1
+      }
+    },
+    {
+      "name": "isCompatibleSelection",
+      "description": null,
+      "sourceLocation": {
+        "filePath": "src/renovatePreset.testSupport.ts",
+        "line": 189,
+        "column": 1
+      }
+    },
+    {
+      "name": "isStableAtOrAfter",
+      "description": null,
+      "sourceLocation": {
+        "filePath": "src/renovatePreset.testSupport.ts",
+        "line": 209,
+        "column": 1
+      }
+    },
+    {
+      "name": "isCaretCompatibleSelection",
+      "description": null,
+      "sourceLocation": {
+        "filePath": "src/renovatePreset.testSupport.ts",
+        "line": 217,
+        "column": 1
+      }
+    },
+    {
+      "name": "parseVersion",
+      "description": null,
+      "sourceLocation": {
+        "filePath": "src/renovatePreset.testSupport.ts",
+        "line": 225,
+        "column": 1
+      }
+    },
+    {
+      "name": "compareCoreVersions",
+      "description": null,
+      "sourceLocation": {
+        "filePath": "src/renovatePreset.testSupport.ts",
+        "line": 246,
+        "column": 1
+      }
+    },
+    {
+      "name": "compareNumber",
+      "description": null,
+      "sourceLocation": {
+        "filePath": "src/renovatePreset.testSupport.ts",
+        "line": 253,
         "column": 1
       }
     }
@@ -196,6 +271,11 @@
   "sequenceScenarios": [],
   "graphs": {
     "imports": [
+      {
+        "fromPath": "src/changeset-workflow.test.ts",
+        "toPath": "src/renovatePreset.testSupport.ts",
+        "sourcePath": "src/changeset-workflow.test.ts"
+      },
       {
         "fromPath": "src/default.test.ts",
         "toPath": "src/renovatePreset.testSupport.ts",
@@ -234,8 +314,14 @@
       },
       {
         "fromSymbol": "src/changeset-workflow.test.ts",
-        "toSymbol": "resolveFixtureVersion",
-        "callExpression": "resolveFixtureVersion",
+        "toSymbol": "resolveTrustedToolchainFixtureVersion",
+        "callExpression": "resolveTrustedToolchainFixtureVersion",
+        "sourcePath": "src/changeset-workflow.test.ts"
+      },
+      {
+        "fromSymbol": "src/changeset-workflow.test.ts",
+        "toSymbol": "isOwned",
+        "callExpression": "isOwned",
         "sourcePath": "src/changeset-workflow.test.ts"
       },
       {
@@ -281,6 +367,30 @@
         "sourcePath": "src/default.test.ts"
       },
       {
+        "fromSymbol": "src/devtools-release-rollout.test.ts",
+        "toSymbol": "readFileSync",
+        "callExpression": "readFileSync",
+        "sourcePath": "src/devtools-release-rollout.test.ts"
+      },
+      {
+        "fromSymbol": "src/devtools-release-rollout.test.ts",
+        "toSymbol": "describe",
+        "callExpression": "describe",
+        "sourcePath": "src/devtools-release-rollout.test.ts"
+      },
+      {
+        "fromSymbol": "src/devtools-release-rollout.test.ts",
+        "toSymbol": "test",
+        "callExpression": "test",
+        "sourcePath": "src/devtools-release-rollout.test.ts"
+      },
+      {
+        "fromSymbol": "src/devtools-release-rollout.test.ts",
+        "toSymbol": "expect",
+        "callExpression": "expect",
+        "sourcePath": "src/devtools-release-rollout.test.ts"
+      },
+      {
         "fromSymbol": "src/index.test.ts",
         "toSymbol": "test",
         "callExpression": "test",
@@ -308,6 +418,54 @@
         "fromSymbol": "src/renovatePreset.testSupport.ts",
         "toSymbol": "matchesRule",
         "callExpression": "matchesRule",
+        "sourcePath": "src/renovatePreset.testSupport.ts"
+      },
+      {
+        "fromSymbol": "resolveTrustedToolchainFixtureVersion",
+        "toSymbol": "parseVersion",
+        "callExpression": "parseVersion",
+        "sourcePath": "src/renovatePreset.testSupport.ts"
+      },
+      {
+        "fromSymbol": "resolveTrustedToolchainFixtureVersion",
+        "toSymbol": "isCompatibleSelection",
+        "callExpression": "isCompatibleSelection",
+        "sourcePath": "src/renovatePreset.testSupport.ts"
+      },
+      {
+        "fromSymbol": "isCompatibleSelection",
+        "toSymbol": "parseVersion",
+        "callExpression": "parseVersion",
+        "sourcePath": "src/renovatePreset.testSupport.ts"
+      },
+      {
+        "fromSymbol": "isCompatibleSelection",
+        "toSymbol": "isStableAtOrAfter",
+        "callExpression": "isStableAtOrAfter",
+        "sourcePath": "src/renovatePreset.testSupport.ts"
+      },
+      {
+        "fromSymbol": "isCompatibleSelection",
+        "toSymbol": "isCaretCompatibleSelection",
+        "callExpression": "isCaretCompatibleSelection",
+        "sourcePath": "src/renovatePreset.testSupport.ts"
+      },
+      {
+        "fromSymbol": "isStableAtOrAfter",
+        "toSymbol": "compareCoreVersions",
+        "callExpression": "compareCoreVersions",
+        "sourcePath": "src/renovatePreset.testSupport.ts"
+      },
+      {
+        "fromSymbol": "isCaretCompatibleSelection",
+        "toSymbol": "compareCoreVersions",
+        "callExpression": "compareCoreVersions",
+        "sourcePath": "src/renovatePreset.testSupport.ts"
+      },
+      {
+        "fromSymbol": "compareCoreVersions",
+        "toSymbol": "compareNumber",
+        "callExpression": "compareNumber",
         "sourcePath": "src/renovatePreset.testSupport.ts"
       }
     ],

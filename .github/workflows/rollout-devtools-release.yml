@@ -1,0 +1,148 @@
+name: Roll out Devtools release
+
+on:
+  repository_dispatch:
+    types:
+      - devtools-release
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact published @ankhorage/devtools version to roll out
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: devtools-release-rollout
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      has-repositories: ${{ steps.registry.outputs.has-repositories }}
+      repositories: ${{ steps.registry.outputs.repositories }}
+      version: ${{ steps.registry.outputs.version }}
+    steps:
+      - name: Check out trusted rollout registry
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Mint the organization Renovate Sync App read token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.ANKHORAGE_RENOVATE_SYNC_CLIENT_ID }}
+          private-key: ${{ secrets.ANKHORAGE_RENOVATE_SYNC_PRIVATE_KEY }}
+          owner: ankhorage
+          permission-contents: read
+
+      - name: Validate release and ready consumer registry
+        id: registry
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          DISPATCH_VERSION: ${{ github.event.client_payload.version }}
+          INPUT_VERSION: ${{ inputs.version }}
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            const fs = require('node:fs');
+            const version = process.env.INPUT_VERSION || process.env.DISPATCH_VERSION;
+            if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version ?? '')) {
+              throw new Error('Devtools rollout requires one exact published semver version.');
+            }
+
+            const registry = JSON.parse(fs.readFileSync('devtools-consumers.json', 'utf8'));
+            if (!Array.isArray(registry.repositories) || registry.repositories.length === 0) {
+              throw new Error('The Devtools consumer registry must contain repositories.');
+            }
+            const uniqueRepositories = new Set(registry.repositories);
+            if (uniqueRepositories.size !== registry.repositories.length) {
+              throw new Error('The Devtools consumer registry must not contain duplicates.');
+            }
+            for (const repository of registry.repositories) {
+              if (typeof repository !== 'string' || !/^ankhorage\/[a-z0-9-]+$/.test(repository)) {
+                throw new Error('The Devtools consumer registry contains an invalid repository.');
+              }
+            }
+
+            const readyRepositories = [];
+            const waitingRepositories = [];
+            for (const repository of registry.repositories) {
+              const [owner, repo] = repository.split('/');
+              try {
+                const { data } = await github.rest.repos.getContent({
+                  owner,
+                  repo,
+                  path: '.github/workflows/renovate.yml',
+                });
+                if (Array.isArray(data) || data.type !== 'file' || !data.content) {
+                  throw new Error('The managed Renovate workflow is not a readable file.');
+                }
+                const workflow = Buffer.from(data.content, 'base64').toString('utf8');
+                if (!workflow.includes("github.actor == 'ankhorage-renovate-sync[bot]'")) {
+                  waitingRepositories.push(repository);
+                  continue;
+                }
+                readyRepositories.push(repository);
+              } catch (error) {
+                core.warning('Skipping ' + repository + ': ' + error.message);
+                waitingRepositories.push(repository);
+              }
+            }
+
+            core.notice(
+              'Ready for direct rollout: ' + readyRepositories.length +
+                '; awaiting the one-time workflow bootstrap: ' + waitingRepositories.length + '.',
+            );
+            core.setOutput('has-repositories', String(readyRepositories.length > 0));
+            core.setOutput('repositories', JSON.stringify(readyRepositories));
+            core.setOutput('version', version);
+
+  renovate:
+    needs: validate
+    if: needs.validate.outputs.has-repositories == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        repository: ${{ fromJSON(needs.validate.outputs.repositories) }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the canonical Renovate policy
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: '1.4.0'
+
+      - name: Install the pinned Renovate runner
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Mint the organization Renovate Sync App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.ANKHORAGE_RENOVATE_SYNC_CLIENT_ID }}
+          private-key: ${{ secrets.ANKHORAGE_RENOVATE_SYNC_PRIVATE_KEY }}
+          owner: ankhorage
+          permission-contents: write
+          permission-issues: write
+          permission-pull-requests: write
+          permission-workflows: write
+
+      - name: Run Renovate immediately for the released Devtools version
+        env:
+          RENOVATE_AUTODISCOVER: 'false'
+          RENOVATE_ONBOARDING: 'false'
+          RENOVATE_PLATFORM: github
+          RENOVATE_PACKAGE_RULES: >-
+            [{"matchPackageNames":["@ankhorage/devtools"],"allowedVersions":"${{ needs.validate.outputs.version }}"}]
+          RENOVATE_REPOSITORIES: ${{ matrix.repository }}
+          RENOVATE_REQUIRE_CONFIG: required
+          RENOVATE_TOKEN: ${{ steps.app-token.outputs.token }}
+          ROLLOUT_VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          echo "Rolling out exactly @ankhorage/devtools@$ROLLOUT_VERSION to $RENOVATE_REPOSITORIES"
+          bun x renovate

@@ -8,8 +8,11 @@
  * in consumers. Compatible @ankhorage/ankh and @ankhorage/devtools releases are grouped for the
  * trusted synchronization workflow. The workflow runs the exact lock-selected provider, requires
  * byte stability and current status, and commits the complete managed result without a manual
- * repository sync. The shared preset also performs a one-time migration of the legacy immutable
- * workflow pin; all other canonical workflow changes remain owned by Devtools sync.
+ * repository sync. After the one-time release-rollout bootstrap, a published Devtools version
+ * immediately starts the same Renovate update flow for every repository in the reviewed consumer
+ * registry; Renovate remains the only dependency-branch writer. The shared preset also performs a
+ * one-time migration of the legacy immutable workflow pin; all other canonical workflow changes
+ * remain owned by Devtools sync.
  *
  * @usage
  * @readme
