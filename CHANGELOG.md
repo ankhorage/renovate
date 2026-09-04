@@ -1,5 +1,11 @@
 # @ankhorage/renovate
 
+## 0.1.12
+
+### Patch Changes
+
+- d3f138f: Trigger registered Devtools consumer updates immediately after each published release.
+
 ## 0.1.11
 
 ### Patch Changes
