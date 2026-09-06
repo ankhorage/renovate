@@ -14,7 +14,7 @@
     {
       "id": "npm",
       "label": "npm",
-      "value": "v0.1.11",
+      "value": "v0.1.12",
       "color": "cb3837"
     },
     {
@@ -86,6 +86,12 @@
   ],
   "modules": [
     {
+      "path": "src/automerge-workflow.test.ts",
+      "isEntrypoint": false,
+      "dependencies": [],
+      "exports": []
+    },
+    {
       "path": "src/changeset-workflow.test.ts",
       "isEntrypoint": false,
       "dependencies": [
@@ -146,7 +152,7 @@
       "description": null,
       "sourceLocation": {
         "filePath": "src/changeset-workflow.test.ts",
-        "line": 254,
+        "line": 255,
         "column": 11
       }
     },
@@ -155,7 +161,7 @@
       "description": null,
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 77,
+        "line": 78,
         "column": 1
       }
     },
@@ -164,7 +170,7 @@
       "description": null,
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 88,
+        "line": 89,
         "column": 1
       }
     },
@@ -173,7 +179,7 @@
       "description": null,
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 95,
+        "line": 96,
         "column": 1
       }
     },
@@ -182,7 +188,7 @@
       "description": null,
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 105,
+        "line": 106,
         "column": 1
       }
     },
@@ -191,7 +197,7 @@
       "description": null,
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 116,
+        "line": 117,
         "column": 1
       }
     },
@@ -200,7 +206,7 @@
       "description": null,
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 120,
+        "line": 121,
         "column": 1
       }
     },
@@ -209,7 +215,7 @@
       "description": null,
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 143,
+        "line": 145,
         "column": 1
       }
     },
@@ -218,7 +224,7 @@
       "description": null,
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 189,
+        "line": 191,
         "column": 1
       }
     },
@@ -227,7 +233,7 @@
       "description": null,
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 209,
+        "line": 211,
         "column": 1
       }
     },
@@ -236,7 +242,7 @@
       "description": null,
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 217,
+        "line": 219,
         "column": 1
       }
     },
@@ -245,7 +251,7 @@
       "description": null,
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 225,
+        "line": 227,
         "column": 1
       }
     },
@@ -254,7 +260,7 @@
       "description": null,
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 246,
+        "line": 248,
         "column": 1
       }
     },
@@ -263,7 +269,7 @@
       "description": null,
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 253,
+        "line": 255,
         "column": 1
       }
     }
@@ -288,6 +294,30 @@
       }
     ],
     "calls": [
+      {
+        "fromSymbol": "src/automerge-workflow.test.ts",
+        "toSymbol": "readFileSync",
+        "callExpression": "readFileSync",
+        "sourcePath": "src/automerge-workflow.test.ts"
+      },
+      {
+        "fromSymbol": "src/automerge-workflow.test.ts",
+        "toSymbol": "describe",
+        "callExpression": "describe",
+        "sourcePath": "src/automerge-workflow.test.ts"
+      },
+      {
+        "fromSymbol": "src/automerge-workflow.test.ts",
+        "toSymbol": "test",
+        "callExpression": "test",
+        "sourcePath": "src/automerge-workflow.test.ts"
+      },
+      {
+        "fromSymbol": "src/automerge-workflow.test.ts",
+        "toSymbol": "expect",
+        "callExpression": "expect",
+        "sourcePath": "src/automerge-workflow.test.ts"
+      },
       {
         "fromSymbol": "src/changeset-workflow.test.ts",
         "toSymbol": "readFileSync",

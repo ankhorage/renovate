@@ -27,6 +27,7 @@ describe('consumer preset', () => {
       enabled: true,
       groupName: 'Ankhorage libraries',
       groupSlug: 'ankhorage-libraries',
+      labels: ['dependencies', 'renovate:automerge'],
       rangeStrategy: 'bump',
     });
   });
@@ -39,6 +40,7 @@ describe('consumer preset', () => {
         enabled: true,
         groupName: 'Ankhorage CLI and Devtools toolchain',
         groupSlug: 'ankhorage-cli-and-devtools-toolchain',
+        labels: ['dependencies', 'renovate:automerge'],
         platformAutomerge: false,
         rangeStrategy: 'bump',
       });
@@ -61,6 +63,7 @@ describe('consumer patch policy', () => {
         automerge: true,
         automergeType: 'pr',
         enabled: true,
+        labels: ['dependencies', 'renovate:automerge'],
         platformAutomerge: false,
       });
     }
@@ -146,6 +149,7 @@ describe('consumer workflow update permissions', () => {
       enabled: true,
       groupName: 'Ankhorage Renovate workflow',
       groupSlug: 'ankhorage-renovate-workflow',
+      labels: ['dependencies', 'renovate:automerge'],
       platformAutomerge: false,
     });
 
@@ -174,6 +178,7 @@ describe('consumer toolchain safeguards', () => {
       automerge: false,
       enabled: true,
       groupName: 'Ankhorage CLI and Devtools toolchain',
+      labels: ['dependencies', 'renovate:review-required'],
     });
   });
 
@@ -229,6 +234,7 @@ describe('Devtools-owner preset', () => {
         automergeType: 'pr',
         enabled: true,
         groupName: 'Devtools-owned toolchain',
+        labels: ['dependencies', 'renovate:automerge'],
         platformAutomerge: false,
         rangeStrategy: 'bump',
       });
@@ -242,6 +248,7 @@ describe('Devtools-owner preset', () => {
       automerge: false,
       enabled: true,
       groupName: 'Devtools-owned toolchain',
+      labels: ['dependencies', 'renovate:review-required'],
     });
   });
 
