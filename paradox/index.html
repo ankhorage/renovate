@@ -148,7 +148,7 @@
       <div class="summary">
         <div><strong>0</strong><span class="muted">public exports</span></div>
         <div><strong>0</strong><span class="muted">components</span></div>
-        <div><strong>6</strong><span class="muted">modules</span></div>
+        <div><strong>7</strong><span class="muted">modules</span></div>
         <div><strong>1</strong><span class="muted">entrypoints</span></div>
       </div>
       <h3>Entrypoints</h3>
@@ -159,7 +159,12 @@
     
     <section class="panel">
       <h2>Modules</h2>
-      <article class="item" data-search="src/changeset-workflow.test.ts src/renovatePreset.testSupport.ts">
+      <article class="item" data-search="src/automerge-workflow.test.ts">
+    <h3>src/automerge-workflow.test.ts</h3>
+    <p class="muted">Referenced module</p>
+    <p><strong>Dependencies:</strong> <span class="empty">None</span></p>
+    <p><strong>Exports:</strong> <span class="empty">None</span></p>
+  </article><article class="item" data-search="src/changeset-workflow.test.ts src/renovatePreset.testSupport.ts">
     <h3>src/changeset-workflow.test.ts</h3>
     <p class="muted">Referenced module</p>
     <p><strong>Dependencies:</strong> <code>src/renovatePreset.testSupport.ts</code></p>
@@ -208,6 +213,8 @@
   package__ankhorage_renovate[&quot;@ankhorage/renovate&quot;]
   entrypoint_src_index_ts[&quot;src/index.ts&quot;]
   package__ankhorage_renovate --&gt; entrypoint_src_index_ts
+  module_src_automerge_workflow_test_ts[&quot;src/automerge-workflow.test.ts&quot;]
+  package__ankhorage_renovate -.-&gt; module_src_automerge_workflow_test_ts
   module_src_changeset_workflow_test_ts[&quot;src/changeset-workflow.test.ts&quot;]
   package__ankhorage_renovate -.-&gt; module_src_changeset_workflow_test_ts
   module_src_changeset_workflow_test_ts --&gt; module_src_renovatePreset_testSupport_ts
@@ -229,6 +236,8 @@
   package__ankhorage_renovate[&quot;@ankhorage/renovate&quot;]
   entrypoint_src_index_ts[&quot;src/index.ts&quot;]
   package__ankhorage_renovate --&gt; entrypoint_src_index_ts
+  module_src_automerge_workflow_test_ts[&quot;src/automerge-workflow.test.ts&quot;]
+  package__ankhorage_renovate -.-&gt; module_src_automerge_workflow_test_ts
   module_src_changeset_workflow_test_ts[&quot;src/changeset-workflow.test.ts&quot;]
   package__ankhorage_renovate -.-&gt; module_src_changeset_workflow_test_ts
   module_src_changeset_workflow_test_ts --&gt; module_src_renovatePreset_testSupport_ts
@@ -249,6 +258,7 @@
     <h3>Module relationships</h3>
     <p class="muted"><code>diagrams/module-relationships.mmd</code></p>
     <div class="mermaid">graph LR
+  module_src_automerge_workflow_test_ts[&quot;src/automerge-workflow.test.ts&quot;]
   module_src_changeset_workflow_test_ts[&quot;src/changeset-workflow.test.ts&quot;]
   module_src_default_test_ts[&quot;src/default.test.ts&quot;]
   module_src_devtools_release_rollout_test_ts[&quot;src/devtools-release-rollout.test.ts&quot;]
@@ -262,6 +272,7 @@
     <details>
       <summary>View Mermaid source</summary>
       <pre>graph LR
+  module_src_automerge_workflow_test_ts[&quot;src/automerge-workflow.test.ts&quot;]
   module_src_changeset_workflow_test_ts[&quot;src/changeset-workflow.test.ts&quot;]
   module_src_default_test_ts[&quot;src/default.test.ts&quot;]
   module_src_devtools_release_rollout_test_ts[&quot;src/devtools-release-rollout.test.ts&quot;]
@@ -277,6 +288,7 @@
     <h3>Export graph</h3>
     <p class="muted"><code>diagrams/export-graph.mmd</code></p>
     <div class="mermaid">graph LR
+  module_src_automerge_workflow_test_ts[&quot;src/automerge-workflow.test.ts&quot;]
   module_src_changeset_workflow_test_ts[&quot;src/changeset-workflow.test.ts&quot;]
   module_src_default_test_ts[&quot;src/default.test.ts&quot;]
   module_src_devtools_release_rollout_test_ts[&quot;src/devtools-release-rollout.test.ts&quot;]
@@ -287,6 +299,7 @@
     <details>
       <summary>View Mermaid source</summary>
       <pre>graph LR
+  module_src_automerge_workflow_test_ts[&quot;src/automerge-workflow.test.ts&quot;]
   module_src_changeset_workflow_test_ts[&quot;src/changeset-workflow.test.ts&quot;]
   module_src_default_test_ts[&quot;src/default.test.ts&quot;]
   module_src_devtools_release_rollout_test_ts[&quot;src/devtools-release-rollout.test.ts&quot;]
@@ -303,7 +316,7 @@
       <h2>src/changeset-workflow.test.ts</h2>
       <article class="item" data-search="isOwned src/changeset-workflow.test.ts ">
     <h3>isOwned</h3>
-    <p class="muted"><code>src/changeset-workflow.test.ts:254:11</code></p>
+    <p class="muted"><code>src/changeset-workflow.test.ts:255:11</code></p>
     <p class="empty">No description available.</p>
   </article>
     </section>
@@ -312,55 +325,55 @@
       <h2>src/renovatePreset.testSupport.ts</h2>
       <article class="item" data-search="dependency src/renovatePreset.testSupport.ts ">
     <h3>dependency</h3>
-    <p class="muted"><code>src/renovatePreset.testSupport.ts:77:1</code></p>
+    <p class="muted"><code>src/renovatePreset.testSupport.ts:78:1</code></p>
     <p class="empty">No description available.</p>
   </article><article class="item" data-search="branchName src/renovatePreset.testSupport.ts ">
     <h3>branchName</h3>
-    <p class="muted"><code>src/renovatePreset.testSupport.ts:88:1</code></p>
+    <p class="muted"><code>src/renovatePreset.testSupport.ts:89:1</code></p>
     <p class="empty">No description available.</p>
   </article><article class="item" data-search="matchesRule src/renovatePreset.testSupport.ts ">
     <h3>matchesRule</h3>
-    <p class="muted"><code>src/renovatePreset.testSupport.ts:95:1</code></p>
+    <p class="muted"><code>src/renovatePreset.testSupport.ts:96:1</code></p>
     <p class="empty">No description available.</p>
   </article><article class="item" data-search="matches src/renovatePreset.testSupport.ts ">
     <h3>matches</h3>
-    <p class="muted"><code>src/renovatePreset.testSupport.ts:105:1</code></p>
+    <p class="muted"><code>src/renovatePreset.testSupport.ts:106:1</code></p>
     <p class="empty">No description available.</p>
   </article><article class="item" data-search="readPreset src/renovatePreset.testSupport.ts ">
     <h3>readPreset</h3>
-    <p class="muted"><code>src/renovatePreset.testSupport.ts:116:1</code></p>
+    <p class="muted"><code>src/renovatePreset.testSupport.ts:117:1</code></p>
     <p class="empty">No description available.</p>
   </article><article class="item" data-search="resolveRules src/renovatePreset.testSupport.ts ">
     <h3>resolveRules</h3>
-    <p class="muted"><code>src/renovatePreset.testSupport.ts:120:1</code></p>
+    <p class="muted"><code>src/renovatePreset.testSupport.ts:121:1</code></p>
     <p class="empty">No description available.</p>
   </article><article class="item" data-search="resolveTrustedToolchainFixtureVersion src/renovatePreset.testSupport.ts ">
     <h3>resolveTrustedToolchainFixtureVersion</h3>
-    <p class="muted"><code>src/renovatePreset.testSupport.ts:143:1</code></p>
+    <p class="muted"><code>src/renovatePreset.testSupport.ts:145:1</code></p>
     <p class="empty">No description available.</p>
   </article><article class="item" data-search="isCompatibleSelection src/renovatePreset.testSupport.ts ">
     <h3>isCompatibleSelection</h3>
-    <p class="muted"><code>src/renovatePreset.testSupport.ts:189:1</code></p>
+    <p class="muted"><code>src/renovatePreset.testSupport.ts:191:1</code></p>
     <p class="empty">No description available.</p>
   </article><article class="item" data-search="isStableAtOrAfter src/renovatePreset.testSupport.ts ">
     <h3>isStableAtOrAfter</h3>
-    <p class="muted"><code>src/renovatePreset.testSupport.ts:209:1</code></p>
+    <p class="muted"><code>src/renovatePreset.testSupport.ts:211:1</code></p>
     <p class="empty">No description available.</p>
   </article><article class="item" data-search="isCaretCompatibleSelection src/renovatePreset.testSupport.ts ">
     <h3>isCaretCompatibleSelection</h3>
-    <p class="muted"><code>src/renovatePreset.testSupport.ts:217:1</code></p>
+    <p class="muted"><code>src/renovatePreset.testSupport.ts:219:1</code></p>
     <p class="empty">No description available.</p>
   </article><article class="item" data-search="parseVersion src/renovatePreset.testSupport.ts ">
     <h3>parseVersion</h3>
-    <p class="muted"><code>src/renovatePreset.testSupport.ts:225:1</code></p>
+    <p class="muted"><code>src/renovatePreset.testSupport.ts:227:1</code></p>
     <p class="empty">No description available.</p>
   </article><article class="item" data-search="compareCoreVersions src/renovatePreset.testSupport.ts ">
     <h3>compareCoreVersions</h3>
-    <p class="muted"><code>src/renovatePreset.testSupport.ts:246:1</code></p>
+    <p class="muted"><code>src/renovatePreset.testSupport.ts:248:1</code></p>
     <p class="empty">No description available.</p>
   </article><article class="item" data-search="compareNumber src/renovatePreset.testSupport.ts ">
     <h3>compareNumber</h3>
-    <p class="muted"><code>src/renovatePreset.testSupport.ts:253:1</code></p>
+    <p class="muted"><code>src/renovatePreset.testSupport.ts:255:1</code></p>
     <p class="empty">No description available.</p>
   </article>
     </section>

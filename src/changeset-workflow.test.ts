@@ -12,7 +12,8 @@ const workflow = readFileSync(
   new URL('../.github/workflows/changeset.yml', import.meta.url),
   'utf8',
 );
-const [prepareJob = '', commitJob = ''] = workflow.split('\n  commit:');
+const [prepareJob = '', afterPrepare = ''] = workflow.split('\n  commit:');
+const [commitJob = ''] = afterPrepare.split('\n  merge:');
 const managedSkillNames =
   /^ {2}DEVTOOLS_MANAGED_SKILL_NAMES: (.+)$/m.exec(workflow)?.[1]?.split(',') ?? [];
 describe('trusted Renovate integration', () => {

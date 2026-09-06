@@ -8,6 +8,7 @@
       "matchManagers": ["bun"],
       "matchFileNames": ["package.json"],
       "enabled": true,
+      "labels": ["dependencies", "renovate:automerge"],
       "groupName": "Devtools-owned toolchain",
       "rangeStrategy": "bump",
       "automerge": true,
@@ -19,6 +20,7 @@
       "matchManagers": ["bun"],
       "matchFileNames": ["package.json"],
       "matchUpdateTypes": ["major"],
+      "labels": ["dependencies", "renovate:review-required"],
       "automerge": false
     }
   ]

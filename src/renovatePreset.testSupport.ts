@@ -15,6 +15,7 @@ interface PackageRule {
   readonly enabled?: boolean;
   readonly groupName?: string;
   readonly groupSlug?: string;
+  readonly labels?: readonly string[];
   readonly matchDatasources?: readonly string[];
   readonly matchFileNames?: readonly string[];
   readonly matchManagers?: readonly string[];
@@ -131,6 +132,7 @@ export function resolveRules(
         ...(rule.enabled === undefined ? {} : { enabled: rule.enabled }),
         ...(rule.groupName === undefined ? {} : { groupName: rule.groupName }),
         ...(rule.groupSlug === undefined ? {} : { groupSlug: rule.groupSlug }),
+        ...(rule.labels === undefined ? {} : { labels: rule.labels }),
         ...(rule.platformAutomerge === undefined
           ? {}
           : { platformAutomerge: rule.platformAutomerge }),

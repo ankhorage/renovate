@@ -514,6 +514,8 @@ jobs:
       contents: read
       pull-requests: read
     runs-on: ubuntu-latest
+    outputs:
+      commit-created: ${{ steps.managed-commit.outputs.commit-created }}
     steps:
       - name: Download deterministic managed changes
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
@@ -534,6 +536,7 @@ jobs:
           permission-workflows: write
 
       - name: Commit managed changes and trigger pull request CI
+        id: managed-commit
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           ARTIFACT_PATH: ${{ runner.temp }}/renovate-managed/renovate-managed.json
@@ -855,6 +858,7 @@ jobs:
             }
 
             if (managedFiles.size === 0 && managedDeletions.size === 0) {
+              core.setOutput('commit-created', 'false');
               core.info('No managed synchronization or Changeset update is required.');
               return;
             }
@@ -909,3 +913,266 @@ jobs:
               sha: commit.sha,
               force: false,
             });
+            core.setOutput('commit-created', 'true');
+
+  merge:
+    needs:
+      - prepare
+      - commit
+    if: needs.commit.outputs.commit-created != 'true'
+    permissions:
+      checks: read
+      contents: read
+      issues: read
+      pull-requests: read
+      statuses: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for the exact synchronized head to become mergeable
+        id: gate
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const pullNumber = context.payload.pull_request?.number;
+            const permittedActors = new Set(['renovate[bot]', 'ankhorage-renovate-sync[bot]']);
+            if (!pullNumber || !permittedActors.has(context.actor)) {
+              core.setFailed('This workflow only accepts trusted Renovate pull requests.');
+              return;
+            }
+
+            const { owner, repo } = context.repo;
+            const automergeLabel = 'renovate:automerge';
+            const reviewLabel = 'renovate:review-required';
+            const allowedConclusions = new Set(['neutral', 'skipped', 'success']);
+            const timeoutAt = Date.now() + 30 * 60 * 1000;
+
+            const readReviewState = async () => {
+              let cursor = null;
+              let reviewDecision = null;
+              let unresolved = false;
+              do {
+                const result = await github.graphql(
+                  `query($owner: String!, $repo: String!, $number: Int!, $cursor: String) {
+                    repository(owner: $owner, name: $repo) {
+                      pullRequest(number: $number) {
+                        reviewDecision
+                        reviewThreads(first: 100, after: $cursor) {
+                          nodes { isResolved }
+                          pageInfo { hasNextPage endCursor }
+                        }
+                      }
+                    }
+                  }`,
+                  { owner, repo, number: pullNumber, cursor },
+                );
+                const pullRequest = result.repository?.pullRequest;
+                if (!pullRequest) throw new Error('Pull request review state is unavailable.');
+                reviewDecision = pullRequest.reviewDecision;
+                unresolved ||= pullRequest.reviewThreads.nodes.some(({ isResolved }) => !isResolved);
+                cursor = pullRequest.reviewThreads.pageInfo.hasNextPage
+                  ? pullRequest.reviewThreads.pageInfo.endCursor
+                  : null;
+              } while (cursor);
+              return { reviewDecision, unresolved };
+            };
+
+            const readTrustedLabel = async () => {
+              const events = await github.paginate(github.rest.issues.listEventsForTimeline, {
+                owner,
+                repo,
+                issue_number: pullNumber,
+                per_page: 100,
+              });
+              const event = events
+                .filter(({ event, label }) => event === 'labeled' && label?.name === automergeLabel)
+                .at(-1);
+              return event && permittedActors.has(event.actor?.login);
+            };
+
+            const readChecks = async (headSha) => {
+              const runs = await github.paginate(github.rest.checks.listForRef, {
+                owner,
+                repo,
+                ref: headSha,
+                filter: 'latest',
+                per_page: 100,
+              });
+              const latestRuns = new Map();
+              for (const run of runs) {
+                if (run.name.startsWith('changeset /')) continue;
+                const key = String(run.app?.id ?? 'unknown') + ':' + run.name;
+                const current = latestRuns.get(key);
+                if (!current || run.id > current.id) latestRuns.set(key, run);
+              }
+              const checks = [...latestRuns.values()];
+              const validate = checks.find(
+                ({ app, name }) => app?.slug === 'github-actions' && name === 'validate',
+              );
+              const failed = checks.some(
+                ({ conclusion, status }) =>
+                  status === 'completed' && !allowedConclusions.has(conclusion),
+              );
+              const pending =
+                !validate ||
+                validate.status !== 'completed' ||
+                validate.conclusion !== 'success' ||
+                checks.some(({ status }) => status !== 'completed');
+
+              const statuses = await github.paginate(github.rest.repos.listCommitStatusesForRef, {
+                owner,
+                repo,
+                ref: headSha,
+                per_page: 100,
+              });
+              const latestStatuses = new Map();
+              for (const status of statuses) {
+                if (!latestStatuses.has(status.context)) latestStatuses.set(status.context, status);
+              }
+              const statusFailed = [...latestStatuses.values()].some(
+                ({ state }) => state === 'error' || state === 'failure',
+              );
+              const statusPending = [...latestStatuses.values()].some(
+                ({ state }) => state === 'pending',
+              );
+              return {
+                failed: failed || statusFailed,
+                pending: pending || statusPending,
+              };
+            };
+
+            const initial = await github.rest.pulls.get({ owner, repo, pull_number: pullNumber });
+            const expectedHead = initial.data.head.sha;
+            const labels = new Set(initial.data.labels.map(({ name }) => name));
+            if (
+              initial.data.user?.login === undefined ||
+              !permittedActors.has(initial.data.user.login) ||
+              initial.data.head.repo?.full_name !== owner + '/' + repo ||
+              !initial.data.head.ref.startsWith('renovate/') ||
+              initial.data.state !== 'open' ||
+              initial.data.draft ||
+              !labels.has(automergeLabel) ||
+              labels.has(reviewLabel) ||
+              !(await readTrustedLabel())
+            ) {
+              core.info('The pull request is not eligible for trusted automerge.');
+              return;
+            }
+
+            while (Date.now() < timeoutAt) {
+              const { data: pull } = await github.rest.pulls.get({
+                owner,
+                repo,
+                pull_number: pullNumber,
+              });
+              if (pull.head.sha !== expectedHead) {
+                throw new Error('The Renovate head changed while checks were pending.');
+              }
+              if (pull.mergeable === false) {
+                core.info('The pull request has merge conflicts.');
+                return;
+              }
+
+              const checks = await readChecks(expectedHead);
+              if (checks.failed) {
+                core.info('The exact Renovate head has failing CI.');
+                return;
+              }
+              if (!checks.pending && pull.mergeable === true) {
+                const review = await readReviewState();
+                if (review.reviewDecision === 'CHANGES_REQUESTED' || review.unresolved) {
+                  core.info('The pull request has unresolved review findings.');
+                  return;
+                }
+                core.setOutput('head-sha', expectedHead);
+                return;
+              }
+              await new Promise((resolve) => setTimeout(resolve, 15000));
+            }
+            core.setFailed('Timed out waiting for the exact Renovate head to pass CI.');
+
+      - name: Create repository-scoped Renovate merge token
+        if: steps.gate.outputs.head-sha != ''
+        id: renovate-merge-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ inputs.renovate_sync_client_id }}
+          private-key: ${{ secrets.renovate_sync_private_key }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-issues: read
+          permission-pull-requests: write
+
+      - name: Merge the unchanged validated head
+        if: steps.gate.outputs.head-sha != ''
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          EXPECTED_HEAD_SHA: ${{ steps.gate.outputs.head-sha }}
+        with:
+          github-token: ${{ steps.renovate-merge-token.outputs.token }}
+          script: |
+            const pullNumber = context.payload.pull_request?.number;
+            const permittedActors = new Set(['renovate[bot]', 'ankhorage-renovate-sync[bot]']);
+            const { owner, repo } = context.repo;
+            const { data: pull } = await github.rest.pulls.get({
+              owner,
+              repo,
+              pull_number: pullNumber,
+            });
+            const labels = new Set(pull.labels.map(({ name }) => name));
+            const events = await github.paginate(github.rest.issues.listEventsForTimeline, {
+              owner,
+              repo,
+              issue_number: pullNumber,
+              per_page: 100,
+            });
+            const labelEvent = events
+              .filter(
+                ({ event, label }) =>
+                  event === 'labeled' && label?.name === 'renovate:automerge',
+              )
+              .at(-1);
+            const review = await github.graphql(
+              `query($owner: String!, $repo: String!, $number: Int!) {
+                repository(owner: $owner, name: $repo) {
+                  pullRequest(number: $number) {
+                    reviewDecision
+                    reviewThreads(first: 100) {
+                      nodes { isResolved }
+                      pageInfo { hasNextPage }
+                    }
+                  }
+                }
+              }`,
+              { owner, repo, number: pullNumber },
+            );
+            const reviewState = review.repository?.pullRequest;
+            if (
+              pull.state !== 'open' ||
+              pull.draft ||
+              pull.mergeable !== true ||
+              pull.head.sha !== process.env.EXPECTED_HEAD_SHA ||
+              pull.head.repo?.full_name !== owner + '/' + repo ||
+              !pull.head.ref.startsWith('renovate/') ||
+              !permittedActors.has(pull.user?.login) ||
+              !labels.has('renovate:automerge') ||
+              labels.has('renovate:review-required') ||
+              !labelEvent ||
+              !permittedActors.has(labelEvent.actor?.login) ||
+              !reviewState ||
+              reviewState.reviewDecision === 'CHANGES_REQUESTED' ||
+              reviewState.reviewThreads.pageInfo.hasNextPage ||
+              reviewState.reviewThreads.nodes.some(({ isResolved }) => !isResolved)
+            ) {
+              throw new Error('The pull request changed after its merge gate passed.');
+            }
+            const result = await github.rest.pulls.merge({
+              owner,
+              repo,
+              pull_number: pullNumber,
+              merge_method: 'squash',
+              sha: process.env.EXPECTED_HEAD_SHA,
+            });
+            if (!result.data.merged) {
+              throw new Error(result.data.message || 'GitHub did not merge the pull request.');
+            }

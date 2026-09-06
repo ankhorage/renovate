@@ -29,6 +29,7 @@
       "matchDatasources": ["npm"],
       "matchUpdateTypes": ["patch"],
       "enabled": true,
+      "labels": ["dependencies", "renovate:automerge"],
       "automerge": true,
       "automergeType": "pr",
       "platformAutomerge": false
@@ -56,6 +57,7 @@
       "matchDatasources": ["npm"],
       "matchPackageNames": ["@ankhorage/**"],
       "enabled": true,
+      "labels": ["dependencies", "renovate:automerge"],
       "groupName": "Ankhorage libraries",
       "groupSlug": "ankhorage-libraries",
       "rangeStrategy": "bump",
@@ -68,6 +70,7 @@
       "matchDatasources": ["npm"],
       "matchPackageNames": ["@ankhorage/ankh", "@ankhorage/devtools"],
       "enabled": true,
+      "labels": ["dependencies", "renovate:automerge"],
       "groupName": "Ankhorage CLI and Devtools toolchain",
       "groupSlug": "ankhorage-cli-and-devtools-toolchain",
       "rangeStrategy": "bump",
@@ -80,6 +83,7 @@
       "matchDatasources": ["npm"],
       "matchPackageNames": ["@ankhorage/ankh", "@ankhorage/devtools"],
       "matchUpdateTypes": ["major"],
+      "labels": ["dependencies", "renovate:review-required"],
       "automerge": false
     },
     {
@@ -99,6 +103,7 @@
       "matchPackageNames": ["ankhorage/renovate"],
       "matchFileNames": [".github/workflows/renovate.yml"],
       "enabled": true,
+      "labels": ["dependencies", "renovate:automerge"],
       "groupName": "Ankhorage Renovate workflow",
       "groupSlug": "ankhorage-renovate-workflow",
       "automerge": true,
