@@ -10,7 +10,7 @@
     "ankhorage/deploy",
     "ankhorage/doctor",
     "ankhorage/expo-runtime",
-    "ankhorage/gh",
+    "ankhorage/repository",
     "ankhorage/infra",
     "ankhorage/orchestrator",
     "ankhorage/orchestrator-module-expo-google-fonts",
@@ -31,7 +31,7 @@
     "ankhorage/utility",
     "ankhorage/zora",
     "ankhorage/zora-chess",
-    "ankhorage/zora-navigation",
+    "ankhorage/navigator",
     "ankhorage/zora-tabletop"
   ]
 }

@@ -20,6 +20,10 @@ describe('Devtools release rollout registry', () => {
     for (const repository of registry.repositories) {
       expect(repository).toMatch(/^ankhorage\/[a-z0-9-]+$/);
     }
+    expect(registry.repositories).toContain('ankhorage/repository');
+    expect(registry.repositories).toContain('ankhorage/navigator');
+    expect(registry.repositories).not.toContain('ankhorage/gh');
+    expect(registry.repositories).not.toContain('ankhorage/zora-navigation');
   });
 });
 
