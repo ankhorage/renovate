@@ -1,5 +1,11 @@
 # @ankhorage/renovate
 
+## 0.2.0
+
+### Minor Changes
+
+- 03f29fb: Merge explicitly eligible Renovate updates after the synchronized head passes CI without review findings.
+
 ## 0.1.12
 
 ### Patch Changes
