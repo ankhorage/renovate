@@ -1,5 +1,11 @@
 # @ankhorage/renovate
 
+## 0.2.2
+
+### Patch Changes
+
+- 9850e21: Run immediate Devtools consumer rollouts on Node.js 24 as required by current Renovate.
+
 ## 0.2.1
 
 ### Patch Changes
