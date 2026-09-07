@@ -14,8 +14,6 @@ const workflow = readFileSync(
 );
 const [prepareJob = '', afterPrepare = ''] = workflow.split('\n  commit:');
 const [commitJob = ''] = afterPrepare.split('\n  merge:');
-const managedSkillNames =
-  /^ {2}DEVTOOLS_MANAGED_SKILL_NAMES: (.+)$/m.exec(workflow)?.[1]?.split(',') ?? [];
 describe('trusted Renovate integration', () => {
   test('accepts only same-repository Renovate branches', () => {
     expect(workflow).toContain("['renovate[bot]', 'ankhorage-renovate-sync[bot]']");
@@ -210,19 +208,16 @@ describe('trusted Renovate write boundary', () => {
     expect(workflow).not.toContain("'.github/workflows/studio-acceptance.yml'");
     expect(workflow).toContain('Devtools sync changed an unexpected path:');
     expect(workflow).toContain('Devtools sync created an unexpected path:');
-    expect(managedSkillNames).toEqual([
-      'ankhorage-coding-rules',
-      'ankhorage-project-structure',
-      'zora-designer',
-    ]);
+    expect(workflow).not.toContain('DEVTOOLS_MANAGED_SKILL_NAMES');
+    expect(workflow).toContain("segments[1] === 'skills'");
     for (const job of [prepareJob, commitJob]) {
-      expect(job).toContain('process.env.DEVTOOLS_MANAGED_SKILL_NAMES');
+      expect(job).toContain('const isExactManagedSkillPath = (relativePath) =>');
       expect(job).toContain('declaredManagedSkillFiles.has(relativePath)');
       expect(job).toContain('baseManagedSkillFiles.has(relativePath)');
       expect(job).toContain('Managed skill content does not match its ownership manifest:');
     }
     expect(prepareJob).toContain('Devtools ownership manifest must be a regular file.');
-    expect(workflow).toContain('managedSkillRoots.find((root) => relativePath.startsWith(root))');
+    expect(workflow).toContain('segments[2]) &&');
   });
 });
 
@@ -251,19 +246,28 @@ describe('trusted managed skill ownership', () => {
     const manifestFiles = new Set([
       '.agents/skills/zora-designer/SKILL.md',
       '.agents/skills/zora-designer/scripts/entry',
+      '.agents/skills/hexagonal-architecture/agents/openai.yaml',
     ]);
     const isOwned = (relativePath: string) => {
-      const root = managedSkillNames
-        .map((name) => `.agents/skills/${name}/`)
-        .find((candidate) => relativePath.startsWith(candidate));
-      if (root === undefined || !manifestFiles.has(relativePath)) return false;
-      return relativePath
-        .slice(root.length)
-        .split('/')
+      const segments = relativePath.split('/');
+      const [, , skillName] = segments;
+      if (
+        segments.length <= 3 ||
+        segments[0] !== '.agents' ||
+        segments[1] !== 'skills' ||
+        skillName === undefined ||
+        !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(skillName) ||
+        !manifestFiles.has(relativePath)
+      ) {
+        return false;
+      }
+      return segments
+        .slice(3)
         .every((segment) => segment !== '' && segment !== '.' && segment !== '..');
     };
 
     expect(isOwned('.agents/skills/zora-designer/SKILL.md')).toBe(true);
+    expect(isOwned('.agents/skills/hexagonal-architecture/agents/openai.yaml')).toBe(true);
     expect(isOwned('.agents/skills/zora-designer/unowned.md')).toBe(false);
     expect(isOwned('.agents/skills/arbitrary/SKILL.md')).toBe(false);
     expect(isOwned('.agents/skills/zora-designer/../secret.md')).toBe(false);

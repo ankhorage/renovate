@@ -14,9 +14,6 @@ permissions:
   contents: read
   pull-requests: read
 
-env:
-  DEVTOOLS_MANAGED_SKILL_NAMES: ankhorage-coding-rules,ankhorage-project-structure,zora-designer
-
 jobs:
   prepare:
     permissions:
@@ -340,14 +337,15 @@ jobs:
             const allowed = allowedByMode[syncMode];
             if (!allowed) throw new Error('The prepared sync mode is invalid.');
             const managedManifestPath = '.agents/.devtools-manifest.json';
-            const managedSkillRoots = process.env.DEVTOOLS_MANAGED_SKILL_NAMES
-              .split(',')
-              .map((name) => '.agents/skills/' + name + '/');
             const isExactManagedSkillPath = (relativePath) => {
-              const managedSkillRoot = managedSkillRoots.find((root) => relativePath.startsWith(root));
-              if (managedSkillRoot === undefined) return false;
-              const segments = relativePath.slice(managedSkillRoot.length).split('/');
-              return segments.every((segment) => segment !== '' && segment !== '.' && segment !== '..');
+              const segments = relativePath.split('/');
+              return (
+                segments.length > 3 &&
+                segments[0] === '.agents' &&
+                segments[1] === 'skills' &&
+                /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(segments[2]) &&
+                segments.slice(3).every((segment) => segment !== '' && segment !== '.' && segment !== '..')
+              );
             };
             const readManagedSkillFiles = (contents) => {
               const manifest = JSON.parse(contents);
@@ -610,14 +608,15 @@ jobs:
               throw new Error('Managed artifact exceeds the file-count limit.');
             }
             const managedManifestPath = '.agents/.devtools-manifest.json';
-            const managedSkillRoots = process.env.DEVTOOLS_MANAGED_SKILL_NAMES
-              .split(',')
-              .map((name) => '.agents/skills/' + name + '/');
             const isExactManagedSkillPath = (relativePath) => {
-              const managedSkillRoot = managedSkillRoots.find((root) => relativePath.startsWith(root));
-              if (managedSkillRoot === undefined) return false;
-              const segments = relativePath.slice(managedSkillRoot.length).split('/');
-              return segments.every((segment) => segment !== '' && segment !== '.' && segment !== '..');
+              const segments = relativePath.split('/');
+              return (
+                segments.length > 3 &&
+                segments[0] === '.agents' &&
+                segments[1] === 'skills' &&
+                /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(segments[2]) &&
+                segments.slice(3).every((segment) => segment !== '' && segment !== '.' && segment !== '..')
+              );
             };
             const readManagedSkillFiles = (contents) => {
               const manifest = JSON.parse(contents);
