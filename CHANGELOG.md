@@ -1,5 +1,11 @@
 # @ankhorage/renovate
 
+## 0.2.9
+
+### Patch Changes
+
+- 1c0c770: Recognize the current PR-author trust condition when selecting rollout-ready repositories.
+
 ## 0.2.8
 
 ### Patch Changes
