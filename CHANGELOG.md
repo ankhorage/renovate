@@ -1,5 +1,11 @@
 # @ankhorage/renovate
 
+## 0.2.1
+
+### Patch Changes
+
+- 9758db0: Synchronize the current Devtools release workflow and managed repository policy.
+
 ## 0.2.0
 
 ### Minor Changes
