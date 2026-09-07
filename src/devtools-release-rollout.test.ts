@@ -48,6 +48,7 @@ describe('Devtools release rollout workflow', () => {
     expect(workflow).toContain('RENOVATE_PACKAGE_RULES:');
     expect(workflow).toContain('"allowedVersions":"${{ needs.validate.outputs.version }}"');
     expect(workflow).toContain('"recreateWhen":"always"');
+    expect(workflow).toContain("RENOVATE_PR_HOURLY_LIMIT: '0'");
     expect(workflow).toContain(
       'actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1',
     );
