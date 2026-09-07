@@ -143,7 +143,7 @@ jobs:
           RENOVATE_ONBOARDING: 'false'
           RENOVATE_PLATFORM: github
           RENOVATE_PACKAGE_RULES: >-
-            [{"matchPackageNames":["@ankhorage/devtools"],"allowedVersions":"${{ needs.validate.outputs.version }}"}]
+            [{"matchPackageNames":["@ankhorage/devtools"],"allowedVersions":"${{ needs.validate.outputs.version }}","recreateWhen":"always"}]
           RENOVATE_REPOSITORIES: ${{ matrix.repository }}
           RENOVATE_REQUIRE_CONFIG: required
           RENOVATE_TOKEN: ${{ steps.app-token.outputs.token }}
