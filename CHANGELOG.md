@@ -1,5 +1,11 @@
 # @ankhorage/renovate
 
+## 0.2.4
+
+### Patch Changes
+
+- 100f4e9: Trust Renovate pull request authors when synchronizing updates, regardless of who triggers a rerun.
+
 ## 0.2.3
 
 ### Patch Changes
