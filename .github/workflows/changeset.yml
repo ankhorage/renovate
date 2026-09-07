@@ -44,7 +44,7 @@ jobs:
               repo,
               pull_number: pullNumber,
             });
-            const permittedAuthors = new Set(['renovate[bot]', 'app/ankhorage-renovate-sync']);
+            const permittedAuthors = new Set(['renovate[bot]', 'ankhorage-renovate-sync[bot]']);
             if (!permittedAuthors.has(pull.user?.login)) {
               core.setFailed('This workflow only accepts Renovate pull requests.');
               return;
@@ -559,7 +559,7 @@ jobs:
               repo,
               pull_number: pullNumber,
             });
-            const permittedAuthors = new Set(['renovate[bot]', 'app/ankhorage-renovate-sync']);
+            const permittedAuthors = new Set(['renovate[bot]', 'ankhorage-renovate-sync[bot]']);
             if (!permittedAuthors.has(pull.user?.login)) {
               core.setFailed('This workflow only accepts Renovate pull requests.');
               return;
