@@ -23,6 +23,11 @@ describe('trusted Renovate integration', () => {
     expect(workflow).toContain('artifact.headSha !== pull.head.sha');
   });
 
+  test('does not mistake the workflow triggerer for the Renovate pull request author', () => {
+    expect(workflow).toContain('if (!pullNumber)');
+    expect(workflow).not.toContain('permittedActors.has(context.actor)');
+  });
+
   test('isolates untrusted branch preparation from write credentials', () => {
     expect(prepareJob).toContain('contents: read');
     expect(prepareJob).toContain('persist-credentials: false');

@@ -942,11 +942,11 @@ jobs:
           github-token: ${{ github.token }}
           script: |
             const pullNumber = context.payload.pull_request?.number;
-            const permittedActors = new Set(['renovate[bot]', 'ankhorage-renovate-sync[bot]']);
-            if (!pullNumber || !permittedActors.has(context.actor)) {
-              core.setFailed('This workflow only accepts trusted Renovate pull requests.');
+            if (!pullNumber) {
+              core.setFailed('This workflow requires a pull request context.');
               return;
             }
+            const permittedActors = new Set(['renovate[bot]', 'ankhorage-renovate-sync[bot]']);
 
             const { owner, repo } = context.repo;
             const automergeLabel = 'renovate:automerge';
