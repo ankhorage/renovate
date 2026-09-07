@@ -1110,6 +1110,7 @@ jobs:
           permission-contents: write
           permission-issues: read
           permission-pull-requests: write
+          permission-workflows: write
 
       - name: Merge the unchanged validated head
         if: steps.gate.outputs.head-sha != ''
