@@ -33,6 +33,7 @@ describe('trusted Renovate automerge', () => {
     expect(mergeJob).toContain('permission-contents: write');
     expect(mergeJob).toContain('permission-issues: read');
     expect(mergeJob).toContain('permission-pull-requests: write');
+    expect(mergeJob).toContain('permission-workflows: write');
     expect(mergeJob).toContain('sha: process.env.EXPECTED_HEAD_SHA');
     expect(mergeJob).toContain("merge_method: 'squash'");
     expect(mergeJob).toContain("reviewState.reviewDecision === 'CHANGES_REQUESTED'");
