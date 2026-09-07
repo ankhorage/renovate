@@ -39,7 +39,9 @@ describe('Devtools release rollout workflow', () => {
   test('targets only the reviewed registry through the organization Renovate Sync App', () => {
     expect(workflow).toContain("fs.readFileSync('devtools-consumers.json', 'utf8')");
     expect(workflow).toContain('The Devtools consumer registry must not contain duplicates.');
-    expect(workflow).toContain("github.actor == 'ankhorage-renovate-sync[bot]'");
+    expect(workflow).toContain(
+      "github.event.pull_request.user.login == 'ankhorage-renovate-sync[bot]'",
+    );
     expect(workflow).toContain('awaiting the one-time workflow bootstrap');
     expect(workflow).toContain('has-repositories: ${{ steps.registry.outputs.has-repositories }}');
     expect(workflow).toContain("if: needs.validate.outputs.has-repositories == 'true'");
