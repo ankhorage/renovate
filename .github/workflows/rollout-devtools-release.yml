@@ -117,6 +117,11 @@ jobs:
         with:
           bun-version: '1.4.0'
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
       - name: Install the pinned Renovate runner
         run: bun install --frozen-lockfile --ignore-scripts
 
