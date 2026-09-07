@@ -1,5 +1,11 @@
 # @ankhorage/renovate
 
+## 0.2.10
+
+### Patch Changes
+
+- 3688ded: Allow the trusted Renovate automerge gate to run after a maintainer retries or updates a pull request.
+
 ## 0.2.9
 
 ### Patch Changes
