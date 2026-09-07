@@ -59,6 +59,7 @@ describe('Devtools release rollout workflow', () => {
   test('serializes duplicate deliveries while leaving every consumer update to Renovate', () => {
     expect(workflow).toContain('group: devtools-release-rollout');
     expect(workflow).toContain('cancel-in-progress: false');
+    expect(workflow).toContain("node-version: '24'");
     expect(workflow).toContain('bun x renovate');
     expect(workflow).not.toContain('git push');
     expect(workflow).not.toContain('pulls.create');
