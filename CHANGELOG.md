@@ -1,5 +1,17 @@
 # @ankhorage/renovate
 
+## 0.2.6
+
+### Patch Changes
+
+- bb563fa: Read automerge gate state through a repository-scoped App token so older consumer callers can invoke the current reusable workflow.
+
+## 0.2.5
+
+### Patch Changes
+
+- 44a7c5f: Recognize the Renovate Sync GitHub App bot login when preparing and merging dependency updates.
+
 ## 0.2.4
 
 ### Patch Changes
