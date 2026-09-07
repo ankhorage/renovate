@@ -1,5 +1,11 @@
 # @ankhorage/renovate
 
+## 0.2.3
+
+### Patch Changes
+
+- 9e5f25a: Derive trusted Devtools-managed skill paths from their ownership manifest so new released skills do not block Renovate synchronization.
+
 ## 0.2.2
 
 ### Patch Changes
