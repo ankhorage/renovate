@@ -16,8 +16,8 @@ const [prepareJob = '', afterPrepare = ''] = workflow.split('\n  commit:');
 const [commitJob = ''] = afterPrepare.split('\n  merge:');
 describe('trusted Renovate integration', () => {
   test('accepts only same-repository Renovate branches', () => {
-    expect(workflow).toContain("['renovate[bot]', 'ankhorage-renovate-sync[bot]']");
-    expect(workflow).toContain('!permittedActors.has(context.actor)');
+    expect(workflow).toContain("['renovate[bot]', 'app/ankhorage-renovate-sync']");
+    expect(workflow).toContain('!permittedAuthors.has(pull.user?.login)');
     expect(workflow).toContain("pull.head.ref.startsWith('renovate/')");
     expect(workflow).toContain("pull.head.repo?.full_name !== owner + '/' + repo");
     expect(workflow).toContain('artifact.headSha !== pull.head.sha');

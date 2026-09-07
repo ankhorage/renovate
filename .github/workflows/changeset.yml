@@ -33,8 +33,7 @@ jobs:
         with:
           script: |
             const pullNumber = context.payload.pull_request?.number;
-            const permittedActors = new Set(['renovate[bot]', 'ankhorage-renovate-sync[bot]']);
-            if (!pullNumber || !permittedActors.has(context.actor)) {
+            if (!pullNumber) {
               core.setFailed('This workflow only accepts Renovate pull requests.');
               return;
             }
@@ -45,6 +44,11 @@ jobs:
               repo,
               pull_number: pullNumber,
             });
+            const permittedAuthors = new Set(['renovate[bot]', 'app/ankhorage-renovate-sync']);
+            if (!permittedAuthors.has(pull.user?.login)) {
+              core.setFailed('This workflow only accepts Renovate pull requests.');
+              return;
+            }
             if (pull.head.repo?.full_name !== owner + '/' + repo || !pull.head.ref.startsWith('renovate/')) {
               core.setFailed('The Renovate branch must belong to the target repository.');
               return;
@@ -544,8 +548,7 @@ jobs:
             const crypto = require('node:crypto');
             const fs = require('node:fs');
             const pullNumber = context.payload.pull_request?.number;
-            const permittedActors = new Set(['renovate[bot]', 'ankhorage-renovate-sync[bot]']);
-            if (!pullNumber || !permittedActors.has(context.actor)) {
+            if (!pullNumber) {
               core.setFailed('This workflow only accepts Renovate pull requests.');
               return;
             }
@@ -556,6 +559,11 @@ jobs:
               repo,
               pull_number: pullNumber,
             });
+            const permittedAuthors = new Set(['renovate[bot]', 'app/ankhorage-renovate-sync']);
+            if (!permittedAuthors.has(pull.user?.login)) {
+              core.setFailed('This workflow only accepts Renovate pull requests.');
+              return;
+            }
             const artifact = JSON.parse(fs.readFileSync(process.env.ARTIFACT_PATH, 'utf8'));
             if (
               pull.head.repo?.full_name !== owner + '/' + repo ||
