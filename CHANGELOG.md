@@ -1,5 +1,11 @@
 # @ankhorage/renovate
 
+## 0.2.5
+
+### Patch Changes
+
+- 44a7c5f: Recognize the Renovate Sync GitHub App bot login when preparing and merging dependency updates.
+
 ## 0.2.4
 
 ### Patch Changes
