@@ -1,5 +1,11 @@
 # @ankhorage/renovate
 
+## 0.2.8
+
+### Patch Changes
+
+- a036e08: Allow the scoped Renovate merge token to merge validated workflow updates.
+
 ## 0.2.7
 
 ### Patch Changes
