@@ -1,5 +1,11 @@
 # @ankhorage/renovate
 
+## 0.2.7
+
+### Patch Changes
+
+- 8e972a4: Use the caller-scoped GitHub token for read-only automerge checks while reserving the Renovate Sync App token for writes.
+
 ## 0.2.6
 
 ### Patch Changes
