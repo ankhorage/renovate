@@ -11,13 +11,11 @@ const [commitJob = '', mergeJob = ''] = afterPrepare.split('\n  merge:');
 
 describe('trusted Renovate automerge', () => {
   test('waits for the exact eligible head and rejects review findings', () => {
-    expect(mergeJob).toContain('id: renovate-gate-token');
-    expect(mergeJob).toContain('permission-checks: read');
-    expect(mergeJob).toContain('permission-statuses: read');
-    expect(mergeJob).toContain('github-token: ${{ steps.renovate-gate-token.outputs.token }}');
-    expect(mergeJob).not.toContain('\n      checks: read');
-    expect(mergeJob).not.toContain('\n      issues: read');
-    expect(mergeJob).not.toContain('\n      statuses: read');
+    expect(mergeJob).not.toContain('id: renovate-gate-token');
+    expect(mergeJob).toContain('\n      checks: read');
+    expect(mergeJob).toContain('\n      issues: read');
+    expect(mergeJob).toContain('\n      statuses: read');
+    expect(mergeJob).toContain('github-token: ${{ github.token }}');
     expect(mergeJob).toContain("const automergeLabel = 'renovate:automerge'");
     expect(mergeJob).toContain("const reviewLabel = 'renovate:review-required'");
     expect(mergeJob).toContain("event === 'labeled'");
