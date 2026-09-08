@@ -1185,3 +1185,15 @@ jobs:
             if (!result.data.merged) {
               throw new Error(result.data.message || 'GitHub did not merge the pull request.');
             }
+            try {
+              await github.rest.git.deleteRef({
+                owner,
+                repo,
+                ref: 'heads/' + pull.head.ref,
+              });
+            } catch (error) {
+              if (error.status !== 404) {
+                throw error;
+              }
+              core.info('The merged Renovate branch was already deleted.');
+            }
