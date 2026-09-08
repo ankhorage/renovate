@@ -18,20 +18,22 @@ describe('Devtools sync protocol contract', () => {
 
   test('requires the exact published Devtools release to declare its protocol', () => {
     expect(workflow).toContain('registry.npmjs.org/%40ankhorage%2Fdevtools/');
-    expect(workflow).toContain('releaseManifest?.ankh?.renovateSyncProtocol');
+    expect(workflow).toContain('releaseManifest?.ankhorage?.renovateSyncProtocol');
     expect(workflow).toContain(
-      'The published Devtools release must declare ankh.renovateSyncProtocol as a positive integer.',
+      'The published Devtools release must declare ankhorage.renovateSyncProtocol as a positive integer.',
     );
     expect(workflow).toContain('canonicalProtocol < requiredProtocol');
-    expect(workflow).toContain('required-protocol: ${{ steps.registry.outputs.required-protocol }}');
+    expect(workflow).toContain(
+      'required-protocol: ${{ steps.registry.outputs.required-protocol }}',
+    );
   });
 
   test('reads protocol from the exact immutable consumer workflow pin', () => {
-    expect(workflow).toContain("const pin = /changeset\\.yml@([0-9a-f]{40})/");
+    expect(workflow).toContain('const pin = /changeset\\.yml@([0-9a-f]{40})/');
     expect(workflow).toContain("path: 'sync-protocol.json'");
     expect(workflow).toContain('ref: pin');
     expect(workflow).toContain('let protocol = 0;');
-    expect(workflow).toContain("if (error.status === 404) return 0;");
+    expect(workflow).toContain('if (error.status === 404) return 0;');
   });
 
   test('updates the workflow digest before starting an incompatible Devtools rollout', () => {
