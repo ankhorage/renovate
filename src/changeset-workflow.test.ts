@@ -203,6 +203,7 @@ describe('trusted Renovate write boundary', () => {
       'AGENTS.md',
       'bun.lock',
       'eslint.config.mjs',
+      'eslint.examples.config.mjs',
       'eslint.local.config.mjs',
       'knip.config.ts',
       'package.json',
