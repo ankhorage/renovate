@@ -27,15 +27,7 @@ describe('Devtools release rollout registry', () => {
   });
 });
 
-describe('Devtools release rollout workflow', () => {
-  test('accepts explicit release events and validates their exact version', () => {
-    expect(workflow).toContain('repository_dispatch:');
-    expect(workflow).toContain('devtools-release');
-    expect(workflow).toContain('workflow_dispatch:');
-    expect(workflow).toContain('Devtools rollout requires one exact published semver version.');
-    expect(workflow).toContain('/^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?$/');
-  });
-
+describe('Devtools release rollout update policy', () => {
   test('bumps a compatible consumer caret range to the exact released minor', () => {
     const rule = readReleasePackageRule('1.14.0');
     const currentValue = '^1.13.0';
@@ -50,6 +42,16 @@ describe('Devtools release rollout workflow', () => {
       recreateWhen: 'always',
     });
     expect(expectedNewValue).toBe('^1.14.0');
+  });
+});
+
+describe('Devtools release rollout workflow', () => {
+  test('accepts explicit release events and validates their exact version', () => {
+    expect(workflow).toContain('repository_dispatch:');
+    expect(workflow).toContain('devtools-release');
+    expect(workflow).toContain('workflow_dispatch:');
+    expect(workflow).toContain('Devtools rollout requires one exact published semver version.');
+    expect(workflow).toContain('/^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?$/');
   });
 
   test('targets only the reviewed registry through the organization Renovate Sync App', () => {
