@@ -24,6 +24,7 @@ jobs:
     outputs:
       has-repositories: ${{ steps.registry.outputs.has-repositories }}
       repositories: ${{ steps.registry.outputs.repositories }}
+      required-protocol: ${{ steps.registry.outputs.required-protocol }}
       version: ${{ steps.registry.outputs.version }}
     steps:
       - name: Check out trusted rollout registry
@@ -51,6 +52,32 @@ jobs:
             const version = process.env.INPUT_VERSION || process.env.DISPATCH_VERSION;
             if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version ?? '')) {
               throw new Error('Devtools rollout requires one exact published semver version.');
+            }
+
+            const protocolManifest = JSON.parse(fs.readFileSync('sync-protocol.json', 'utf8'));
+            const canonicalProtocol = protocolManifest?.version;
+            if (!Number.isInteger(canonicalProtocol) || canonicalProtocol < 1) {
+              throw new Error('The canonical Renovate sync protocol must be a positive integer.');
+            }
+
+            const releaseResponse = await fetch(
+              'https://registry.npmjs.org/%40ankhorage%2Fdevtools/' + encodeURIComponent(version),
+              { headers: { accept: 'application/json' } },
+            );
+            if (!releaseResponse.ok) {
+              throw new Error('The exact published Devtools release manifest could not be loaded.');
+            }
+            const releaseManifest = await releaseResponse.json();
+            const requiredProtocol = releaseManifest?.ankhorage?.renovateSyncProtocol;
+            if (!Number.isInteger(requiredProtocol) || requiredProtocol < 1) {
+              throw new Error(
+                'The published Devtools release must declare ankhorage.renovateSyncProtocol as a positive integer.',
+              );
+            }
+            if (canonicalProtocol < requiredProtocol) {
+              throw new Error(
+                'The canonical Renovate sync protocol cannot satisfy this Devtools release.',
+              );
             }
 
             const registry = JSON.parse(fs.readFileSync('devtools-consumers.json', 'utf8'));
@@ -97,11 +124,12 @@ jobs:
             }
 
             core.notice(
-              'Ready for direct rollout: ' + readyRepositories.length +
+              'Ready for protocol-gated rollout: ' + readyRepositories.length +
                 '; awaiting the one-time workflow bootstrap: ' + waitingRepositories.length + '.',
             );
             core.setOutput('has-repositories', String(readyRepositories.length > 0));
             core.setOutput('repositories', JSON.stringify(readyRepositories));
+            core.setOutput('required-protocol', String(requiredProtocol));
             core.setOutput('version', version);
 
   renovate:
@@ -140,6 +168,135 @@ jobs:
           permission-issues: write
           permission-pull-requests: write
           permission-workflows: write
+
+      - name: Check pinned Renovate sync protocol
+        id: protocol
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          REQUIRED_PROTOCOL: ${{ needs.validate.outputs.required-protocol }}
+          TARGET_REPOSITORY: ${{ matrix.repository }}
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            const requiredProtocol = Number(process.env.REQUIRED_PROTOCOL);
+            const [owner, repo] = process.env.TARGET_REPOSITORY.split('/');
+            const { data } = await github.rest.repos.getContent({
+              owner,
+              repo,
+              path: '.github/workflows/renovate.yml',
+            });
+            if (Array.isArray(data) || data.type !== 'file' || !data.content) {
+              throw new Error('The managed Renovate workflow is not a readable file.');
+            }
+            const workflow = Buffer.from(data.content, 'base64').toString('utf8');
+            const pin = /changeset\.yml@([0-9a-f]{40})/.exec(workflow)?.[1];
+            if (!pin) {
+              throw new Error('The managed Renovate workflow must pin changeset.yml by commit SHA.');
+            }
+
+            let protocol = 0;
+            try {
+              const response = await github.rest.repos.getContent({
+                owner: 'ankhorage',
+                repo: 'renovate',
+                path: 'sync-protocol.json',
+                ref: pin,
+              });
+              if (Array.isArray(response.data) || response.data.type !== 'file' || !response.data.content) {
+                throw new Error('The pinned Renovate sync protocol is not a readable file.');
+              }
+              const manifest = JSON.parse(Buffer.from(response.data.content, 'base64').toString('utf8'));
+              protocol = manifest?.version;
+              if (!Number.isInteger(protocol) || protocol < 1) {
+                throw new Error('The pinned Renovate sync protocol must be a positive integer.');
+              }
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
+
+            const compatible = protocol >= requiredProtocol;
+            core.notice(
+              process.env.TARGET_REPOSITORY + ' pins Renovate protocol ' + protocol +
+                '; Devtools requires ' + requiredProtocol + '.',
+            );
+            core.setOutput('compatible', String(compatible));
+
+      - name: Update the immutable Renovate workflow first
+        if: steps.protocol.outputs.compatible != 'true'
+        env:
+          RENOVATE_AUTODISCOVER: 'false'
+          RENOVATE_ONBOARDING: 'false'
+          RENOVATE_PACKAGE_RULES: >-
+            [{"matchDatasources":["github-digest"],"matchPackageNames":["ankhorage/renovate"],"enabled":true,"recreateWhen":"always"}]
+          RENOVATE_PLATFORM: github
+          RENOVATE_PR_HOURLY_LIMIT: '0'
+          RENOVATE_REPOSITORIES: ${{ matrix.repository }}
+          RENOVATE_REQUIRE_CONFIG: required
+          RENOVATE_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: bun x renovate --enabled-managers=custom.regex
+
+      - name: Wait for a compatible immutable Renovate workflow
+        if: steps.protocol.outputs.compatible != 'true'
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          REQUIRED_PROTOCOL: ${{ needs.validate.outputs.required-protocol }}
+          TARGET_REPOSITORY: ${{ matrix.repository }}
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            const requiredProtocol = Number(process.env.REQUIRED_PROTOCOL);
+            const [owner, repo] = process.env.TARGET_REPOSITORY.split('/');
+            const timeoutAt = Date.now() + 30 * 60 * 1000;
+
+            const readPinnedProtocol = async () => {
+              const { data } = await github.rest.repos.getContent({
+                owner,
+                repo,
+                path: '.github/workflows/renovate.yml',
+              });
+              if (Array.isArray(data) || data.type !== 'file' || !data.content) {
+                throw new Error('The managed Renovate workflow is not a readable file.');
+              }
+              const workflow = Buffer.from(data.content, 'base64').toString('utf8');
+              const pin = /changeset\.yml@([0-9a-f]{40})/.exec(workflow)?.[1];
+              if (!pin) {
+                throw new Error('The managed Renovate workflow must pin changeset.yml by commit SHA.');
+              }
+              try {
+                const response = await github.rest.repos.getContent({
+                  owner: 'ankhorage',
+                  repo: 'renovate',
+                  path: 'sync-protocol.json',
+                  ref: pin,
+                });
+                if (Array.isArray(response.data) || response.data.type !== 'file' || !response.data.content) {
+                  throw new Error('The pinned Renovate sync protocol is not a readable file.');
+                }
+                const manifest = JSON.parse(
+                  Buffer.from(response.data.content, 'base64').toString('utf8'),
+                );
+                const protocol = manifest?.version;
+                if (!Number.isInteger(protocol) || protocol < 1) {
+                  throw new Error('The pinned Renovate sync protocol must be a positive integer.');
+                }
+                return protocol;
+              } catch (error) {
+                if (error.status === 404) return 0;
+                throw error;
+              }
+            };
+
+            while (Date.now() < timeoutAt) {
+              const protocol = await readPinnedProtocol();
+              if (protocol >= requiredProtocol) {
+                core.notice(
+                  process.env.TARGET_REPOSITORY + ' now pins compatible Renovate protocol ' + protocol + '.',
+                );
+                return;
+              }
+              await new Promise((resolve) => setTimeout(resolve, 15000));
+            }
+            throw new Error('Timed out waiting for a compatible immutable Renovate workflow.');
 
       - name: Run Renovate immediately for the released Devtools version
         env:

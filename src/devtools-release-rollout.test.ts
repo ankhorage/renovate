@@ -93,10 +93,15 @@ interface ReleasePackageRule {
   readonly recreateWhen: string;
 }
 
-/*** Parse the release-specific Renovate rule exactly as the workflow renders it for one release. */
+/*** Parse the Devtools release rule from its final protocol-gated rollout step. */
 function readReleasePackageRule(version: string): ReleasePackageRule {
+  const stepMarker = '- name: Run Renovate immediately for the released Devtools version';
+  const stepStart = workflow.indexOf(stepMarker);
+  if (stepStart < 0) {
+    throw new Error('Devtools rollout workflow does not declare the final Devtools update step.');
+  }
   const marker = 'RENOVATE_PACKAGE_RULES: >-\n            ';
-  const start = workflow.indexOf(marker);
+  const start = workflow.indexOf(marker, stepStart);
   if (start < 0) {
     throw new Error('Devtools rollout workflow does not declare RENOVATE_PACKAGE_RULES.');
   }
