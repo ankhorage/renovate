@@ -39,7 +39,8 @@ describe('Devtools release rollout workflow', () => {
   test('bumps a compatible consumer caret range to the exact released minor', () => {
     const rule = readReleasePackageRule('1.14.0');
     const currentValue = '^1.13.0';
-    const expectedNewValue = rule.rangeStrategy === 'bump' ? `^${rule.allowedVersions}` : currentValue;
+    const expectedNewValue =
+      rule.rangeStrategy === 'bump' ? `^${rule.allowedVersions}` : currentValue;
 
     expect(rule).toEqual({
       matchPackageNames: ['@ankhorage/devtools'],
@@ -94,7 +95,9 @@ interface ReleasePackageRule {
 function readReleasePackageRule(version: string): ReleasePackageRule {
   const marker = 'RENOVATE_PACKAGE_RULES: >-\n            ';
   const start = workflow.indexOf(marker);
-  if (start < 0) throw new Error('Devtools rollout workflow does not declare RENOVATE_PACKAGE_RULES.');
+  if (start < 0) {
+    throw new Error('Devtools rollout workflow does not declare RENOVATE_PACKAGE_RULES.');
+  }
   const rendered = workflow
     .slice(start + marker.length)
     .split('\n', 1)[0]
