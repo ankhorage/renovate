@@ -1,5 +1,11 @@
 # @ankhorage/renovate
 
+## 0.2.11
+
+### Patch Changes
+
+- e3679ed: Delete validated same-repository Renovate branches after their pull requests merge so later dependency updates cannot remain blocked by retained edited heads.
+
 ## 0.2.10
 
 ### Patch Changes
