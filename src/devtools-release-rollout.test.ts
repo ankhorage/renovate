@@ -36,6 +36,21 @@ describe('Devtools release rollout workflow', () => {
     expect(workflow).toContain('/^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?$/');
   });
 
+  test('bumps a compatible consumer caret range to the exact released minor', () => {
+    const rule = readReleasePackageRule('1.14.0');
+    const currentValue = '^1.13.0';
+    const expectedNewValue = rule.rangeStrategy === 'bump' ? `^${rule.allowedVersions}` : currentValue;
+
+    expect(rule).toEqual({
+      matchPackageNames: ['@ankhorage/devtools'],
+      enabled: true,
+      rangeStrategy: 'bump',
+      allowedVersions: '1.14.0',
+      recreateWhen: 'always',
+    });
+    expect(expectedNewValue).toBe('^1.14.0');
+  });
+
   test('targets only the reviewed registry through the organization Renovate Sync App', () => {
     expect(workflow).toContain("fs.readFileSync('devtools-consumers.json', 'utf8')");
     expect(workflow).toContain('The Devtools consumer registry must not contain duplicates.');
@@ -47,9 +62,6 @@ describe('Devtools release rollout workflow', () => {
     expect(workflow).toContain("if: needs.validate.outputs.has-repositories == 'true'");
     expect(workflow).toContain('RENOVATE_REPOSITORIES: ${{ matrix.repository }}');
     expect(workflow).toContain('RENOVATE_REQUIRE_CONFIG: required');
-    expect(workflow).toContain('RENOVATE_PACKAGE_RULES:');
-    expect(workflow).toContain('"allowedVersions":"${{ needs.validate.outputs.version }}"');
-    expect(workflow).toContain('"recreateWhen":"always"');
     expect(workflow).toContain("RENOVATE_PR_HOURLY_LIMIT: '0'");
     expect(workflow).toContain(
       'actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1',
@@ -69,3 +81,28 @@ describe('Devtools release rollout workflow', () => {
     expect(workflow).not.toContain('pulls.create');
   });
 });
+
+interface ReleasePackageRule {
+  readonly allowedVersions: string;
+  readonly enabled: boolean;
+  readonly matchPackageNames: readonly string[];
+  readonly rangeStrategy: string;
+  readonly recreateWhen: string;
+}
+
+/*** Parse the release-specific Renovate rule exactly as the workflow renders it for one release. */
+function readReleasePackageRule(version: string): ReleasePackageRule {
+  const marker = 'RENOVATE_PACKAGE_RULES: >-\n            ';
+  const start = workflow.indexOf(marker);
+  if (start < 0) throw new Error('Devtools rollout workflow does not declare RENOVATE_PACKAGE_RULES.');
+  const rendered = workflow
+    .slice(start + marker.length)
+    .split('\n', 1)[0]
+    ?.replace('${{ needs.validate.outputs.version }}', version);
+  if (!rendered) throw new Error('Devtools rollout package rule is empty.');
+  const parsed: unknown = JSON.parse(rendered);
+  if (!Array.isArray(parsed) || parsed.length !== 1) {
+    throw new Error('Devtools rollout must render exactly one release-specific package rule.');
+  }
+  return parsed[0] as ReleasePackageRule;
+}
