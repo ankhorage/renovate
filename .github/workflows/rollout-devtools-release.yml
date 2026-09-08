@@ -132,7 +132,7 @@ jobs:
             core.setOutput('required-protocol', String(requiredProtocol));
             core.setOutput('version', version);
 
-  renovate:
+  prepare-protocol:
     needs: validate
     if: needs.validate.outputs.has-repositories == 'true'
     strategy:
@@ -235,32 +235,48 @@ jobs:
           RENOVATE_TOKEN: ${{ steps.app-token.outputs.token }}
         run: bun x renovate --enabled-managers=custom.regex
 
-      - name: Wait for a compatible immutable Renovate workflow
-        if: steps.protocol.outputs.compatible != 'true'
+  protocol-barrier:
+    needs:
+      - validate
+      - prepare-protocol
+    if: needs.validate.outputs.has-repositories == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mint the organization Renovate Sync App read token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.ANKHORAGE_RENOVATE_SYNC_CLIENT_ID }}
+          private-key: ${{ secrets.ANKHORAGE_RENOVATE_SYNC_PRIVATE_KEY }}
+          owner: ankhorage
+          permission-contents: read
+
+      - name: Wait for compatible immutable Renovate workflows
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
+          REPOSITORIES: ${{ needs.validate.outputs.repositories }}
           REQUIRED_PROTOCOL: ${{ needs.validate.outputs.required-protocol }}
-          TARGET_REPOSITORY: ${{ matrix.repository }}
         with:
           github-token: ${{ steps.app-token.outputs.token }}
           script: |
+            const repositories = JSON.parse(process.env.REPOSITORIES);
             const requiredProtocol = Number(process.env.REQUIRED_PROTOCOL);
-            const [owner, repo] = process.env.TARGET_REPOSITORY.split('/');
             const timeoutAt = Date.now() + 30 * 60 * 1000;
 
-            const readPinnedProtocol = async () => {
+            const readPinnedProtocol = async (repository) => {
+              const [owner, repo] = repository.split('/');
               const { data } = await github.rest.repos.getContent({
                 owner,
                 repo,
                 path: '.github/workflows/renovate.yml',
               });
               if (Array.isArray(data) || data.type !== 'file' || !data.content) {
-                throw new Error('The managed Renovate workflow is not a readable file.');
+                throw new Error('The managed Renovate workflow is not a readable file: ' + repository);
               }
               const workflow = Buffer.from(data.content, 'base64').toString('utf8');
               const pin = /changeset\.yml@([0-9a-f]{40})/.exec(workflow)?.[1];
               if (!pin) {
-                throw new Error('The managed Renovate workflow must pin changeset.yml by commit SHA.');
+                throw new Error('The managed Renovate workflow must pin changeset.yml by commit SHA: ' + repository);
               }
               try {
                 const response = await github.rest.repos.getContent({
@@ -287,16 +303,58 @@ jobs:
             };
 
             while (Date.now() < timeoutAt) {
-              const protocol = await readPinnedProtocol();
-              if (protocol >= requiredProtocol) {
-                core.notice(
-                  process.env.TARGET_REPOSITORY + ' now pins compatible Renovate protocol ' + protocol + '.',
-                );
+              const waiting = [];
+              for (const repository of repositories) {
+                const protocol = await readPinnedProtocol(repository);
+                if (protocol < requiredProtocol) waiting.push(repository);
+              }
+              if (waiting.length === 0) {
+                core.notice('Every Devtools consumer now pins a compatible Renovate sync protocol.');
                 return;
               }
+              core.info('Awaiting compatible Renovate workflow pins: ' + waiting.join(', '));
               await new Promise((resolve) => setTimeout(resolve, 15000));
             }
-            throw new Error('Timed out waiting for a compatible immutable Renovate workflow.');
+            throw new Error('Timed out waiting for compatible immutable Renovate workflows.');
+
+  renovate:
+    needs:
+      - validate
+      - protocol-barrier
+    if: needs.validate.outputs.has-repositories == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        repository: ${{ fromJSON(needs.validate.outputs.repositories) }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the canonical Renovate policy
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: '1.4.0'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install the pinned Renovate runner
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Mint the organization Renovate Sync App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.ANKHORAGE_RENOVATE_SYNC_CLIENT_ID }}
+          private-key: ${{ secrets.ANKHORAGE_RENOVATE_SYNC_PRIVATE_KEY }}
+          owner: ankhorage
+          permission-contents: write
+          permission-issues: write
+          permission-pull-requests: write
+          permission-workflows: write
 
       - name: Run Renovate immediately for the released Devtools version
         env:
