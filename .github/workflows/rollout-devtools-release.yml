@@ -68,10 +68,10 @@ jobs:
               throw new Error('The exact published Devtools release manifest could not be loaded.');
             }
             const releaseManifest = await releaseResponse.json();
-            const requiredProtocol = releaseManifest?.ankh?.renovateSyncProtocol;
+            const requiredProtocol = releaseManifest?.ankhorage?.renovateSyncProtocol;
             if (!Number.isInteger(requiredProtocol) || requiredProtocol < 1) {
               throw new Error(
-                'The published Devtools release must declare ankh.renovateSyncProtocol as a positive integer.',
+                'The published Devtools release must declare ankhorage.renovateSyncProtocol as a positive integer.',
               );
             }
             if (canonicalProtocol < requiredProtocol) {
