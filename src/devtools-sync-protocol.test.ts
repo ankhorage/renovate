@@ -10,7 +10,7 @@ const workflow = readFileSync(
   'utf8',
 );
 
-describe('Devtools sync protocol contract', () => {
+describe('Devtools sync protocol release contract', () => {
   test('declares one positive canonical protocol', () => {
     expect(protocolManifest.version).toBeInteger();
     expect(protocolManifest.version).toBeGreaterThan(0);
@@ -35,7 +35,9 @@ describe('Devtools sync protocol contract', () => {
     expect(workflow).toContain('let protocol = 0;');
     expect(workflow).toContain('if (error.status === 404) return 0;');
   });
+});
 
+describe('Devtools sync protocol rollout orchestration', () => {
   test('prepares digest updates without holding matrix runners while PR CI executes', () => {
     const prepareStart = workflow.indexOf('\n  prepare-protocol:');
     const barrierStart = workflow.indexOf('\n  protocol-barrier:');
@@ -51,7 +53,9 @@ describe('Devtools sync protocol contract', () => {
     expect(prepare).not.toContain('while (Date.now() < timeoutAt)');
     expect(barrier).toContain('- name: Wait for compatible immutable Renovate workflows');
     expect(barrier).toContain('while (Date.now() < timeoutAt)');
-    expect(barrier).toContain('Every Devtools consumer now pins a compatible Renovate sync protocol.');
+    expect(barrier).toContain(
+      'Every Devtools consumer now pins a compatible Renovate sync protocol.',
+    );
     expect(workflow.match(/while \(Date\.now\(\) < timeoutAt\)/gu)).toHaveLength(1);
   });
 
@@ -60,9 +64,13 @@ describe('Devtools sync protocol contract', () => {
     const devtoolsStart = workflow.indexOf('\n  renovate:', barrierStart);
     const devtools = workflow.slice(devtoolsStart);
 
-    expect(workflow).toContain('  protocol-barrier:\n    needs:\n      - validate\n      - prepare-protocol');
+    expect(workflow).toContain(
+      '  protocol-barrier:\n    needs:\n      - validate\n      - prepare-protocol',
+    );
     expect(devtools).toContain('needs:\n      - validate\n      - protocol-barrier');
-    expect(devtools).toContain('- name: Run Renovate immediately for the released Devtools version');
+    expect(devtools).toContain(
+      '- name: Run Renovate immediately for the released Devtools version',
+    );
     expect(devtools).toContain('"matchPackageNames":["@ankhorage/devtools"]');
     expect(workflow.indexOf('- name: Update the immutable Renovate workflow first')).toBeLessThan(
       devtools.indexOf('- name: Run Renovate immediately for the released Devtools version') +
