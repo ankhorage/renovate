@@ -1,5 +1,11 @@
 # @ankhorage/renovate
 
+## 0.2.12
+
+### Patch Changes
+
+- a0f85a0: Explicitly enable the Bun and custom regex managers in the canonical consumer preset so self-hosted Renovate configuration cannot silently disable Ankhorage package propagation.
+
 ## 0.2.11
 
 ### Patch Changes
