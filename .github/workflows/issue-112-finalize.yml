@@ -29,7 +29,7 @@ jobs:
           test_path = Path('src/default.test.ts')
           test_text = test_path.read_text()
           marker = "  test('keeps ordinary Ankhorage packages eligible', () => {\n"
-          insertion = """  test('owns the managers required for package and workflow propagation', () => {\n    expect(consumerPreset.enabledManagers).toEqual(['npm', 'custom.regex']);\n  });\n\n"""
+          insertion = """  test('owns the managers required for package and workflow propagation', () => {\n    expect(consumerPreset.enabledManagers).toEqual(['bun', 'custom.regex']);\n  });\n\n"""
           if insertion not in test_text:
               if marker not in test_text:
                   raise SystemExit('default.test.ts insertion marker not found')
@@ -39,14 +39,14 @@ jobs:
           example_path = Path('examples/renovate.json5')
           example_text = example_path.read_text()
           old = """ * immediately starts the same Renovate update flow for every repository in the reviewed consumer\n * registry; Renovate remains the only dependency-branch writer. The shared preset also performs a\n"""
-          new = """ * immediately starts the same Renovate update flow for every repository in the reviewed consumer\n * registry. The preset explicitly owns npm and custom.regex extraction so self-hosted manager\n * filtering cannot silently drop package propagation. Never edit renovate/* branches manually;\n * request Renovate rebase/retry to discard edits and return the branch to Renovate ownership.\n * Renovate remains the only dependency-branch writer. The shared preset also performs a\n"""
+          new = """ * immediately starts the same Renovate update flow for every repository in the reviewed consumer\n * registry. The preset explicitly owns bun and custom.regex extraction so self-hosted manager\n * filtering cannot silently drop package propagation. Never edit renovate/* branches manually;\n * request Renovate rebase/retry to discard edits and return the branch to Renovate ownership.\n * Renovate remains the only dependency-branch writer. The shared preset also performs a\n"""
           if new not in example_text:
               if old not in example_text:
                   raise SystemExit('examples/renovate.json5 insertion marker not found')
               example_path.write_text(example_text.replace(old, new, 1))
 
           changeset = Path('.changeset/own-renovate-managers.md')
-          changeset.write_text("""---\n'@ankhorage/renovate': patch\n---\n\nExplicitly enable npm and custom regex managers in the canonical consumer preset so self-hosted Renovate configuration cannot silently disable Ankhorage package propagation.\n""")
+          changeset.write_text("""---\n'@ankhorage/renovate': patch\n---\n\nExplicitly enable the Bun and custom regex managers in the canonical consumer preset so self-hosted Renovate configuration cannot silently disable Ankhorage package propagation.\n""")
           PY
       - name: Format and generate documentation
         run: |
