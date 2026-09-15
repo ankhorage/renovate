@@ -19,6 +19,10 @@ describe('consumer preset', () => {
     });
   });
 
+  test('owns the managers required for package and workflow propagation', () => {
+    expect(consumerPreset.enabledManagers).toEqual(['bun', 'custom.regex']);
+  });
+
   test('keeps ordinary Ankhorage packages eligible', () => {
     expect(
       resolveRules(consumerPreset.packageRules, dependency('@ankhorage/contracts')),
