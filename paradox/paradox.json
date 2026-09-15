@@ -14,7 +14,7 @@
     {
       "id": "npm",
       "label": "npm",
-      "value": "v0.1.12",
+      "value": "v0.2.11",
       "color": "cb3837"
     },
     {
@@ -72,7 +72,7 @@
     },
     {
       "title": "Repository configuration",
-      "description": "Repository configuration\n\nLoads the normal consumer policy from its default branch. Every npm patch release is proposed,\nfully validated by repository CI, and automerged when green. Minor and major external upgrades\nstay disabled. The canonical development toolchain follows the same automatic patch policy\nthrough its Devtools owner release and synchronization chain instead of drifting independently\nin consumers. Compatible @ankhorage/ankh and @ankhorage/devtools releases are grouped for the\ntrusted synchronization workflow. The workflow runs the exact lock-selected provider, requires\nbyte stability and current status, and commits the complete managed result without a manual\nrepository sync. After the one-time release-rollout bootstrap, a published Devtools version\nimmediately starts the same Renovate update flow for every repository in the reviewed consumer\nregistry; Renovate remains the only dependency-branch writer. The shared preset also performs a\none-time migration of the legacy immutable workflow pin; all other canonical workflow changes\nremain owned by Devtools sync.",
+      "description": "Repository configuration\n\nLoads the normal consumer policy from its default branch. Every npm patch release is proposed,\nfully validated by repository CI, and automerged when green. Minor and major external upgrades\nstay disabled. The canonical development toolchain follows the same automatic patch policy\nthrough its Devtools owner release and synchronization chain instead of drifting independently\nin consumers. Compatible @ankhorage/ankh and @ankhorage/devtools releases are grouped for the\ntrusted synchronization workflow. The workflow runs the exact lock-selected provider, requires\nbyte stability and current status, and commits the complete managed result without a manual\nrepository sync. After the one-time release-rollout bootstrap, a published Devtools version\nimmediately starts the same Renovate update flow for every repository in the reviewed consumer\nregistry. The preset explicitly owns bun and custom.regex extraction so self-hosted manager\nfiltering cannot silently drop package propagation. Never edit renovate/* branches manually;\nrequest Renovate rebase/retry to discard edits and return the branch to Renovate ownership.\nRenovate remains the only dependency-branch writer. The shared preset also performs a\none-time migration of the legacy immutable workflow pin; all other canonical workflow changes\nremain owned by Devtools sync.",
       "language": "",
       "code": "{\n  $schema: 'https://docs.renovatebot.com/renovate-schema.json',\n  extends: ['github>ankhorage/renovate'],\n}",
       "sourcePath": "examples/renovate.json5"
@@ -114,6 +114,12 @@
       "exports": []
     },
     {
+      "path": "src/devtools-sync-protocol.test.ts",
+      "isEntrypoint": false,
+      "dependencies": [],
+      "exports": []
+    },
+    {
       "path": "src/index.test.ts",
       "isEntrypoint": false,
       "dependencies": [
@@ -124,6 +130,18 @@
     {
       "path": "src/index.ts",
       "isEntrypoint": true,
+      "dependencies": [],
+      "exports": []
+    },
+    {
+      "path": "src/merged-branch-cleanup.test.ts",
+      "isEntrypoint": false,
+      "dependencies": [],
+      "exports": []
+    },
+    {
+      "path": "src/renovate-caller-workflow.test.ts",
+      "isEntrypoint": false,
       "dependencies": [],
       "exports": []
     },
@@ -152,8 +170,17 @@
       "description": null,
       "sourceLocation": {
         "filePath": "src/changeset-workflow.test.ts",
-        "line": 255,
+        "line": 257,
         "column": 11
+      }
+    },
+    {
+      "name": "readReleasePackageRule",
+      "description": "Parse the Devtools release rule from its final protocol-gated rollout step.",
+      "sourceLocation": {
+        "filePath": "src/devtools-release-rollout.test.ts",
+        "line": 97,
+        "column": 1
       }
     },
     {
@@ -161,7 +188,7 @@
       "description": null,
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 78,
+        "line": 79,
         "column": 1
       }
     },
@@ -170,7 +197,7 @@
       "description": null,
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 89,
+        "line": 90,
         "column": 1
       }
     },
@@ -179,7 +206,7 @@
       "description": null,
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 96,
+        "line": 97,
         "column": 1
       }
     },
@@ -188,7 +215,7 @@
       "description": null,
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 106,
+        "line": 107,
         "column": 1
       }
     },
@@ -197,7 +224,7 @@
       "description": null,
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 117,
+        "line": 118,
         "column": 1
       }
     },
@@ -206,7 +233,7 @@
       "description": null,
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 121,
+        "line": 122,
         "column": 1
       }
     },
@@ -215,7 +242,7 @@
       "description": null,
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 145,
+        "line": 146,
         "column": 1
       }
     },
@@ -224,7 +251,7 @@
       "description": null,
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 191,
+        "line": 192,
         "column": 1
       }
     },
@@ -233,7 +260,7 @@
       "description": null,
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 211,
+        "line": 212,
         "column": 1
       }
     },
@@ -242,7 +269,7 @@
       "description": null,
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 219,
+        "line": 220,
         "column": 1
       }
     },
@@ -251,7 +278,7 @@
       "description": null,
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 227,
+        "line": 228,
         "column": 1
       }
     },
@@ -260,7 +287,7 @@
       "description": null,
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 248,
+        "line": 249,
         "column": 1
       }
     },
@@ -269,7 +296,7 @@
       "description": null,
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 255,
+        "line": 256,
         "column": 1
       }
     }
@@ -421,6 +448,36 @@
         "sourcePath": "src/devtools-release-rollout.test.ts"
       },
       {
+        "fromSymbol": "src/devtools-release-rollout.test.ts",
+        "toSymbol": "readReleasePackageRule",
+        "callExpression": "readReleasePackageRule",
+        "sourcePath": "src/devtools-release-rollout.test.ts"
+      },
+      {
+        "fromSymbol": "src/devtools-sync-protocol.test.ts",
+        "toSymbol": "readFileSync",
+        "callExpression": "readFileSync",
+        "sourcePath": "src/devtools-sync-protocol.test.ts"
+      },
+      {
+        "fromSymbol": "src/devtools-sync-protocol.test.ts",
+        "toSymbol": "describe",
+        "callExpression": "describe",
+        "sourcePath": "src/devtools-sync-protocol.test.ts"
+      },
+      {
+        "fromSymbol": "src/devtools-sync-protocol.test.ts",
+        "toSymbol": "test",
+        "callExpression": "test",
+        "sourcePath": "src/devtools-sync-protocol.test.ts"
+      },
+      {
+        "fromSymbol": "src/devtools-sync-protocol.test.ts",
+        "toSymbol": "expect",
+        "callExpression": "expect",
+        "sourcePath": "src/devtools-sync-protocol.test.ts"
+      },
+      {
         "fromSymbol": "src/index.test.ts",
         "toSymbol": "test",
         "callExpression": "test",
@@ -431,6 +488,54 @@
         "toSymbol": "expect",
         "callExpression": "expect",
         "sourcePath": "src/index.test.ts"
+      },
+      {
+        "fromSymbol": "src/merged-branch-cleanup.test.ts",
+        "toSymbol": "readFileSync",
+        "callExpression": "readFileSync",
+        "sourcePath": "src/merged-branch-cleanup.test.ts"
+      },
+      {
+        "fromSymbol": "src/merged-branch-cleanup.test.ts",
+        "toSymbol": "describe",
+        "callExpression": "describe",
+        "sourcePath": "src/merged-branch-cleanup.test.ts"
+      },
+      {
+        "fromSymbol": "src/merged-branch-cleanup.test.ts",
+        "toSymbol": "test",
+        "callExpression": "test",
+        "sourcePath": "src/merged-branch-cleanup.test.ts"
+      },
+      {
+        "fromSymbol": "src/merged-branch-cleanup.test.ts",
+        "toSymbol": "expect",
+        "callExpression": "expect",
+        "sourcePath": "src/merged-branch-cleanup.test.ts"
+      },
+      {
+        "fromSymbol": "src/renovate-caller-workflow.test.ts",
+        "toSymbol": "readFileSync",
+        "callExpression": "readFileSync",
+        "sourcePath": "src/renovate-caller-workflow.test.ts"
+      },
+      {
+        "fromSymbol": "src/renovate-caller-workflow.test.ts",
+        "toSymbol": "describe",
+        "callExpression": "describe",
+        "sourcePath": "src/renovate-caller-workflow.test.ts"
+      },
+      {
+        "fromSymbol": "src/renovate-caller-workflow.test.ts",
+        "toSymbol": "test",
+        "callExpression": "test",
+        "sourcePath": "src/renovate-caller-workflow.test.ts"
+      },
+      {
+        "fromSymbol": "src/renovate-caller-workflow.test.ts",
+        "toSymbol": "expect",
+        "callExpression": "expect",
+        "sourcePath": "src/renovate-caller-workflow.test.ts"
       },
       {
         "fromSymbol": "matchesRule",

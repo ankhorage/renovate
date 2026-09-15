@@ -37,6 +37,7 @@ interface CustomManager {
 }
 
 export interface Preset {
+  readonly enabledManagers?: readonly string[];
   readonly customManagers?: readonly CustomManager[];
   readonly description: readonly string[];
   readonly extends: readonly string[];
