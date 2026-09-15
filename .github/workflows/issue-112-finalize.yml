@@ -26,6 +26,20 @@ jobs:
           python - <<'PY'
           from pathlib import Path
 
+          support_path = Path('src/renovatePreset.testSupport.ts')
+          support_text = support_path.read_text()
+          support_marker = "export interface Preset {\n"
+          support_field = "  readonly enabledManagers?: readonly string[];\n"
+          if support_field not in support_text:
+              if support_marker not in support_text:
+                  raise SystemExit('Preset interface marker not found')
+              support_text = support_text.replace(
+                  support_marker,
+                  support_marker + support_field,
+                  1,
+              )
+              support_path.write_text(support_text)
+
           test_path = Path('src/default.test.ts')
           test_text = test_path.read_text()
           marker = "  test('keeps ordinary Ankhorage packages eligible', () => {\n"
