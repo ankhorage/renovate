@@ -1,5 +1,12 @@
 # @ankhorage/renovate
 
+## 0.2.14
+
+### Patch Changes
+
+- 1a607b4: Document selected-repository Renovate Sync App bootstrap policy and fail Devtools rollouts when the
+  consumer registry contains repositories outside the App installation.
+
 ## 0.2.13
 
 ### Patch Changes
