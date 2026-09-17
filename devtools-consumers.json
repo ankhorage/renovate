@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "description": "Explicit Renovate-managed consumers eligible for a Devtools release rollout.",
+  "description": "Explicit Renovate-managed consumers eligible for a Devtools release rollout; every entry must already be selected in the ankhorage-renovate-sync GitHub App installation.",
   "repositories": [
     "ankhorage/ankh",
     "ankhorage/board",

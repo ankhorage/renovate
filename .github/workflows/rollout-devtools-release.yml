@@ -94,6 +94,24 @@ jobs:
               }
             }
 
+            const installationRepositories = await github.paginate(
+              github.rest.apps.listReposAccessibleToInstallation,
+              { per_page: 100 },
+            );
+            const accessibleRepositories = new Set(
+              installationRepositories.map((repository) => repository.full_name),
+            );
+            const inaccessibleRepositories = registry.repositories.filter(
+              (repository) => !accessibleRepositories.has(repository),
+            );
+            if (inaccessibleRepositories.length > 0) {
+              throw new Error(
+                'The ankhorage-renovate-sync GitHub App installation does not include registered Devtools consumers: ' +
+                  inaccessibleRepositories.join(', ') +
+                  '. Add these repositories to the selected-repository App installation before treating them as managed-release ready. Bootstrap policy: https://github.com/ankhorage/renovate/issues/115',
+              );
+            }
+
             const readyRepositories = [];
             const waitingRepositories = [];
             for (const repository of registry.repositories) {
