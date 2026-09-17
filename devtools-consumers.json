@@ -10,6 +10,7 @@
     "ankhorage/deploy",
     "ankhorage/doctor",
     "ankhorage/expo-runtime",
+    "ankhorage/game",
     "ankhorage/repository",
     "ankhorage/infra",
     "ankhorage/orchestrator",
@@ -31,6 +32,7 @@
     "ankhorage/utility",
     "ankhorage/zora",
     "ankhorage/zora-chess",
+    "ankhorage/zora-game",
     "ankhorage/navigator",
     "ankhorage/zora-tabletop"
   ]
