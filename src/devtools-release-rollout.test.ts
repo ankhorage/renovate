@@ -62,6 +62,10 @@ describe('Devtools release rollout workflow', () => {
     expect(workflow).toContain(
       "github.event.pull_request.user.login == 'ankhorage-renovate-sync[bot]'",
     );
+    expect(workflow).toContain('github.rest.apps.listReposAccessibleToInstallation');
+    expect(workflow).toContain('The ankhorage-renovate-sync GitHub App installation does not include registered Devtools consumers');
+    expect(workflow).toContain('selected-repository App installation');
+    expect(workflow).toContain('https://github.com/ankhorage/renovate/issues/115');
     expect(workflow).toContain('awaiting the one-time workflow bootstrap');
     expect(workflow).toContain('has-repositories: ${{ steps.registry.outputs.has-repositories }}');
     expect(workflow).toContain("if: needs.validate.outputs.has-repositories == 'true'");
