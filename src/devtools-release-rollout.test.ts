@@ -12,9 +12,11 @@ const workflow = readFileSync(
 
 describe('Devtools release rollout registry', () => {
   test('lists each current managed Devtools consumer exactly once', () => {
-    expect(registry.repositories).toHaveLength(31);
+    expect(registry.repositories).toHaveLength(33);
     expect(new Set(registry.repositories).size).toBe(registry.repositories.length);
     expect(registry.repositories).toContain('ankhorage/renovate');
+    expect(registry.repositories).toContain('ankhorage/game');
+    expect(registry.repositories).toContain('ankhorage/zora-game');
     expect(registry.repositories).not.toContain('ankhorage/devtools');
     expect(registry.repositories).not.toContain('ankhorage/api-gateway');
     for (const repository of registry.repositories) {
