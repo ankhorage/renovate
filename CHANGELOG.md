@@ -1,5 +1,11 @@
 # @ankhorage/renovate
 
+## 0.2.15
+
+### Patch Changes
+
+- bbdb683: Isolate Devtools release rollouts per consumer so a slow protocol migration cannot block every repository or exhaust the shared GitHub App rate limit.
+
 ## 0.2.14
 
 ### Patch Changes
