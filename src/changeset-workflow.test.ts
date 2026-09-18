@@ -197,6 +197,8 @@ describe('trusted Renovate write boundary', () => {
       '.github/workflows/release.yml',
       '.github/workflows/renovate.yml',
       '.agents/.devtools-manifest.json',
+      '.gitignore',
+      '.prettierignore',
       '.prettierrc.js',
       '.vscode/extensions.json',
       '.vscode/settings.json',
@@ -208,6 +210,7 @@ describe('trusted Renovate write boundary', () => {
       'knip.config.ts',
       'package.json',
       'prettier.local.config.js',
+      'renovate.json5',
     ]) {
       expect(workflow).toContain("'" + path + "'");
     }
