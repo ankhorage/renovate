@@ -13,7 +13,7 @@ const workflow = readFileSync(
 describe('Devtools sync protocol release contract', () => {
   test('declares one positive canonical protocol', () => {
     expect(protocolManifest.version).toBeInteger();
-    expect(protocolManifest.version).toBeGreaterThan(0);
+    expect(protocolManifest.version).toBe(2);
   });
 
   test('requires the exact published Devtools release to declare its protocol', () => {
