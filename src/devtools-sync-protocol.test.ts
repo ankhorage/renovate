@@ -58,6 +58,7 @@ describe('Devtools sync protocol rollout orchestration', () => {
     expect(rollout).toContain('TARGET_REPOSITORY: ${{ matrix.repository }}');
     expect(rollout).toContain('while (Date.now() < timeoutAt)');
     expect(workflow.match(/while \(Date\.now\(\) < timeoutAt\)/gu)).toHaveLength(1);
+    expect(rollout).toContain('const timeoutAt = Date.now() + 60 * 60 * 1000;');
   });
 
   test('isolates consumer failures instead of gating one global barrier', () => {
