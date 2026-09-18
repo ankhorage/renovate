@@ -33,49 +33,43 @@ describe('Devtools sync protocol release contract', () => {
     expect(workflow).toContain("path: 'sync-protocol.json'");
     expect(workflow).toContain('ref: pin');
     expect(workflow).toContain('let protocol = 0;');
-    expect(workflow).toContain('if (error.status === 404) return 0;');
+    expect(workflow).toContain('if (error.status !== 404) throw error;');
   });
 });
 
 describe('Devtools sync protocol rollout orchestration', () => {
-  test('prepares digest updates without holding matrix runners while PR CI executes', () => {
-    const prepareStart = workflow.indexOf('\n  prepare-protocol:');
-    const barrierStart = workflow.indexOf('\n  protocol-barrier:');
-    const devtoolsStart = workflow.indexOf('\n  renovate:', barrierStart);
-    const prepare = workflow.slice(prepareStart, barrierStart);
-    const barrier = workflow.slice(barrierStart, devtoolsStart);
-
-    expect(prepareStart).toBeGreaterThan(0);
-    expect(barrierStart).toBeGreaterThan(prepareStart);
-    expect(devtoolsStart).toBeGreaterThan(barrierStart);
-    expect(prepare).toContain('- name: Update the immutable Renovate workflow first');
-    expect(prepare).toContain('bun x renovate --enabled-managers=custom.regex');
-    expect(prepare).not.toContain('while (Date.now() < timeoutAt)');
-    expect(barrier).toContain('- name: Wait for compatible immutable Renovate workflows');
-    expect(barrier).toContain('while (Date.now() < timeoutAt)');
-    expect(barrier).toContain(
-      'Every Devtools consumer now pins a compatible Renovate sync protocol.',
+  test('updates, waits, and propagates inside each consumer matrix entry', () => {
+    const rolloutStart = workflow.indexOf('\n  rollout:');
+    const rollout = workflow.slice(rolloutStart);
+    const updateStart = rollout.indexOf('- name: Update the immutable Renovate workflow first');
+    const waitStart = rollout.indexOf(
+      "- name: Wait for this repository's compatible immutable Renovate workflow",
     );
+    const devtoolsStart = rollout.indexOf(
+      '- name: Run Renovate immediately for the released Devtools version',
+    );
+
+    expect(rolloutStart).toBeGreaterThan(0);
+    expect(rollout).toContain('repository: ${{ fromJSON(needs.validate.outputs.repositories) }}');
+    expect(updateStart).toBeGreaterThan(0);
+    expect(waitStart).toBeGreaterThan(updateStart);
+    expect(devtoolsStart).toBeGreaterThan(waitStart);
+    expect(rollout).toContain('bun x renovate --enabled-managers=custom.regex');
+    expect(rollout).toContain('TARGET_REPOSITORY: ${{ matrix.repository }}');
+    expect(rollout).toContain('while (Date.now() < timeoutAt)');
     expect(workflow.match(/while \(Date\.now\(\) < timeoutAt\)/gu)).toHaveLength(1);
   });
 
-  test('gates the Devtools matrix on the single protocol barrier', () => {
-    const barrierStart = workflow.indexOf('\n  protocol-barrier:');
-    const devtoolsStart = workflow.indexOf('\n  renovate:', barrierStart);
-    const devtools = workflow.slice(devtoolsStart);
+  test('isolates consumer failures instead of gating one global barrier', () => {
+    const rolloutStart = workflow.indexOf('\n  rollout:');
+    const rollout = workflow.slice(rolloutStart);
 
-    expect(workflow).toContain(
-      '  protocol-barrier:\n    needs:\n      - validate\n      - prepare-protocol',
-    );
-    expect(devtools).toContain('needs:\n      - validate\n      - protocol-barrier');
-    expect(devtools).toContain(
-      '- name: Run Renovate immediately for the released Devtools version',
-    );
-    expect(devtools).toContain('"matchPackageNames":["@ankhorage/devtools"]');
-    expect(workflow.indexOf('- name: Update the immutable Renovate workflow first')).toBeLessThan(
-      devtools.indexOf('- name: Run Renovate immediately for the released Devtools version') +
-        devtoolsStart,
-    );
+    expect(workflow).not.toContain('\n  protocol-barrier:');
+    expect(workflow).not.toContain('\n  prepare-protocol:');
+    expect(rollout).toContain('fail-fast: false');
+    expect(rollout).toContain('RENOVATE_REPOSITORIES: ${{ matrix.repository }}');
+    expect(rollout).toContain('"matchPackageNames":["@ankhorage/devtools"]');
+    expect(workflow).not.toContain('for (const repository of repositories)');
   });
 
   test('keeps direct consumer writes out of the rollout', () => {

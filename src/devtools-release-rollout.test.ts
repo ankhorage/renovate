@@ -93,6 +93,22 @@ describe('Devtools release rollout workflow', () => {
   });
 });
 
+describe('Devtools release rollout protocol isolation', () => {
+  test('keeps each consumer independent while waiting for protocol compatibility', () => {
+    expect(workflow).toContain('  rollout:');
+    expect(workflow).toContain('fail-fast: false');
+    expect(workflow).toContain('TARGET_REPOSITORY: ${{ matrix.repository }}');
+    expect(workflow).toContain('const repository = process.env.TARGET_REPOSITORY;');
+    expect(workflow).toContain("Wait for this repository's compatible immutable Renovate workflow");
+    expect(workflow).toContain('const timeoutAt = Date.now() + 20 * 60 * 1000;');
+    expect(workflow).toContain('setTimeout(resolve, 30000)');
+    expect(workflow).toContain('if (pin !== lastPin)');
+    expect(workflow).not.toContain('  protocol-barrier:');
+    expect(workflow).not.toContain('REPOSITORIES: ${{ needs.validate.outputs.repositories }}');
+    expect(workflow).not.toContain('for (const repository of repositories)');
+  });
+});
+
 interface ReleasePackageRule {
   readonly allowedVersions: string;
   readonly enabled: boolean;
