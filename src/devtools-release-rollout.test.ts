@@ -100,7 +100,7 @@ describe('Devtools release rollout protocol isolation', () => {
     expect(workflow).toContain('TARGET_REPOSITORY: ${{ matrix.repository }}');
     expect(workflow).toContain('const repository = process.env.TARGET_REPOSITORY;');
     expect(workflow).toContain("Wait for this repository's compatible immutable Renovate workflow");
-    expect(workflow).toContain('const timeoutAt = Date.now() + 20 * 60 * 1000;');
+    expect(workflow).toContain('const timeoutAt = Date.now() + 60 * 60 * 1000;');
     expect(workflow).toContain('setTimeout(resolve, 30000)');
     expect(workflow).toContain('if (pin !== lastPin)');
     expect(workflow).not.toContain('  protocol-barrier:');

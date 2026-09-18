@@ -265,7 +265,7 @@ jobs:
             const requiredProtocol = Number(process.env.REQUIRED_PROTOCOL);
             const repository = process.env.TARGET_REPOSITORY;
             const [owner, repo] = repository.split('/');
-            const timeoutAt = Date.now() + 20 * 60 * 1000;
+            const timeoutAt = Date.now() + 60 * 60 * 1000;
             let lastPin;
             let lastProtocol = 0;
 
