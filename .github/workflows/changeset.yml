@@ -313,6 +313,8 @@ jobs:
               '.github/workflows/ci.yml',
               '.github/workflows/release.yml',
               '.github/workflows/renovate.yml',
+              '.gitignore',
+              '.prettierignore',
               '.prettierrc.js',
               '.vscode/extensions.json',
               '.vscode/settings.json',
@@ -324,6 +326,7 @@ jobs:
               'knip.config.ts',
               'package.json',
               'prettier.local.config.js',
+              'renovate.json5',
             ];
             const ownerAllowed = [
               '.github/workflows/ci.yml',
