@@ -29,7 +29,7 @@ describe('package release rollout registry', () => {
   });
 });
 
-describe('package release rollout workflow', () => {
+describe('package release rollout validation', () => {
   test('accepts one exact Ankhorage package release identity', () => {
     expect(workflow).toContain('repository_dispatch:');
     expect(workflow).toContain('package-release');
@@ -60,9 +60,7 @@ describe('package release rollout workflow', () => {
     expect(workflow).toContain(
       'The ankhorage-renovate-sync GitHub App installation does not include registered package consumers',
     );
-    expect(workflow).toContain(
-      '(repository) => repository !== sourceRepository',
-    );
+    expect(workflow).toContain('(repository) => repository !== sourceRepository');
     expect(workflow).toContain(
       "github.event.pull_request.user.login == 'ankhorage-renovate-sync[bot]'",
     );
@@ -70,12 +68,17 @@ describe('package release rollout workflow', () => {
     expect(workflow).toContain('RENOVATE_REQUIRE_CONFIG: required');
   });
 
+});
+
+describe('package release rollout execution', () => {
   test('keeps the immutable workflow protocol gate specific to Devtools releases', () => {
     expect(workflow).toContain("if (packageName === '@ankhorage/devtools')");
     expect(workflow).toContain('let requiredProtocol = 0;');
-    expect(workflow).toContain("if (requiredProtocol === 0)");
+    expect(workflow).toContain('if (requiredProtocol === 0)');
     expect(workflow).toContain("core.setOutput('compatible', 'true')");
-    expect(workflow).toContain('The canonical Renovate sync protocol cannot satisfy this Devtools release.');
+    expect(workflow).toContain(
+      'The canonical Renovate sync protocol cannot satisfy this Devtools release.',
+    );
     expect(workflow).toContain('Update the immutable Renovate workflow first');
     expect(workflow).toContain("Wait for this repository's compatible immutable Renovate workflow");
   });
