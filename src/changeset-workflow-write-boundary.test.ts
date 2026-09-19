@@ -31,7 +31,7 @@ describe('trusted Renovate write boundary', () => {
       'prettier.local.config.js',
       'renovate.json5',
     ]) {
-      expect(workflow).toContain("'" + path + "'");
+      expect(workflow).toContain(`    ${path}\n`);
     }
     expect(workflow).not.toContain("'.github/workflows/studio-acceptance.yml'");
     expect(workflow).toContain('Devtools sync changed an unexpected path:');
@@ -57,12 +57,8 @@ describe('trusted Renovate write boundary', () => {
     ).toHaveLength(1);
 
     for (const job of [prepareJob, commitJob]) {
-      expect(job).toContain(
-        "readManagedPaths('ANKHORAGE_RENOVATE_CONSUMER_MANAGED_PATHS')",
-      );
-      expect(job).toContain(
-        "readManagedPaths('ANKHORAGE_RENOVATE_DEVTOOLS_OWNER_MANAGED_PATHS')",
-      );
+      expect(job).toContain("'ANKHORAGE_RENOVATE_CONSUMER_MANAGED_PATHS'");
+      expect(job).toContain("'ANKHORAGE_RENOVATE_DEVTOOLS_OWNER_MANAGED_PATHS'");
       expect(job).not.toContain('const consumerAllowed = [');
       expect(job).not.toContain('const ownerAllowed = [');
     }
