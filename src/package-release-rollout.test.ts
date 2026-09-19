@@ -82,11 +82,10 @@ describe('package release rollout execution', () => {
     expect(workflow).toContain("Wait for this repository's compatible immutable Renovate workflow");
   });
 
-  test('runs only the exact released Ankhorage package through Renovate', () => {
+  test('guarantees the exact released package while retaining canonical grouping', () => {
     const rules = readReleasePackageRules('@ankhorage/apm', '0.8.9');
 
     expect(rules).toEqual([
-      { matchPackageNames: ['@ankhorage/**'], enabled: false },
       {
         matchDatasources: ['npm'],
         matchPackageNames: ['@ankhorage/apm'],
@@ -102,8 +101,9 @@ describe('package release rollout execution', () => {
     expect(workflow).not.toContain('pulls.create');
   });
 
-  test('serializes releases per package without cancelling an in-flight rollout', () => {
-    expect(workflow).toContain(
+  test('serializes grouped package releases without cancelling an in-flight rollout', () => {
+    expect(workflow).toContain('group: package-release-rollout');
+    expect(workflow).not.toContain(
       'group: package-release-rollout-${{ github.event.client_payload.package_name || inputs.package_name }}',
     );
     expect(workflow).toContain('cancel-in-progress: false');
@@ -135,8 +135,8 @@ function readReleasePackageRules(
     .replace('${{ needs.validate.outputs.version }}', version);
   if (!rendered) throw new Error('Package rollout package rules are empty.');
   const parsed: unknown = JSON.parse(rendered);
-  if (!Array.isArray(parsed) || parsed.length !== 2) {
-    throw new Error('Package rollout must render exactly two release-specific package rules.');
+  if (!Array.isArray(parsed) || parsed.length !== 1) {
+    throw new Error('Package rollout must render exactly one release-specific package rule.');
   }
   return parsed as readonly ReleasePackageRule[];
 }
