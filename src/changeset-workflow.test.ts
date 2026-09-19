@@ -278,7 +278,7 @@ describe('trusted Devtools owner write boundary', () => {
   test('revalidates the sync mode and uses separate owner output permissions', () => {
     expect(workflow).toContain('Managed artifact sync mode no longer matches the pull request.');
     expect(workflow).toContain("'devtools-owner': new Set(ownerAllowed)");
-    expect(workflow).toContain("'README.md'");
+    expect(workflow).toContain('    README.md\n');
     expect(workflow).toContain('Managed artifact contains an invalid sync mode.');
   });
 });
