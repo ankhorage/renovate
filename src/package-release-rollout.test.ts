@@ -67,7 +67,6 @@ describe('package release rollout validation', () => {
     expect(workflow).toContain('RENOVATE_REPOSITORIES: ${{ matrix.repository }}');
     expect(workflow).toContain('RENOVATE_REQUIRE_CONFIG: required');
   });
-
 });
 
 describe('package release rollout execution', () => {
