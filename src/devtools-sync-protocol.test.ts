@@ -6,7 +6,7 @@ const protocolManifest = JSON.parse(
   readFileSync(new URL('../sync-protocol.json', import.meta.url), 'utf8'),
 ) as { readonly version?: unknown };
 const workflow = readFileSync(
-  new URL('../.github/workflows/rollout-devtools-release.yml', import.meta.url),
+  new URL('../.github/workflows/rollout-package-release.yml', import.meta.url),
   'utf8',
 );
 
@@ -17,14 +17,16 @@ describe('Devtools sync protocol release contract', () => {
   });
 
   test('requires the exact published Devtools release to declare its protocol', () => {
-    expect(workflow).toContain('registry.npmjs.org/%40ankhorage%2Fdevtools/');
+    expect(workflow).toContain("if (packageName === '@ankhorage/devtools')");
+    expect(workflow).toContain('encodeURIComponent(packageName)');
+    expect(workflow).toContain('encodeURIComponent(version)');
     expect(workflow).toContain('releaseManifest?.ankhorage?.renovateSyncProtocol');
     expect(workflow).toContain(
       'The published Devtools release must declare ankhorage.renovateSyncProtocol as a positive integer.',
     );
     expect(workflow).toContain('canonicalProtocol < requiredProtocol');
     expect(workflow).toContain(
-      'required-protocol: ${{ steps.registry.outputs.required-protocol }}',
+      'required_protocol: ${{ steps.registry.outputs.required_protocol }}',
     );
   });
 
@@ -45,15 +47,15 @@ describe('Devtools sync protocol rollout orchestration', () => {
     const waitStart = rollout.indexOf(
       "- name: Wait for this repository's compatible immutable Renovate workflow",
     );
-    const devtoolsStart = rollout.indexOf(
-      '- name: Run Renovate immediately for the released Devtools version',
+    const packageStart = rollout.indexOf(
+      '- name: Run Renovate immediately for the released package',
     );
 
     expect(rolloutStart).toBeGreaterThan(0);
     expect(rollout).toContain('repository: ${{ fromJSON(needs.validate.outputs.repositories) }}');
     expect(updateStart).toBeGreaterThan(0);
     expect(waitStart).toBeGreaterThan(updateStart);
-    expect(devtoolsStart).toBeGreaterThan(waitStart);
+    expect(packageStart).toBeGreaterThan(waitStart);
     expect(rollout).toContain('bun x renovate --enabled-managers=custom.regex');
     expect(rollout).toContain('TARGET_REPOSITORY: ${{ matrix.repository }}');
     expect(rollout).toContain('while (Date.now() < timeoutAt)');
@@ -69,7 +71,10 @@ describe('Devtools sync protocol rollout orchestration', () => {
     expect(workflow).not.toContain('\n  prepare-protocol:');
     expect(rollout).toContain('fail-fast: false');
     expect(rollout).toContain('RENOVATE_REPOSITORIES: ${{ matrix.repository }}');
-    expect(rollout).toContain('"matchPackageNames":["@ankhorage/devtools"]');
+    expect(rollout).toContain('"matchPackageNames":["@ankhorage/**"],"enabled":false');
+    expect(rollout).toContain(
+      '"matchPackageNames":["${{ needs.validate.outputs.package_name }}"]',
+    );
     expect(workflow).not.toContain('for (const repository of repositories)');
   });
 
