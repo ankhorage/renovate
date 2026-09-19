@@ -1,5 +1,11 @@
 # @ankhorage/renovate
 
+## 0.2.16
+
+### Patch Changes
+
+- 0131fb5: Trigger an immediate exact-version Renovate rollout for every published Ankhorage package instead of only Devtools releases.
+
 ## 0.2.15
 
 ### Patch Changes
