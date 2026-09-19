@@ -23,7 +23,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: package-release-rollout-${{ github.event.client_payload.package_name || inputs.package_name }}
+  group: package-release-rollout
   cancel-in-progress: false
 
 jobs:
@@ -398,7 +398,7 @@ jobs:
           RENOVATE_AUTODISCOVER: 'false'
           RENOVATE_ONBOARDING: 'false'
           RENOVATE_PACKAGE_RULES: >-
-            [{"matchPackageNames":["@ankhorage/**"],"enabled":false},{"matchDatasources":["npm"],"matchPackageNames":["${{ needs.validate.outputs.package_name }}"],"enabled":true,"rangeStrategy":"bump","allowedVersions":"${{ needs.validate.outputs.version }}","recreateWhen":"always"}]
+            [{"matchDatasources":["npm"],"matchPackageNames":["${{ needs.validate.outputs.package_name }}"],"enabled":true,"rangeStrategy":"bump","allowedVersions":"${{ needs.validate.outputs.version }}","recreateWhen":"always"}]
           RENOVATE_PLATFORM: github
           RENOVATE_PR_HOURLY_LIMIT: '0'
           RENOVATE_REPOSITORIES: ${{ matrix.repository }}
