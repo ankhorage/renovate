@@ -1,0 +1,411 @@
+name: Roll out package release
+
+on:
+  repository_dispatch:
+    types:
+      - package-release
+  workflow_dispatch:
+    inputs:
+      package_name:
+        description: Exact published @ankhorage package name to roll out
+        required: true
+        type: string
+      version:
+        description: Exact published package version to roll out
+        required: true
+        type: string
+      source_repository:
+        description: Source repository that published the package
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-release-rollout-${{ github.event.client_payload.package_name || inputs.package_name }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      has_repositories: ${{ steps.registry.outputs.has_repositories }}
+      package_name: ${{ steps.registry.outputs.package_name }}
+      repositories: ${{ steps.registry.outputs.repositories }}
+      required_protocol: ${{ steps.registry.outputs.required_protocol }}
+      source_repository: ${{ steps.registry.outputs.source_repository }}
+      version: ${{ steps.registry.outputs.version }}
+    steps:
+      - name: Check out trusted rollout registry
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Mint the organization Renovate Sync App read token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.ANKHORAGE_RENOVATE_SYNC_CLIENT_ID }}
+          private-key: ${{ secrets.ANKHORAGE_RENOVATE_SYNC_PRIVATE_KEY }}
+          owner: ankhorage
+          permission-contents: read
+
+      - name: Validate release and ready consumer registry
+        id: registry
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          DISPATCH_PACKAGE_NAME: ${{ github.event.client_payload.package_name }}
+          DISPATCH_SOURCE_REPOSITORY: ${{ github.event.client_payload.source_repository }}
+          DISPATCH_VERSION: ${{ github.event.client_payload.version }}
+          INPUT_PACKAGE_NAME: ${{ inputs.package_name }}
+          INPUT_SOURCE_REPOSITORY: ${{ inputs.source_repository }}
+          INPUT_VERSION: ${{ inputs.version }}
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            const fs = require('node:fs');
+            const packageName = process.env.INPUT_PACKAGE_NAME || process.env.DISPATCH_PACKAGE_NAME;
+            const version = process.env.INPUT_VERSION || process.env.DISPATCH_VERSION;
+            const sourceRepository =
+              process.env.INPUT_SOURCE_REPOSITORY || process.env.DISPATCH_SOURCE_REPOSITORY;
+
+            if (!/^@ankhorage\/[a-z0-9][a-z0-9-]*$/.test(packageName ?? '')) {
+              throw new Error('Package rollout requires one valid @ankhorage package name.');
+            }
+            if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version ?? '')) {
+              throw new Error('Package rollout requires one exact published semver version.');
+            }
+            if (!/^ankhorage\/[a-z0-9-]+$/.test(sourceRepository ?? '')) {
+              throw new Error('Package rollout requires one valid Ankhorage source repository.');
+            }
+
+            const releaseResponse = await fetch(
+              'https://registry.npmjs.org/' +
+                encodeURIComponent(packageName) +
+                '/' +
+                encodeURIComponent(version),
+              { headers: { accept: 'application/json' } },
+            );
+            if (!releaseResponse.ok) {
+              throw new Error('The exact published package release manifest could not be loaded.');
+            }
+            const releaseManifest = await releaseResponse.json();
+            if (releaseManifest?.name !== packageName || releaseManifest?.version !== version) {
+              throw new Error('The npm release manifest does not match the dispatched package identity.');
+            }
+
+            let requiredProtocol = 0;
+            if (packageName === '@ankhorage/devtools') {
+              const protocolManifest = JSON.parse(fs.readFileSync('sync-protocol.json', 'utf8'));
+              const canonicalProtocol = protocolManifest?.version;
+              if (!Number.isInteger(canonicalProtocol) || canonicalProtocol < 1) {
+                throw new Error('The canonical Renovate sync protocol must be a positive integer.');
+              }
+              requiredProtocol = releaseManifest?.ankhorage?.renovateSyncProtocol;
+              if (!Number.isInteger(requiredProtocol) || requiredProtocol < 1) {
+                throw new Error(
+                  'The published Devtools release must declare ankhorage.renovateSyncProtocol as a positive integer.',
+                );
+              }
+              if (canonicalProtocol < requiredProtocol) {
+                throw new Error(
+                  'The canonical Renovate sync protocol cannot satisfy this Devtools release.',
+                );
+              }
+            }
+
+            const registry = JSON.parse(fs.readFileSync('release-consumers.json', 'utf8'));
+            if (!Array.isArray(registry.repositories) || registry.repositories.length === 0) {
+              throw new Error('The package release consumer registry must contain repositories.');
+            }
+            const uniqueRepositories = new Set(registry.repositories);
+            if (uniqueRepositories.size !== registry.repositories.length) {
+              throw new Error('The package release consumer registry must not contain duplicates.');
+            }
+            for (const repository of registry.repositories) {
+              if (typeof repository !== 'string' || !/^ankhorage\/[a-z0-9-]+$/.test(repository)) {
+                throw new Error('The package release consumer registry contains an invalid repository.');
+              }
+            }
+
+            const installationRepositories = await github.paginate(
+              github.rest.apps.listReposAccessibleToInstallation,
+              { per_page: 100 },
+            );
+            const accessibleRepositories = new Set(
+              installationRepositories.map((repository) => repository.full_name),
+            );
+            const inaccessibleRepositories = registry.repositories.filter(
+              (repository) => !accessibleRepositories.has(repository),
+            );
+            if (inaccessibleRepositories.length > 0) {
+              throw new Error(
+                'The ankhorage-renovate-sync GitHub App installation does not include registered package consumers: ' +
+                  inaccessibleRepositories.join(', ') +
+                  '. Add these repositories to the selected-repository App installation before treating them as managed-release ready. Bootstrap policy: https://github.com/ankhorage/renovate/issues/115',
+              );
+            }
+
+            const candidateRepositories = registry.repositories.filter(
+              (repository) => repository !== sourceRepository,
+            );
+            const readyRepositories = [];
+            const waitingRepositories = [];
+            for (const repository of candidateRepositories) {
+              const [owner, repo] = repository.split('/');
+              try {
+                const { data } = await github.rest.repos.getContent({
+                  owner,
+                  repo,
+                  path: '.github/workflows/renovate.yml',
+                });
+                if (Array.isArray(data) || data.type !== 'file' || !data.content) {
+                  throw new Error('The managed Renovate workflow is not a readable file.');
+                }
+                const managedWorkflow = Buffer.from(data.content, 'base64').toString('utf8');
+                if (
+                  !managedWorkflow.includes(
+                    "github.event.pull_request.user.login == 'ankhorage-renovate-sync[bot]'",
+                  )
+                ) {
+                  waitingRepositories.push(repository);
+                  continue;
+                }
+                readyRepositories.push(repository);
+              } catch (error) {
+                core.warning('Skipping ' + repository + ': ' + error.message);
+                waitingRepositories.push(repository);
+              }
+            }
+
+            core.notice(
+              'Ready for immediate ' + packageName + '@' + version + ' rollout: ' +
+                readyRepositories.length +
+                '; awaiting the one-time workflow bootstrap: ' +
+                waitingRepositories.length +
+                '.',
+            );
+            core.setOutput('has_repositories', String(readyRepositories.length > 0));
+            core.setOutput('package_name', packageName);
+            core.setOutput('repositories', JSON.stringify(readyRepositories));
+            core.setOutput('required_protocol', String(requiredProtocol));
+            core.setOutput('source_repository', sourceRepository);
+            core.setOutput('version', version);
+
+  rollout:
+    needs: validate
+    if: needs.validate.outputs.has_repositories == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        repository: ${{ fromJSON(needs.validate.outputs.repositories) }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the canonical Renovate policy
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: '1.4.0'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install the pinned Renovate runner
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Mint the organization Renovate Sync App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.ANKHORAGE_RENOVATE_SYNC_CLIENT_ID }}
+          private-key: ${{ secrets.ANKHORAGE_RENOVATE_SYNC_PRIVATE_KEY }}
+          owner: ankhorage
+          permission-contents: write
+          permission-issues: write
+          permission-pull-requests: write
+          permission-workflows: write
+
+      - name: Check pinned Renovate sync protocol
+        id: protocol
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          REQUIRED_PROTOCOL: ${{ needs.validate.outputs.required_protocol }}
+          TARGET_REPOSITORY: ${{ matrix.repository }}
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            const requiredProtocol = Number(process.env.REQUIRED_PROTOCOL);
+            if (requiredProtocol === 0) {
+              core.setOutput('compatible', 'true');
+              return;
+            }
+
+            const [owner, repo] = process.env.TARGET_REPOSITORY.split('/');
+            const { data } = await github.rest.repos.getContent({
+              owner,
+              repo,
+              path: '.github/workflows/renovate.yml',
+            });
+            if (Array.isArray(data) || data.type !== 'file' || !data.content) {
+              throw new Error('The managed Renovate workflow is not a readable file.');
+            }
+            const managedWorkflow = Buffer.from(data.content, 'base64').toString('utf8');
+            const pin = /changeset\.yml@([0-9a-f]{40})/.exec(managedWorkflow)?.[1];
+            if (!pin) {
+              throw new Error('The managed Renovate workflow must pin changeset.yml by commit SHA.');
+            }
+
+            let protocol = 0;
+            try {
+              const response = await github.rest.repos.getContent({
+                owner: 'ankhorage',
+                repo: 'renovate',
+                path: 'sync-protocol.json',
+                ref: pin,
+              });
+              if (
+                Array.isArray(response.data) ||
+                response.data.type !== 'file' ||
+                !response.data.content
+              ) {
+                throw new Error('The pinned Renovate sync protocol is not a readable file.');
+              }
+              const manifest = JSON.parse(
+                Buffer.from(response.data.content, 'base64').toString('utf8'),
+              );
+              protocol = manifest?.version;
+              if (!Number.isInteger(protocol) || protocol < 1) {
+                throw new Error('The pinned Renovate sync protocol must be a positive integer.');
+              }
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
+
+            core.notice(
+              process.env.TARGET_REPOSITORY +
+                ' pins Renovate protocol ' +
+                protocol +
+                '; Devtools requires ' +
+                requiredProtocol +
+                '.',
+            );
+            core.setOutput('compatible', String(protocol >= requiredProtocol));
+
+      - name: Update the immutable Renovate workflow first
+        if: steps.protocol.outputs.compatible != 'true'
+        env:
+          RENOVATE_AUTODISCOVER: 'false'
+          RENOVATE_ONBOARDING: 'false'
+          RENOVATE_PACKAGE_RULES: >-
+            [{"matchDatasources":["github-digest"],"matchPackageNames":["ankhorage/renovate"],"enabled":true,"recreateWhen":"always"}]
+          RENOVATE_PLATFORM: github
+          RENOVATE_PR_HOURLY_LIMIT: '0'
+          RENOVATE_REPOSITORIES: ${{ matrix.repository }}
+          RENOVATE_REQUIRE_CONFIG: required
+          RENOVATE_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: bun x renovate --enabled-managers=custom.regex
+
+      - name: Wait for this repository's compatible immutable Renovate workflow
+        if: steps.protocol.outputs.compatible != 'true'
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          REQUIRED_PROTOCOL: ${{ needs.validate.outputs.required_protocol }}
+          TARGET_REPOSITORY: ${{ matrix.repository }}
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            const requiredProtocol = Number(process.env.REQUIRED_PROTOCOL);
+            const repository = process.env.TARGET_REPOSITORY;
+            const [owner, repo] = repository.split('/');
+            const timeoutAt = Date.now() + 60 * 60 * 1000;
+            let lastPin;
+            let lastProtocol = 0;
+
+            while (Date.now() < timeoutAt) {
+              const { data } = await github.rest.repos.getContent({
+                owner,
+                repo,
+                path: '.github/workflows/renovate.yml',
+              });
+              if (Array.isArray(data) || data.type !== 'file' || !data.content) {
+                throw new Error('The managed Renovate workflow is not a readable file: ' + repository);
+              }
+              const managedWorkflow = Buffer.from(data.content, 'base64').toString('utf8');
+              const pin = /changeset\.yml@([0-9a-f]{40})/.exec(managedWorkflow)?.[1];
+              if (!pin) {
+                throw new Error(
+                  'The managed Renovate workflow must pin changeset.yml by commit SHA: ' + repository,
+                );
+              }
+
+              if (pin !== lastPin) {
+                lastPin = pin;
+                lastProtocol = 0;
+                try {
+                  const response = await github.rest.repos.getContent({
+                    owner: 'ankhorage',
+                    repo: 'renovate',
+                    path: 'sync-protocol.json',
+                    ref: pin,
+                  });
+                  if (
+                    Array.isArray(response.data) ||
+                    response.data.type !== 'file' ||
+                    !response.data.content
+                  ) {
+                    throw new Error('The pinned Renovate sync protocol is not a readable file.');
+                  }
+                  const manifest = JSON.parse(
+                    Buffer.from(response.data.content, 'base64').toString('utf8'),
+                  );
+                  lastProtocol = manifest?.version;
+                  if (!Number.isInteger(lastProtocol) || lastProtocol < 1) {
+                    throw new Error('The pinned Renovate sync protocol must be a positive integer.');
+                  }
+                } catch (error) {
+                  if (error.status !== 404) throw error;
+                }
+              }
+
+              if (lastProtocol >= requiredProtocol) {
+                core.notice(
+                  repository + ' now pins compatible Renovate protocol ' + lastProtocol + '.',
+                );
+                return;
+              }
+
+              core.info(
+                'Awaiting compatible Renovate workflow pin for ' +
+                  repository +
+                  '; current protocol ' +
+                  lastProtocol +
+                  ', required ' +
+                  requiredProtocol +
+                  '.',
+              );
+              await new Promise((resolve) => setTimeout(resolve, 30000));
+            }
+
+            throw new Error(
+              'Timed out waiting for a compatible immutable Renovate workflow: ' + repository,
+            );
+
+      - name: Run Renovate immediately for the released package
+        env:
+          RENOVATE_AUTODISCOVER: 'false'
+          RENOVATE_ONBOARDING: 'false'
+          RENOVATE_PACKAGE_RULES: >-
+            [{"matchPackageNames":["@ankhorage/**"],"enabled":false},{"matchDatasources":["npm"],"matchPackageNames":["${{ needs.validate.outputs.package_name }}"],"enabled":true,"rangeStrategy":"bump","allowedVersions":"${{ needs.validate.outputs.version }}","recreateWhen":"always"}]
+          RENOVATE_PLATFORM: github
+          RENOVATE_PR_HOURLY_LIMIT: '0'
+          RENOVATE_REPOSITORIES: ${{ matrix.repository }}
+          RENOVATE_REQUIRE_CONFIG: required
+          RENOVATE_TOKEN: ${{ steps.app-token.outputs.token }}
+          ROLLOUT_PACKAGE_NAME: ${{ needs.validate.outputs.package_name }}
+          ROLLOUT_VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          echo "Rolling out exactly $ROLLOUT_PACKAGE_NAME@$ROLLOUT_VERSION to $RENOVATE_REPOSITORIES"
+          bun x renovate
