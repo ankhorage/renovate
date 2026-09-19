@@ -8,9 +8,10 @@
  * in consumers. Compatible @ankhorage/ankh and @ankhorage/devtools releases are grouped for the
  * trusted synchronization workflow. The workflow runs the exact lock-selected provider, requires
  * byte stability and current status, and commits the complete managed result without a manual
- * repository sync. After the one-time release-rollout bootstrap, a published Devtools version
- * immediately starts the same Renovate update flow for every repository in the reviewed consumer
- * registry. The preset explicitly owns bun and custom.regex extraction so self-hosted manager
+ * repository sync. Every published @ankhorage package immediately starts a targeted Renovate
+ * rollout for every repository in the reviewed managed-consumer registry; Devtools releases retain
+ * the immutable workflow protocol gate before their package update. The preset explicitly owns bun
+ * and custom.regex extraction so self-hosted manager
  * filtering cannot silently drop package propagation. Never edit renovate/* branches manually;
  * request Renovate rebase/retry to discard edits and return the branch to Renovate ownership.
  * Renovate remains the only dependency-branch writer. The shared preset also performs a
