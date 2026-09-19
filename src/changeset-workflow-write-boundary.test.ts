@@ -47,4 +47,24 @@ describe('trusted Renovate write boundary', () => {
     expect(prepareJob).toContain('Devtools ownership manifest must be a regular file.');
     expect(workflow).toContain('segments[2]) &&');
   });
+
+  test('shares the same trusted path inventories between prepare and commit', () => {
+    expect(
+      workflow.match(/^  ANKHORAGE_RENOVATE_CONSUMER_MANAGED_PATHS:/gm),
+    ).toHaveLength(1);
+    expect(
+      workflow.match(/^  ANKHORAGE_RENOVATE_DEVTOOLS_OWNER_MANAGED_PATHS:/gm),
+    ).toHaveLength(1);
+
+    for (const job of [prepareJob, commitJob]) {
+      expect(job).toContain(
+        "readManagedPaths('ANKHORAGE_RENOVATE_CONSUMER_MANAGED_PATHS')",
+      );
+      expect(job).toContain(
+        "readManagedPaths('ANKHORAGE_RENOVATE_DEVTOOLS_OWNER_MANAGED_PATHS')",
+      );
+      expect(job).not.toContain('const consumerAllowed = [');
+      expect(job).not.toContain('const ownerAllowed = [');
+    }
+  });
 });
