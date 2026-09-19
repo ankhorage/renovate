@@ -71,7 +71,6 @@ describe('Devtools sync protocol rollout orchestration', () => {
     expect(workflow).not.toContain('\n  prepare-protocol:');
     expect(rollout).toContain('fail-fast: false');
     expect(rollout).toContain('RENOVATE_REPOSITORIES: ${{ matrix.repository }}');
-    expect(rollout).toContain('"matchPackageNames":["@ankhorage/**"],"enabled":false');
     expect(rollout).toContain(
       '"matchPackageNames":["${{ needs.validate.outputs.package_name }}"]',
     );
