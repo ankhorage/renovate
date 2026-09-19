@@ -1,5 +1,11 @@
 # @ankhorage/renovate
 
+## 0.2.17
+
+### Patch Changes
+
+- 39ebca5: Keep trusted Renovate prepare and commit managed-path inventories aligned so consumer synchronization reaches the ordinary CI-triggering write path.
+
 ## 0.2.16
 
 ### Patch Changes
