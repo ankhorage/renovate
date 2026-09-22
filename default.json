@@ -5,6 +5,15 @@
   "enabledManagers": ["bun", "custom.regex"],
   "gitIgnoredAuthors": ["323340348+ankhorage-renovate-sync[bot]@users.noreply.github.com"],
   "labels": ["dependencies"],
+  "ignorePaths": [
+    "**/node_modules/**",
+    "**/bower_components/**",
+    "**/vendor/**",
+    "**/__tests__/**",
+    "**/test/**",
+    "**/tests/**",
+    "**/__fixtures__/**"
+  ],
   "customManagers": [
     {
       "customType": "regex",

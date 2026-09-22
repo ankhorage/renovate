@@ -42,6 +42,7 @@ export interface Preset {
   readonly description: readonly string[];
   readonly extends: readonly string[];
   readonly gitIgnoredAuthors?: readonly string[];
+  readonly ignorePaths?: readonly string[];
   readonly labels?: readonly string[];
   readonly packageRules: readonly PackageRule[];
 }

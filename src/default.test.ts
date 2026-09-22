@@ -52,6 +52,21 @@ describe('consumer preset', () => {
   });
 });
 
+describe('consumer path discovery', () => {
+  test('keeps public examples discoverable while retaining standard ignored paths', () => {
+    expect(consumerPreset.ignorePaths).toEqual([
+      '**/node_modules/**',
+      '**/bower_components/**',
+      '**/vendor/**',
+      '**/__tests__/**',
+      '**/test/**',
+      '**/tests/**',
+      '**/__fixtures__/**',
+    ]);
+    expect(consumerPreset.ignorePaths).not.toContain('**/examples/**');
+  });
+});
+
 describe('consumer patch policy', () => {
   test('automerges every validated npm patch without enabling broader upgrades', () => {
     for (const packageName of ['expo', 'react', 'vitest']) {
