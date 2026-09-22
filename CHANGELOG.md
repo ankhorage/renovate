@@ -1,5 +1,11 @@
 # @ankhorage/renovate
 
+## 0.2.18
+
+### Patch Changes
+
+- 499dc2a: Keep standalone public example package manifests visible to Renovate while retaining standard dependency, vendor, test, and fixture exclusions.
+
 ## 0.2.17
 
 ### Patch Changes
