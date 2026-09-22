@@ -23,19 +23,6 @@ describe('consumer preset', () => {
     expect(consumerPreset.enabledManagers).toEqual(['bun', 'custom.regex']);
   });
 
-  test('keeps public examples discoverable while retaining standard ignored paths', () => {
-    expect(consumerPreset.ignorePaths).toEqual([
-      '**/node_modules/**',
-      '**/bower_components/**',
-      '**/vendor/**',
-      '**/__tests__/**',
-      '**/test/**',
-      '**/tests/**',
-      '**/__fixtures__/**',
-    ]);
-    expect(consumerPreset.ignorePaths).not.toContain('**/examples/**');
-  });
-
   test('keeps ordinary Ankhorage packages eligible', () => {
     expect(
       resolveRules(consumerPreset.packageRules, dependency('@ankhorage/contracts')),
@@ -62,6 +49,21 @@ describe('consumer preset', () => {
         rangeStrategy: 'bump',
       });
     }
+  });
+});
+
+describe('consumer path discovery', () => {
+  test('keeps public examples discoverable while retaining standard ignored paths', () => {
+    expect(consumerPreset.ignorePaths).toEqual([
+      '**/node_modules/**',
+      '**/bower_components/**',
+      '**/vendor/**',
+      '**/__tests__/**',
+      '**/test/**',
+      '**/tests/**',
+      '**/__fixtures__/**',
+    ]);
+    expect(consumerPreset.ignorePaths).not.toContain('**/examples/**');
   });
 });
 
