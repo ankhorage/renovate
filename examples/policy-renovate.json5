@@ -1,0 +1,14 @@
+/***
+ * Policy owner repository configuration
+ *
+ * Loads the owner-specific policy that groups the canonical Bun runtime literals with the matching
+ * root package metadata. Major runtime upgrades remain reviewable. Do not use this profile in
+ * normal consumer repositories.
+ *
+ * @usage
+ * @readme
+ */
+{
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  extends: ['github>ankhorage/renovate:policy-owner'],
+}
