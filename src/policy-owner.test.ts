@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 
 import { dependency, readPreset, resolveRules } from './renovatePreset.testSupport.js';
 
@@ -6,7 +6,6 @@ const consumerPreset = readPreset('../default.json');
 const policyOwnerPreset = readPreset('../policy-owner.json');
 const effectiveRules = [...consumerPreset.packageRules, ...policyOwnerPreset.packageRules];
 
-describe('Policy-owner preset', () => {
   test('composes with the consumer default-deny boundary', () => {
     expect(policyOwnerPreset.extends).toEqual(['./default']);
   });
@@ -85,4 +84,3 @@ describe('Policy-owner preset', () => {
       ),
     ).toEqual({ enabled: false });
   });
-});
