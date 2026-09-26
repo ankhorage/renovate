@@ -33,6 +33,7 @@ describe('consumer preset', () => {
       groupSlug: 'ankhorage-libraries',
       labels: ['dependencies', 'renovate:automerge'],
       rangeStrategy: 'bump',
+      separateMajorMinor: false,
     });
   });
 
@@ -47,6 +48,7 @@ describe('consumer preset', () => {
         labels: ['dependencies', 'renovate:automerge'],
         platformAutomerge: false,
         rangeStrategy: 'bump',
+        separateMajorMinor: false,
       });
     }
   });
@@ -187,17 +189,18 @@ describe('consumer workflow update permissions', () => {
 });
 
 describe('consumer toolchain safeguards', () => {
-  test('requires review for major CLI and provider upgrades', () => {
+  test('keeps major CLI and provider upgrades on the latest validated automerge path', () => {
     expect(
       resolveRules(
         consumerPreset.packageRules,
         dependency('@ankhorage/devtools', { updateType: 'major' }),
       ),
     ).toMatchObject({
-      automerge: false,
+      automerge: true,
       enabled: true,
       groupName: 'Ankhorage CLI and Devtools toolchain',
-      labels: ['dependencies', 'renovate:review-required'],
+      labels: ['dependencies', 'renovate:automerge'],
+      separateMajorMinor: false,
     });
   });
 
