@@ -1,27 +1,31 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": ["Devtools-owner dependency update policy for ankhorage/devtools."],
-  "extends": ["./default"],
+  "description": [
+    "Devtools-owner dependency update policy for ankhorage/devtools."
+  ],
+  "extends": [
+    "./default"
+  ],
   "packageRules": [
     {
       "description": "Group dependencies owned and validated by the Devtools repository.",
-      "matchManagers": ["bun"],
-      "matchFileNames": ["package.json"],
+      "matchManagers": [
+        "bun"
+      ],
+      "matchFileNames": [
+        "package.json"
+      ],
       "enabled": true,
-      "labels": ["dependencies", "renovate:automerge"],
+      "labels": [
+        "dependencies",
+        "renovate:automerge"
+      ],
       "groupName": "Devtools-owned toolchain",
       "rangeStrategy": "bump",
       "automerge": true,
       "automergeType": "pr",
-      "platformAutomerge": false
-    },
-    {
-      "description": "Require review for major Devtools-owned toolchain upgrades.",
-      "matchManagers": ["bun"],
-      "matchFileNames": ["package.json"],
-      "matchUpdateTypes": ["major"],
-      "labels": ["dependencies", "renovate:review-required"],
-      "automerge": false
+      "platformAutomerge": false,
+      "separateMajorMinor": false
     }
   ]
 }
