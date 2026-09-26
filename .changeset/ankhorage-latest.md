@@ -2,4 +2,4 @@
 "@ankhorage/renovate": patch
 ---
 
-Always converge consumer repositories to the latest published Ankhorage package releases instead of keeping parallel older major update lines.
+Automerge every validated npm dependency update across patch, minor, and major releases, and keep grouped owner dependencies on the latest release line instead of parallel older majors.
