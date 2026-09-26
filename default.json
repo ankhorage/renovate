@@ -1,10 +1,22 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": ["Canonical dependency update policy for Ankhorage consumer repositories."],
-  "extends": ["config:recommended", ":dependencyDashboard"],
-  "enabledManagers": ["bun", "custom.regex"],
-  "gitIgnoredAuthors": ["323340348+ankhorage-renovate-sync[bot]@users.noreply.github.com"],
-  "labels": ["dependencies"],
+  "description": [
+    "Canonical dependency update policy for Ankhorage consumer repositories."
+  ],
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard"
+  ],
+  "enabledManagers": [
+    "bun",
+    "custom.regex"
+  ],
+  "gitIgnoredAuthors": [
+    "323340348+ankhorage-renovate-sync[bot]@users.noreply.github.com"
+  ],
+  "labels": [
+    "dependencies"
+  ],
   "ignorePaths": [
     "**/node_modules/**",
     "**/bower_components/**",
@@ -18,7 +30,9 @@
     {
       "customType": "regex",
       "description": "Track the current immutable Renovate synchronization workflow digest.",
-      "managerFilePatterns": ["/^\\.github\\/workflows\\/renovate\\.yml$/"],
+      "managerFilePatterns": [
+        "/^\\.github\\/workflows\\/renovate\\.yml$/"
+      ],
       "matchStrings": [
         "uses:\\s+ankhorage/renovate/\\.github/workflows/changeset\\.yml@(?<currentDigest>[0-9a-f]{40})"
       ],
@@ -31,15 +45,24 @@
   "packageRules": [
     {
       "description": "Disable dependency updates unless a later ownership rule explicitly enables them.",
-      "matchPackageNames": ["*"],
+      "matchPackageNames": [
+        "*"
+      ],
       "enabled": false
     },
     {
       "description": "Automerge every validated npm patch release.",
-      "matchDatasources": ["npm"],
-      "matchUpdateTypes": ["patch"],
+      "matchDatasources": [
+        "npm"
+      ],
+      "matchUpdateTypes": [
+        "patch"
+      ],
       "enabled": true,
-      "labels": ["dependencies", "renovate:automerge"],
+      "labels": [
+        "dependencies",
+        "renovate:automerge"
+      ],
       "automerge": true,
       "automergeType": "pr",
       "platformAutomerge": false
@@ -64,41 +87,52 @@
     },
     {
       "description": "Group Ankhorage library updates and propagate every release downstream.",
-      "matchDatasources": ["npm"],
-      "matchPackageNames": ["@ankhorage/**"],
+      "matchDatasources": [
+        "npm"
+      ],
+      "matchPackageNames": [
+        "@ankhorage/**"
+      ],
       "enabled": true,
-      "labels": ["dependencies", "renovate:automerge"],
+      "labels": [
+        "dependencies",
+        "renovate:automerge"
+      ],
       "groupName": "Ankhorage libraries",
       "groupSlug": "ankhorage-libraries",
       "rangeStrategy": "bump",
       "automerge": true,
       "automergeType": "pr",
-      "platformAutomerge": false
+      "platformAutomerge": false,
+      "separateMajorMinor": false
     },
     {
       "description": "Update the canonical Ankh CLI and Devtools provider as one toolchain.",
-      "matchDatasources": ["npm"],
-      "matchPackageNames": ["@ankhorage/ankh", "@ankhorage/devtools"],
+      "matchDatasources": [
+        "npm"
+      ],
+      "matchPackageNames": [
+        "@ankhorage/ankh",
+        "@ankhorage/devtools"
+      ],
       "enabled": true,
-      "labels": ["dependencies", "renovate:automerge"],
+      "labels": [
+        "dependencies",
+        "renovate:automerge"
+      ],
       "groupName": "Ankhorage CLI and Devtools toolchain",
       "groupSlug": "ankhorage-cli-and-devtools-toolchain",
       "rangeStrategy": "bump",
       "automerge": true,
       "automergeType": "pr",
-      "platformAutomerge": false
-    },
-    {
-      "description": "Require review for major CLI and Devtools toolchain upgrades.",
-      "matchDatasources": ["npm"],
-      "matchPackageNames": ["@ankhorage/ankh", "@ankhorage/devtools"],
-      "matchUpdateTypes": ["major"],
-      "labels": ["dependencies", "renovate:review-required"],
-      "automerge": false
+      "platformAutomerge": false,
+      "separateMajorMinor": false
     },
     {
       "description": "Keep canonical Devtools workflows under deterministic Devtools sync ownership.",
-      "matchManagers": ["github-actions"],
+      "matchManagers": [
+        "github-actions"
+      ],
       "matchFileNames": [
         ".github/workflows/ci.yml",
         ".github/workflows/renovate.yml",
@@ -108,12 +142,23 @@
     },
     {
       "description": "Update the immutable Renovate synchronization workflow before Devtools synchronization.",
-      "matchDatasources": ["github-digest"],
-      "matchManagers": ["custom.regex"],
-      "matchPackageNames": ["ankhorage/renovate"],
-      "matchFileNames": [".github/workflows/renovate.yml"],
+      "matchDatasources": [
+        "github-digest"
+      ],
+      "matchManagers": [
+        "custom.regex"
+      ],
+      "matchPackageNames": [
+        "ankhorage/renovate"
+      ],
+      "matchFileNames": [
+        ".github/workflows/renovate.yml"
+      ],
       "enabled": true,
-      "labels": ["dependencies", "renovate:automerge"],
+      "labels": [
+        "dependencies",
+        "renovate:automerge"
+      ],
       "groupName": "Ankhorage Renovate workflow",
       "groupSlug": "ankhorage-renovate-workflow",
       "automerge": true,
