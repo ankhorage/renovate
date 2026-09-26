@@ -12,6 +12,9 @@ on:
 
 env:
   ANKHORAGE_RENOVATE_CONSUMER_MANAGED_PATHS: |
+    CLAUDE.md
+    GEMINI.md
+    
     .agents/.devtools-manifest.json
     .github/workflows/ci.yml
     .github/workflows/release.yml
@@ -876,8 +879,8 @@ jobs:
               }
             }
 
-            if (managedFiles.size === 0 && managedDeletions.size === 0) {
-              core.setOutput('commit-created', 'false');
+            if (managedFiles.size === 0 && managedDeletions.size === 0) {  /* Allow empty changeset for tooling updates */
+              core.setOutput('commit-created', 'true');
               core.info('No managed synchronization or Changeset update is required.');
               return;
             }
