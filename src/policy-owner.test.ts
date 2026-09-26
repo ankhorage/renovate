@@ -54,7 +54,7 @@ test('groups policy literals with matching root package updates', () => {
   }
 });
 
-test('requires review for major runtime upgrades', () => {
+test('automerges major runtime upgrades on the latest line', () => {
   expect(
     resolveRules(
       effectiveRules,
@@ -65,22 +65,34 @@ test('requires review for major runtime upgrades', () => {
       }),
     ),
   ).toMatchObject({
-    automerge: false,
+    automerge: true,
     enabled: true,
     groupName: 'Policy-owned runtime',
-    labels: ['dependencies', 'renovate:review-required'],
+    labels: ['dependencies', 'renovate:automerge'],
     platformAutomerge: false,
+    separateMajorMinor: false,
   });
 });
 
-test('does not broaden third-party updates beyond Policy-owned runtime fields', () => {
-  expect(resolveRules(effectiveRules, dependency('typescript'))).toEqual({ enabled: false });
+test('keeps third-party dependencies on the generic all-update policy', () => {
+  expect(resolveRules(effectiveRules, dependency('typescript', { updateType: 'major' }))).toMatchObject({
+    automerge: true,
+    enabled: true,
+    labels: ['dependencies', 'renovate:automerge'],
+    separateMajorMinor: false,
+  });
   expect(
     resolveRules(
       effectiveRules,
       dependency('bun', {
         fileName: 'examples/package.json',
+        updateType: 'major',
       }),
     ),
-  ).toEqual({ enabled: false });
+  ).toMatchObject({
+    automerge: true,
+    enabled: true,
+    labels: ['dependencies', 'renovate:automerge'],
+    separateMajorMinor: false,
+  });
 });
