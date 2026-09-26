@@ -252,7 +252,7 @@ describe('trusted Renovate commit boundary', () => {
     expect(workflow).toContain('github.rest.git.createTree');
     expect(workflow).toContain('github.rest.git.createCommit');
     expect(workflow).toContain('github.rest.git.updateRef');
-    expect(workflow).toContain('if (currentContent !== content)');
+    expect(workflow).toContain('if (currentChangesetContent !== content)');
   });
 
   test('pins every third-party action by immutable commit', () => {
@@ -265,7 +265,7 @@ describe('trusted Renovate commit boundary', () => {
 });
 
 describe('trusted Devtools owner write boundary', () => {
-  test('creates release metadata for Devtools-owned dependency updates', () => {
+  test('creates real release metadata only for release-impacting dependency updates', () => {
     expect(workflow).toContain(
       "const isDevtoolsOwner = owner + '/' + repo === 'ankhorage/devtools';",
     );
@@ -273,6 +273,18 @@ describe('trusted Devtools owner write boundary', () => {
     expect(workflow).toContain('base.packageManager !== effectiveHead.packageManager');
     expect(workflow).toContain("changed.push({ name: 'bun', section: 'packageManager' })");
     expect(workflow).toContain("managedFiles.has('package.json')");
+    expect(workflow).toContain('changed.length > 0 &&');
+    expect(workflow).toContain("const frontmatter = '---\\n' + \"'\" + effectiveHead.name");
+    expect(workflow).not.toContain("'---\\n---'");
+  });
+
+  test('removes only a stale workflow-owned Changeset when a Renovate update becomes no-release', () => {
+    expect(workflow).toContain(
+      "const changesetPath = '.changeset/renovate-' + pullNumber + '.md';",
+    );
+    expect(workflow).toContain('currentChangesetContent !== null');
+    expect(workflow).toContain('Update (?:Devtools-owned|Ankhorage) dependencies');
+    expect(workflow).toContain('managedDeletions.add(changesetPath);');
   });
 
   test('revalidates the sync mode and uses separate owner output permissions', () => {

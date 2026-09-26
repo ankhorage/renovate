@@ -835,15 +835,32 @@ jobs:
               changed.push({ name: 'bun', section: 'packageManager' });
             }
 
-            if (changed.length > 0) {
-              const release =
-                !effectiveHead.private &&
-                typeof effectiveHead.name === 'string' &&
-                (isDevtoolsOwner ||
-                  changed.some(({ section }) => releaseSections.includes(section)));
-              const frontmatter = release
-                ? '---\n' + "'" + effectiveHead.name + "': patch\n---"
-                : '---\n---';
+            const changesetPath = '.changeset/renovate-' + pullNumber + '.md';
+            let currentChangesetContent = null;
+            try {
+              const response = await github.rest.repos.getContent({
+                owner,
+                repo,
+                path: changesetPath,
+                ref: pull.head.sha,
+              });
+              if (
+                !Array.isArray(response.data) &&
+                response.data.type === 'file' &&
+                response.data.content
+              ) {
+                currentChangesetContent = Buffer.from(response.data.content, 'base64').toString('utf8');
+              }
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
+            const release =
+              changed.length > 0 &&
+              !effectiveHead.private &&
+              typeof effectiveHead.name === 'string' &&
+              (isDevtoolsOwner || changed.some(({ section }) => releaseSections.includes(section)));
+            if (release) {
+              const frontmatter = '---\n' + "'" + effectiveHead.name + "': patch\n---";
               const tick = String.fromCharCode(96);
               const names = [...new Set(changed.map(({ name }) => tick + name + tick))]
                 .sort()
@@ -852,28 +869,16 @@ jobs:
                 ? 'Update Devtools-owned dependencies: '
                 : 'Update Ankhorage dependencies: ';
               const content = frontmatter + '\n\n' + subject + names + '.\n';
-              const changesetPath = '.changeset/renovate-' + pullNumber + '.md';
-              let currentContent = null;
-              try {
-                const response = await github.rest.repos.getContent({
-                  owner,
-                  repo,
-                  path: changesetPath,
-                  ref: pull.head.sha,
-                });
-                if (
-                  !Array.isArray(response.data) &&
-                  response.data.type === 'file' &&
-                  response.data.content
-                ) {
-                  currentContent = Buffer.from(response.data.content, 'base64').toString('utf8');
-                }
-              } catch (error) {
-                if (error.status !== 404) throw error;
-              }
-              if (currentContent !== content) {
+              if (currentChangesetContent !== content) {
                 managedFiles.set(changesetPath, Buffer.from(content));
               }
+            } else if (
+              currentChangesetContent !== null &&
+              /^---\n(?:'[^']+': patch\n)?---\n\nUpdate (?:Devtools-owned|Ankhorage) dependencies: `[^`]+`(?:, `[^`]+`)*\.\n$/u.test(
+                currentChangesetContent,
+              )
+            ) {
+              managedDeletions.add(changesetPath);
             }
 
             if (managedFiles.size === 0 && managedDeletions.size === 0) {
