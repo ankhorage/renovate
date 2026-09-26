@@ -1,5 +1,12 @@
 # @ankhorage/renovate
 
+## 0.3.1
+
+### Patch Changes
+
+- bdacf8a: Automerge every validated npm dependency update across patch, minor, and major releases, and
+  keep grouped owner dependencies on the latest release line instead of parallel older majors.
+
 ## 0.3.0
 
 ### Minor Changes
