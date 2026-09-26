@@ -23,6 +23,7 @@ interface PackageRule {
   readonly matchUpdateTypes?: readonly string[];
   readonly platformAutomerge?: boolean;
   readonly rangeStrategy?: string;
+  readonly separateMajorMinor?: boolean;
 }
 
 interface CustomManager {
@@ -139,6 +140,9 @@ export function resolveRules(
           ? {}
           : { platformAutomerge: rule.platformAutomerge }),
         ...(rule.rangeStrategy === undefined ? {} : { rangeStrategy: rule.rangeStrategy }),
+        ...(rule.separateMajorMinor === undefined
+          ? {}
+          : { separateMajorMinor: rule.separateMajorMinor }),
       }),
       {},
     );

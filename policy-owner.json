@@ -33,20 +33,8 @@
       "rangeStrategy": "bump",
       "automerge": true,
       "automergeType": "pr",
-      "platformAutomerge": false
-    },
-    {
-      "description": "Require review for major Policy-owned runtime upgrades.",
-      "matchManagers": ["bun", "custom.regex"],
-      "matchFileNames": ["package.json", "src/repository/policy.ts"],
-      "matchPackageNames": ["bun", "@types/bun"],
-      "matchUpdateTypes": ["major"],
-      "enabled": true,
-      "labels": ["dependencies", "renovate:review-required"],
-      "groupName": "Policy-owned runtime",
-      "groupSlug": "policy-owned-runtime",
-      "automerge": false,
-      "platformAutomerge": false
+      "platformAutomerge": false,
+      "separateMajorMinor": false
     }
   ]
 }

@@ -13,15 +13,8 @@
       "rangeStrategy": "bump",
       "automerge": true,
       "automergeType": "pr",
-      "platformAutomerge": false
-    },
-    {
-      "description": "Require review for major Devtools-owned toolchain upgrades.",
-      "matchManagers": ["bun"],
-      "matchFileNames": ["package.json"],
-      "matchUpdateTypes": ["major"],
-      "labels": ["dependencies", "renovate:review-required"],
-      "automerge": false
+      "platformAutomerge": false,
+      "separateMajorMinor": false
     }
   ]
 }
