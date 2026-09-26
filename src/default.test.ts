@@ -197,7 +197,6 @@ describe('consumer toolchain safeguards', () => {
       separateMajorMinor: false,
     });
   });
-
 });
 
 describe('consumer unrestricted dependency policy', () => {
