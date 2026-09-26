@@ -1,0 +1,52 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": ["Policy-owner dependency update policy for ankhorage/policy."],
+  "extends": ["./default"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Track the canonical Bun runtime literal owned by @ankhorage/policy.",
+      "managerFilePatterns": ["/^src\\/repository\\/policy\\.ts$/"],
+      "matchStrings": ["const BUN_VERSION = '(?<currentValue>[^']+)';"],
+      "depNameTemplate": "bun",
+      "datasourceTemplate": "npm"
+    },
+    {
+      "customType": "regex",
+      "description": "Track the canonical Bun types literal owned by @ankhorage/policy.",
+      "managerFilePatterns": ["/^src\\/repository\\/policy\\.ts$/"],
+      "matchStrings": ["const BUN_TYPES_VERSION = '(?<currentValue>[^']+)';"],
+      "depNameTemplate": "@types/bun",
+      "datasourceTemplate": "npm"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Group the runtime policy literals and matching root package declarations.",
+      "matchManagers": ["bun", "custom.regex"],
+      "matchFileNames": ["package.json", "src/repository/policy.ts"],
+      "matchPackageNames": ["bun", "@types/bun"],
+      "enabled": true,
+      "labels": ["dependencies", "renovate:automerge"],
+      "groupName": "Policy-owned runtime",
+      "groupSlug": "policy-owned-runtime",
+      "rangeStrategy": "bump",
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": false
+    },
+    {
+      "description": "Require review for major Policy-owned runtime upgrades.",
+      "matchManagers": ["bun", "custom.regex"],
+      "matchFileNames": ["package.json", "src/repository/policy.ts"],
+      "matchPackageNames": ["bun", "@types/bun"],
+      "matchUpdateTypes": ["major"],
+      "enabled": true,
+      "labels": ["dependencies", "renovate:review-required"],
+      "groupName": "Policy-owned runtime",
+      "groupSlug": "policy-owned-runtime",
+      "automerge": false,
+      "platformAutomerge": false
+    }
+  ]
+}
