@@ -51,39 +51,20 @@
       "enabled": false
     },
     {
-      "description": "Automerge every validated npm patch release.",
+      "description": "Automerge every validated npm release.",
       "matchDatasources": [
         "npm"
-      ],
-      "matchUpdateTypes": [
-        "patch"
       ],
       "enabled": true,
       "labels": [
         "dependencies",
         "renovate:automerge"
       ],
+      "rangeStrategy": "bump",
+      "separateMajorMinor": false,
       "automerge": true,
       "automergeType": "pr",
       "platformAutomerge": false
-    },
-    {
-      "description": "Keep the canonical development toolchain under Devtools release ownership.",
-      "matchPackageNames": [
-        "bun",
-        "@types/bun",
-        "@types/node",
-        "@eslint/**",
-        "eslint",
-        "eslint-*",
-        "knip",
-        "prettier",
-        "prettier-*",
-        "typescript",
-        "typescript-eslint",
-        "@typescript-eslint/**"
-      ],
-      "enabled": false
     },
     {
       "description": "Group Ankhorage library updates and propagate every release downstream.",
