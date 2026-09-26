@@ -198,6 +198,9 @@ describe('consumer toolchain safeguards', () => {
     });
   });
 
+});
+
+describe('consumer unrestricted dependency policy', () => {
   test('updates former Devtools-owned consumer dependencies without a special holdback', () => {
     for (const packageName of [
       'bun',
