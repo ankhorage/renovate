@@ -69,35 +69,29 @@ describe('consumer path discovery', () => {
   });
 });
 
-describe('consumer patch policy', () => {
-  test('automerges every validated npm patch without enabling broader upgrades', () => {
+describe('consumer update policy', () => {
+  test('automerges every validated npm release across patch, minor, and major updates', () => {
     for (const packageName of ['expo', 'react', 'vitest']) {
-      expect(
-        resolveRules(
-          consumerPreset.packageRules,
-          dependency(packageName, {
-            fileName: 'examples/expo-showcase/package.json',
-            updateType: 'patch',
-          }),
-        ),
-      ).toMatchObject({
-        automerge: true,
-        automergeType: 'pr',
-        enabled: true,
-        labels: ['dependencies', 'renovate:automerge'],
-        platformAutomerge: false,
-      });
+      for (const updateType of ['patch', 'minor', 'major'] as const) {
+        expect(
+          resolveRules(
+            consumerPreset.packageRules,
+            dependency(packageName, {
+              fileName: 'examples/expo-showcase/package.json',
+              updateType,
+            }),
+          ),
+        ).toMatchObject({
+          automerge: true,
+          automergeType: 'pr',
+          enabled: true,
+          labels: ['dependencies', 'renovate:automerge'],
+          platformAutomerge: false,
+          rangeStrategy: 'bump',
+          separateMajorMinor: false,
+        });
+      }
     }
-
-    expect(
-      resolveRules(
-        consumerPreset.packageRules,
-        dependency('expo', {
-          fileName: 'examples/expo-showcase/package.json',
-          updateType: 'minor',
-        }),
-      ),
-    ).toEqual({ enabled: false });
   });
 });
 
@@ -204,7 +198,7 @@ describe('consumer toolchain safeguards', () => {
     });
   });
 
-  test('does not independently update consumer-owned Devtools packages', () => {
+  test('updates former Devtools-owned consumer dependencies without a special holdback', () => {
     for (const packageName of [
       'bun',
       '@types/bun',
@@ -220,8 +214,13 @@ describe('consumer toolchain safeguards', () => {
       '@typescript-eslint/parser',
     ]) {
       expect(
-        resolveRules(consumerPreset.packageRules, dependency(packageName, { updateType: 'patch' })),
-      ).toMatchObject({ enabled: false });
+        resolveRules(consumerPreset.packageRules, dependency(packageName, { updateType: 'major' })),
+      ).toMatchObject({
+        automerge: true,
+        enabled: true,
+        labels: ['dependencies', 'renovate:automerge'],
+        separateMajorMinor: false,
+      });
     }
   });
 
@@ -263,20 +262,26 @@ describe('Devtools-owner preset', () => {
     }
   });
 
-  test('requires review for major owner toolchain upgrades', () => {
+  test('automerges major owner toolchain upgrades on the latest line', () => {
     expect(
       resolveRules(effectiveRules, dependency('typescript', { updateType: 'major' })),
     ).toMatchObject({
-      automerge: false,
+      automerge: true,
       enabled: true,
       groupName: 'Devtools-owned toolchain',
-      labels: ['dependencies', 'renovate:review-required'],
+      labels: ['dependencies', 'renovate:automerge'],
+      separateMajorMinor: false,
     });
   });
 
-  test('does not broaden owner permissions beyond the root package manifest', () => {
+  test('keeps non-owner manifests on the generic all-update policy', () => {
     expect(
       resolveRules(effectiveRules, dependency('eslint', { fileName: 'examples/package.json' })),
-    ).toEqual({ enabled: false });
+    ).toMatchObject({
+      automerge: true,
+      enabled: true,
+      labels: ['dependencies', 'renovate:automerge'],
+      separateMajorMinor: false,
+    });
   });
 });
