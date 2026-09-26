@@ -75,7 +75,9 @@ test('automerges major runtime upgrades on the latest line', () => {
 });
 
 test('keeps third-party dependencies on the generic all-update policy', () => {
-  expect(resolveRules(effectiveRules, dependency('typescript', { updateType: 'major' }))).toMatchObject({
+  expect(
+    resolveRules(effectiveRules, dependency('typescript', { updateType: 'major' })),
+  ).toMatchObject({
     automerge: true,
     enabled: true,
     labels: ['dependencies', 'renovate:automerge'],
