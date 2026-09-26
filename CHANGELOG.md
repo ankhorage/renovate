@@ -1,5 +1,11 @@
 # @ankhorage/renovate
 
+## 0.3.0
+
+### Minor Changes
+
+- 81fe247: Add the Policy-owner preset for grouped canonical Bun runtime and Bun-types updates in ankhorage/policy.
+
 ## 0.2.18
 
 ### Patch Changes
