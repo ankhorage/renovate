@@ -36,6 +36,13 @@ describe('trusted Renovate write boundary', () => {
     expect(workflow).not.toContain("'.github/workflows/studio-acceptance.yml'");
     expect(workflow).toContain('Devtools sync changed an unexpected path:');
     expect(workflow).toContain('Devtools sync created an unexpected path:');
+    expect(workflow).toContain('  ANKHORAGE_RENOVATE_CONSUMER_MANAGED_SYMLINKS: |');
+    expect(workflow).toContain('    CLAUDE.md=AGENTS.md');
+    expect(workflow).toContain('    GEMINI.md=AGENTS.md');
+    expect(workflow).toContain("mode = '120000'");
+    expect(workflow).toContain('Managed symlink target does not match trusted target:');
+    expect(workflow).toContain('Managed artifact contains an invalid symlink target:');
+    expect(workflow).toContain("mode: managedFileModes.get(path) ?? '100644'");
     expect(workflow).not.toContain('DEVTOOLS_MANAGED_SKILL_NAMES');
     expect(workflow).toContain("segments[1] === 'skills'");
     for (const job of [prepareJob, commitJob]) {
@@ -55,10 +62,12 @@ describe('trusted Renovate path inventory', () => {
     expect(workflow.match(/^ {2}ANKHORAGE_RENOVATE_DEVTOOLS_OWNER_MANAGED_PATHS:/gm)).toHaveLength(
       1,
     );
+    expect(workflow.match(/^ {2}ANKHORAGE_RENOVATE_CONSUMER_MANAGED_SYMLINKS:/gm)).toHaveLength(1);
 
     for (const job of [prepareJob, commitJob]) {
       expect(job).toContain("'ANKHORAGE_RENOVATE_CONSUMER_MANAGED_PATHS'");
       expect(job).toContain("'ANKHORAGE_RENOVATE_DEVTOOLS_OWNER_MANAGED_PATHS'");
+      expect(job).toContain('ANKHORAGE_RENOVATE_CONSUMER_MANAGED_SYMLINKS');
       expect(job).not.toContain('const consumerAllowed = [');
       expect(job).not.toContain('const ownerAllowed = [');
     }
