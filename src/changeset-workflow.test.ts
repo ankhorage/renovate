@@ -240,7 +240,7 @@ describe('trusted managed skill ownership', () => {
     expect(isOwned('.agents/skills/zora-designer/unowned.md')).toBe(false);
     expect(isOwned('.agents/skills/arbitrary/SKILL.md')).toBe(false);
     expect(isOwned('.agents/skills/zora-designer/../secret.md')).toBe(false);
-    expect(workflow).toContain('Managed output must be a regular file:');
+    expect(workflow).toContain('Managed output has an unsupported file type:');
     expect(workflow).not.toContain("relativePath.startsWith('.agents/skills/')");
   });
 });
