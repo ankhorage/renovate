@@ -9,6 +9,7 @@ interface Dependency {
 }
 
 interface PackageRule {
+  readonly allowedVersions?: string;
   readonly automerge?: boolean;
   readonly automergeType?: string;
   readonly description: string;
@@ -130,6 +131,7 @@ export function resolveRules(
     .reduce<Partial<PackageRule>>(
       (resolved, rule) => ({
         ...resolved,
+        ...(rule.allowedVersions === undefined ? {} : { allowedVersions: rule.allowedVersions }),
         ...(rule.automerge === undefined ? {} : { automerge: rule.automerge }),
         ...(rule.automergeType === undefined ? {} : { automergeType: rule.automergeType }),
         ...(rule.enabled === undefined ? {} : { enabled: rule.enabled }),
