@@ -54,7 +54,7 @@ describe('trusted Renovate toolchain policy', () => {
     expect(workflow).toContain("resolveVersion('@ankhorage/devtools')");
     expect(workflow).toContain('"@ankhorage/ankh": process.env.ANKH_VERSION');
     expect(workflow).toContain('"@ankhorage/devtools": process.env.DEVTOOLS_VERSION');
-    expect(workflow).toContain('package.json must declare a compatible root');
+    expect(workflow).toContain('package.json must declare compatible root');
     expect(workflow).toContain('--ignore-scripts --lockfile-only');
     expect(workflow).toContain('--registry=https://registry.npmjs.org');
     expect(workflow).not.toContain('@latest');
