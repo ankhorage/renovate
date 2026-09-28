@@ -46,6 +46,12 @@
       "platformAutomerge": false
     },
     {
+      "description": "Keep TypeScript on the latest currently compatible major line.",
+      "matchDatasources": ["npm"],
+      "matchPackageNames": ["typescript"],
+      "allowedVersions": "<7"
+    },
+    {
       "description": "Group Ankhorage library updates and propagate every release downstream.",
       "matchDatasources": ["npm"],
       "matchPackageNames": ["@ankhorage/**"],
