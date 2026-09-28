@@ -177,13 +177,15 @@ export function resolveTrustedToolchainFixtureVersion(
     ...lock.matchAll(new RegExp('^    "' + escaped + '": \\["' + escaped + '@([^"]+)"', 'gm')),
   ];
   const [selectedMatch] = matches;
-  const declaration = declarations.length === 1 ? declarations.at(0) : undefined;
   const selectedVersion = matches.length === 1 ? selectedMatch?.at(1) : undefined;
   if (typeof selectedVersion !== 'string' || parseVersion(selectedVersion) === null) {
     throw new Error('The fixture does not select one exact root ' + name + ' version.');
   }
-  if (typeof declaration !== 'string' || !isCompatibleSelection(declaration, selectedVersion)) {
-    throw new Error('The fixture does not declare a compatible root ' + name + ' version range.');
+  if (
+    declarations.length === 0 ||
+    !declarations.every((declaration) => isCompatibleSelection(declaration, selectedVersion))
+  ) {
+    throw new Error('The fixture does not declare compatible root ' + name + ' version ranges.');
   }
   return selectedVersion;
 }
