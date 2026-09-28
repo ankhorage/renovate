@@ -30,6 +30,9 @@ env:
     package.json
     prettier.local.config.js
     renovate.json5
+  ANKHORAGE_RENOVATE_CONSUMER_MANAGED_SYMLINKS: |
+    CLAUDE.md=AGENTS.md
+    GEMINI.md=AGENTS.md
   ANKHORAGE_RENOVATE_DEVTOOLS_OWNER_MANAGED_PATHS: |
     .github/workflows/ci.yml
     .github/workflows/release.yml
@@ -451,12 +454,35 @@ jobs:
                 }
               }
             }
+            const readManagedSymlinkTargets = () => {
+              const value = process.env.ANKHORAGE_RENOVATE_CONSUMER_MANAGED_SYMLINKS;
+              if (typeof value !== 'string' || value.trim() === '') {
+                throw new Error('Trusted managed-symlink inventory is missing.');
+              }
+              return new Map(
+                value
+                  .split('\n')
+                  .map((entry) => entry.trim())
+                  .filter(Boolean)
+                  .map((entry) => {
+                    const separator = entry.indexOf('=');
+                    if (separator <= 0 || separator === entry.length - 1) {
+                      throw new Error('Trusted managed-symlink inventory is invalid.');
+                    }
+                    return [entry.slice(0, separator), entry.slice(separator + 1)];
+                  }),
+              );
+            };
+            const managedSymlinkTargets = readManagedSymlinkTargets();
             const isManagedSkillPath = (relativePath) =>
               isExactManagedSkillPath(relativePath) && declaredManagedSkillFiles.has(relativePath);
             const isManagedSkillDeletion = (relativePath) =>
               isExactManagedSkillPath(relativePath) && baseManagedSkillFiles.has(relativePath);
+            const isManagedSymlinkPath = (relativePath) =>
+              syncMode === 'consumer' && managedSymlinkTargets.has(relativePath);
             const isAllowed = (relativePath) =>
               allowed.has(relativePath) ||
+              isManagedSymlinkPath(relativePath) ||
               (syncMode === 'consumer' && isManagedSkillPath(relativePath));
             const isDeletionAllowed = (relativePath) =>
               syncMode === 'consumer' && isManagedSkillDeletion(relativePath);
@@ -491,20 +517,35 @@ jobs:
                   throw new Error('Devtools sync changed an unexpected path: ' + relativePath);
                 }
                 const absolutePath = path.join(root, relativePath);
-                if (!fs.lstatSync(absolutePath).isFile()) {
-                  throw new Error('Managed output must be a regular file: ' + relativePath);
+                const outputStat = fs.lstatSync(absolutePath);
+                let mode;
+                let content;
+                if (outputStat.isFile()) {
+                  mode = '100644';
+                  content = fs.readFileSync(absolutePath);
+                } else if (outputStat.isSymbolicLink() && isManagedSymlinkPath(relativePath)) {
+                  const target = fs.readlinkSync(absolutePath);
+                  const expectedTarget = managedSymlinkTargets.get(relativePath);
+                  if (target !== expectedTarget) {
+                    throw new Error('Managed symlink target does not match trusted target: ' + relativePath);
+                  }
+                  mode = '120000';
+                  content = Buffer.from(target);
+                } else {
+                  throw new Error('Managed output has an unsupported file type: ' + relativePath);
                 }
                 if (isManagedSkillPath(relativePath)) {
                   const expectedManagedHash = declaredManagedSkillFiles.get(relativePath);
                   const actualManagedHash =
-                    'sha256:' + crypto.createHash('sha256').update(fs.readFileSync(absolutePath)).digest('hex');
+                    'sha256:' + crypto.createHash('sha256').update(content).digest('hex');
                   if (expectedManagedHash !== actualManagedHash) {
                     throw new Error('Managed skill content does not match its ownership manifest: ' + relativePath);
                   }
                 }
                 files.push({
                   path: relativePath,
-                  content: fs.readFileSync(absolutePath).toString('base64'),
+                  mode,
+                  content: content.toString('base64'),
                 });
               }
               for (const relativePath of deleted.split('\0').filter(Boolean)) {
@@ -720,16 +761,40 @@ jobs:
                 }
               }
             }
+            const readManagedSymlinkTargets = () => {
+              const value = process.env.ANKHORAGE_RENOVATE_CONSUMER_MANAGED_SYMLINKS;
+              if (typeof value !== 'string' || value.trim() === '') {
+                throw new Error('Trusted managed-symlink inventory is missing.');
+              }
+              return new Map(
+                value
+                  .split('\n')
+                  .map((entry) => entry.trim())
+                  .filter(Boolean)
+                  .map((entry) => {
+                    const separator = entry.indexOf('=');
+                    if (separator <= 0 || separator === entry.length - 1) {
+                      throw new Error('Trusted managed-symlink inventory is invalid.');
+                    }
+                    return [entry.slice(0, separator), entry.slice(separator + 1)];
+                  }),
+              );
+            };
+            const managedSymlinkTargets = readManagedSymlinkTargets();
             const isManagedSkillPath = (relativePath) =>
               isExactManagedSkillPath(relativePath) && declaredManagedSkillFiles.has(relativePath);
             const isManagedSkillDeletion = (relativePath) =>
               isExactManagedSkillPath(relativePath) && baseManagedSkillFiles.has(relativePath);
+            const isManagedSymlinkPath = (relativePath) =>
+              artifact.syncMode === 'consumer' && managedSymlinkTargets.has(relativePath);
             const isAllowed = (relativePath) =>
               allowed.has(relativePath) ||
+              isManagedSymlinkPath(relativePath) ||
               (artifact.syncMode === 'consumer' && isManagedSkillPath(relativePath));
             const isDeletionAllowed = (relativePath) =>
               artifact.syncMode === 'consumer' && isManagedSkillDeletion(relativePath);
             const managedFiles = new Map();
+            const managedFileModes = new Map();
             for (const file of artifact.files) {
               if (
                 !file ||
@@ -740,7 +805,17 @@ jobs:
               ) {
                 throw new Error('Managed artifact contains an invalid file.');
               }
+              const expectedMode = isManagedSymlinkPath(file.path) ? '120000' : '100644';
+              if (file.mode !== expectedMode) {
+                throw new Error('Managed artifact contains an invalid file mode: ' + file.path);
+              }
               const content = Buffer.from(file.content, 'base64');
+              if (
+                isManagedSymlinkPath(file.path) &&
+                content.toString('utf8') !== managedSymlinkTargets.get(file.path)
+              ) {
+                throw new Error('Managed artifact contains an invalid symlink target: ' + file.path);
+              }
               if (content.byteLength > 2_000_000) {
                 throw new Error('Managed artifact file exceeds the size limit: ' + file.path);
               }
@@ -753,6 +828,7 @@ jobs:
                 }
               }
               managedFiles.set(file.path, content);
+              managedFileModes.set(file.path, file.mode);
             }
             const managedDeletions = new Set();
             for (const relativePath of artifact.deletions) {
@@ -871,6 +947,7 @@ jobs:
               const content = frontmatter + '\n\n' + subject + names + '.\n';
               if (currentChangesetContent !== content) {
                 managedFiles.set(changesetPath, Buffer.from(content));
+                managedFileModes.set(changesetPath, '100644');
               }
             } else if (
               currentChangesetContent !== null &&
@@ -897,7 +974,7 @@ jobs:
               });
               treeEntries.push({
                 path,
-                mode: '100644',
+                mode: managedFileModes.get(path) ?? '100644',
                 type: 'blob',
                 sha: blob.sha,
               });
