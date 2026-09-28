@@ -12,9 +12,20 @@ const workflow = readFileSync(
   new URL('../.github/workflows/changeset.yml', import.meta.url),
   'utf8',
 );
+const callerWorkflow = readFileSync(
+  new URL('../.github/workflows/renovate.yml', import.meta.url),
+  'utf8',
+);
 const [prepareJob = '', afterPrepare = ''] = workflow.split('\n  commit:');
 const [commitJob = ''] = afterPrepare.split('\n  merge:');
 describe('trusted Renovate integration', () => {
+  test('calls the canonical immutable Changeset workflow without the obsolete empty-Changeset path', () => {
+    expect(callerWorkflow).toContain(
+      'uses: ankhorage/renovate/.github/workflows/changeset.yml@490a24f9e690731cddc2f4c572207a5c142a23a0',
+    );
+    expect(workflow).not.toContain("'---\\n---'");
+  });
+
   test('accepts only same-repository Renovate branches', () => {
     expect(workflow).toContain("['renovate[bot]', 'ankhorage-renovate-sync[bot]']");
     expect(workflow).toContain('!permittedAuthors.has(pull.user?.login)');
