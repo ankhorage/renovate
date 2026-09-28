@@ -199,6 +199,20 @@ describe('consumer toolchain safeguards', () => {
   });
 });
 
+describe('consumer TypeScript compatibility', () => {
+  test('holds TypeScript below 7 until the lint toolchain supports it', () => {
+    expect(
+      resolveRules(consumerPreset.packageRules, dependency('typescript', { updateType: 'major' })),
+    ).toMatchObject({
+      allowedVersions: '<7',
+      automerge: true,
+      enabled: true,
+      labels: ['dependencies', 'renovate:automerge'],
+      separateMajorMinor: false,
+    });
+  });
+});
+
 describe('consumer unrestricted dependency policy', () => {
   test('updates former Devtools-owned consumer dependencies without a special holdback', () => {
     for (const packageName of [
@@ -223,18 +237,6 @@ describe('consumer unrestricted dependency policy', () => {
         separateMajorMinor: false,
       });
     }
-  });
-
-  test('holds TypeScript below 7 until the lint toolchain supports it', () => {
-    expect(
-      resolveRules(consumerPreset.packageRules, dependency('typescript', { updateType: 'major' })),
-    ).toMatchObject({
-      allowedVersions: '<7',
-      automerge: true,
-      enabled: true,
-      labels: ['dependencies', 'renovate:automerge'],
-      separateMajorMinor: false,
-    });
   });
 
   test('names only the canonical workflow inventory as Devtools-owned', () => {
