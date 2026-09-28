@@ -85,6 +85,36 @@ describe('trusted Renovate toolchain policy', () => {
 });
 
 describe('trusted Renovate toolchain selection', () => {
+  test('accepts compatible duplicate declarations across dependency sections', () => {
+    expect(
+      resolveTrustedToolchainFixtureVersion(
+        {
+          name: '@ankhorage/apm',
+          packageManager: 'bun@1.4.2',
+          devDependencies: { '@ankhorage/ankh': '^0.10.4' },
+          peerDependencies: { '@ankhorage/ankh': '^0.10.4' },
+        },
+        `
+  workspaces: {
+    "": {
+      devDependencies: {
+        "@ankhorage/ankh": "^0.10.4",
+      },
+      peerDependencies: {
+        "@ankhorage/ankh": "^0.10.4",
+      },
+    },
+  },
+  packages: {
+    "@ankhorage/ankh": ["@ankhorage/ankh@0.10.4", "", {}],
+  },
+`,
+        '@ankhorage/ankh',
+      ),
+    ).toBe('0.10.4');
+    expect(workflow).toContain('declarations.every((declaration) =>');
+  });
+
   test('uses Bun’s exact newer patch selection for a compatible declared range', () => {
     expect(
       resolveTrustedToolchainFixtureVersion(
