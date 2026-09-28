@@ -1,5 +1,11 @@
 # @ankhorage/renovate
 
+## 0.3.2
+
+### Patch Changes
+
+- 01ce3a3: Stop creating empty Changesets for no-release Renovate updates.
+
 ## 0.3.1
 
 ### Patch Changes
