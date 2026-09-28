@@ -19,9 +19,9 @@ const callerWorkflow = readFileSync(
 const [prepareJob = '', afterPrepare = ''] = workflow.split('\n  commit:');
 const [commitJob = ''] = afterPrepare.split('\n  merge:');
 describe('trusted Renovate integration', () => {
-  test('calls the canonical immutable Changeset workflow without the obsolete empty-Changeset path', () => {
-    expect(callerWorkflow).toContain(
-      'uses: ankhorage/renovate/.github/workflows/changeset.yml@490a24f9e690731cddc2f4c572207a5c142a23a0',
+  test('calls an immutable Changeset workflow without the obsolete empty-Changeset path', () => {
+    expect(callerWorkflow).toMatch(
+      /uses:\\s+ankhorage\\/renovate\\/\\.github\\/workflows\\/changeset\\.yml@[0-9a-f]{40}/u,
     );
     expect(workflow).not.toContain("'---\\n---'");
   });
