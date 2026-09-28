@@ -76,7 +76,9 @@ describe('package release rollout validation', () => {
 describe('release recovery contract', () => {
   test('recovers only unfinished releases from the exact version commit', () => {
     expect(releaseWorkflow).toContain('release_tag="v$current_version"');
-    expect(releaseWorkflow).toContain('git rev-parse -q --verify "refs/tags/${release_tag}^{commit}"');
+    expect(releaseWorkflow).toContain(
+      'git rev-parse -q --verify "refs/tags/${release_tag}^{commit}"',
+    );
     expect(releaseWorkflow).toContain('Release tag mismatch');
     expect(releaseWorkflow).toContain('is already finalized at');
     expect(releaseWorkflow).toContain('git checkout --detach "$release_sha"');
