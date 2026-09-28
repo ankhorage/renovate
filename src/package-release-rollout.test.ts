@@ -74,14 +74,13 @@ describe('package release rollout validation', () => {
 });
 
 describe('release recovery contract', () => {
-  test('recovers only unfinished releases from the exact version commit', () => {
-    expect(releaseWorkflow).toContain('release_tag="v$current_version"');
+  test('recovers the current release from its exact version commit', () => {
+    expect(releaseWorkflow).toContain('release_sha=""');
+    expect(releaseWorkflow).toContain('for candidate_sha in $(git rev-list HEAD)');
     expect(releaseWorkflow).toContain(
-      'git rev-parse -q --verify "refs/tags/${release_tag}^{commit}"',
+      'Recovering canonical release commit $release_sha for version $current_version without another version bump.',
     );
-    expect(releaseWorkflow).toContain('Release tag mismatch');
-    expect(releaseWorkflow).toContain('is already finalized at');
-    expect(releaseWorkflow).toContain('git checkout --detach "$release_sha"');
+    expect(releaseWorkflow).toContain('echo "release_sha=$release_sha" >> "$GITHUB_OUTPUT"');
   });
 });
 
