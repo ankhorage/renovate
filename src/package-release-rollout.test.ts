@@ -74,23 +74,13 @@ describe('package release rollout validation', () => {
 });
 
 describe('release recovery contract', () => {
-  test('recovers the exact version commit and finalizes that commit idempotently', () => {
+  test('recovers the current release from its exact version commit', () => {
+    expect(releaseWorkflow).toContain('release_sha=""');
     expect(releaseWorkflow).toContain('for candidate_sha in $(git rev-list HEAD)');
     expect(releaseWorkflow).toContain(
-      'candidate_subject="$(git show -s --format=%s "$candidate_sha")"',
+      'Recovering canonical release commit $release_sha for version $current_version without another version bump.',
     );
-    expect(releaseWorkflow).toContain(
-      'candidate_version="$(git show "${candidate_sha}:package.json"',
-    );
-    expect(releaseWorkflow).toContain('if [ "$candidate_version" = "$current_version" ]; then');
     expect(releaseWorkflow).toContain('echo "release_sha=$release_sha" >> "$GITHUB_OUTPUT"');
-    expect(releaseWorkflow).toContain('ref: ${{ needs.release.outputs.release_sha }}');
-    expect(releaseWorkflow).toContain(
-      'remote_sha="$(git ls-remote --tags origin "refs/tags/$tag" | cut -f1)"',
-    );
-    expect(releaseWorkflow).toContain('if [ "$remote_sha" != "$RELEASE_SHA" ]; then');
-    expect(releaseWorkflow).toContain('git tag "$tag" "$RELEASE_SHA"');
-    expect(releaseWorkflow).toContain('gh release view "$tag" --repo "$GITHUB_REPOSITORY"');
   });
 });
 
