@@ -104,6 +104,11 @@ describe('package release rollout execution', () => {
     expect(rules).toEqual([
       {
         matchDatasources: ['npm'],
+        matchPackageNames: ['*'],
+        enabled: false,
+      },
+      {
+        matchDatasources: ['npm'],
         matchPackageNames: ['@ankhorage/apm'],
         enabled: true,
         rangeStrategy: 'bump',
@@ -112,6 +117,8 @@ describe('package release rollout execution', () => {
       },
     ]);
     expect(workflow).toContain("RENOVATE_PR_HOURLY_LIMIT: '0'");
+    expect(workflow).toContain('id: rollout-app-token');
+    expect(workflow).toContain('RENOVATE_TOKEN: ${{ steps.rollout-app-token.outputs.token }}');
     expect(workflow).toContain('bun x renovate');
     expect(workflow).not.toContain('git push');
     expect(workflow).not.toContain('pulls.create');
@@ -151,8 +158,10 @@ function readReleasePackageRules(
     .replace('${{ needs.validate.outputs.version }}', version);
   if (!rendered) throw new Error('Package rollout package rules are empty.');
   const parsed: unknown = JSON.parse(rendered);
-  if (!Array.isArray(parsed) || parsed.length !== 1) {
-    throw new Error('Package rollout must render exactly one release-specific package rule.');
+  if (!Array.isArray(parsed) || parsed.length !== 2) {
+    throw new Error(
+      'Package rollout must disable unrelated npm updates before enabling the exact released package.',
+    );
   }
   return parsed as readonly ReleasePackageRule[];
 }

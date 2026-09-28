@@ -393,17 +393,29 @@ jobs:
               'Timed out waiting for a compatible immutable Renovate workflow: ' + repository,
             );
 
+      - name: Refresh the organization Renovate Sync App token
+        id: rollout-app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.ANKHORAGE_RENOVATE_SYNC_CLIENT_ID }}
+          private-key: ${{ secrets.ANKHORAGE_RENOVATE_SYNC_PRIVATE_KEY }}
+          owner: ankhorage
+          permission-contents: write
+          permission-issues: write
+          permission-pull-requests: write
+          permission-workflows: write
+
       - name: Run Renovate immediately for the released package
         env:
           RENOVATE_AUTODISCOVER: 'false'
           RENOVATE_ONBOARDING: 'false'
           RENOVATE_PACKAGE_RULES: >-
-            [{"matchDatasources":["npm"],"matchPackageNames":["${{ needs.validate.outputs.package_name }}"],"enabled":true,"rangeStrategy":"bump","allowedVersions":"${{ needs.validate.outputs.version }}","recreateWhen":"always"}]
+            [{"matchDatasources":["npm"],"matchPackageNames":["*"],"enabled":false},{"matchDatasources":["npm"],"matchPackageNames":["${{ needs.validate.outputs.package_name }}"],"enabled":true,"rangeStrategy":"bump","allowedVersions":"${{ needs.validate.outputs.version }}","recreateWhen":"always"}]
           RENOVATE_PLATFORM: github
           RENOVATE_PR_HOURLY_LIMIT: '0'
           RENOVATE_REPOSITORIES: ${{ matrix.repository }}
           RENOVATE_REQUIRE_CONFIG: required
-          RENOVATE_TOKEN: ${{ steps.app-token.outputs.token }}
+          RENOVATE_TOKEN: ${{ steps.rollout-app-token.outputs.token }}
           ROLLOUT_PACKAGE_NAME: ${{ needs.validate.outputs.package_name }}
           ROLLOUT_VERSION: ${{ needs.validate.outputs.version }}
         run: |
