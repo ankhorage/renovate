@@ -25,7 +25,7 @@
 
     "@ankhorage/paradox": ["@ankhorage/paradox@0.2.6", "", { "dependencies": { "@ankhorage/policy": "^0.5.1", "@ankhorage/utility": "^1.8.1", "ts-morph": "^28.0.0" }, "bin": { "paradox": "dist/cli/standalone.js" } }, "sha512-9x8BHN0qodoSlR/YRQNS5zzvZ5IAii7b7V7EBp0cZL6SrbRQp2PsQWOGnvM/qvv5AqPJH1JtbG9yHLLddXPdtQ=="],
 
-    "@ankhorage/policy": ["@ankhorage/policy@0.5.2", "", {}, "sha512-IUxsBWVX5d8Pca5tAG05y9sPhD8FIZcC3+33Aw5VTK5YD2nl8K5wCEJx4VVXy4D/z+ewwztiLzOnko7SKt6IHA=="],
+    "@ankhorage/policy": ["@ankhorage/policy@0.5.3", "", {}, "sha512-qex6il8m1jnY9gHfvxVyocrTiNzhf7eP3kOhsYUZX5cVdaohHclDvhDr+m2tvtY0WdQXP3v8G4VlyahTSkc6EA=="],
 
     "@ankhorage/project-detector": ["@ankhorage/project-detector@0.3.1", "", { "dependencies": { "@ankhorage/utility": "^0.8.0", "minimatch": "^10.2.6", "yaml": "^2.9.1" }, "peerDependencies": { "@ankhorage/ankh": "^0.8.13" }, "optionalPeers": ["@ankhorage/ankh"], "bin": { "project-detector": "dist/cli/runAsync.js" } }, "sha512-jU6Kb0l2TQru0cAi/Q2hFuksurkWMH4ZOhaxEhgJsK6NnlyvkJuctyjRpxtIpqU47mxiIFt4+iJ35EsvldNUVQ=="],
 
@@ -1708,8 +1708,6 @@
     "@ankhorage/apm/yaml": ["yaml@2.9.1", "", { "bin": { "yaml": "bin.mjs" } }, "sha512-3NxN8+78OdzbT7C/WjGsyfPAtJaN3FNDsWxv7Y7mcDsT/oOmgW8BpyQQFFBnvZE3j9Y2Sdz1ULFLezL7Eb2yFw=="],
 
     "@ankhorage/contracts/@ankhorage/utility": ["@ankhorage/utility@1.8.1", "", {}, "sha512-jnhaSPD+GDhSJTH3IRzTAaC/6HNDMarffIaY/nuD1PaIQh4I70zsNlvzotuOJzX8v8laa+Wzxl+LXt20L7DRKA=="],
-
-    "@ankhorage/paradox/@ankhorage/policy": ["@ankhorage/policy@0.5.1", "", {}, "sha512-+J/SfR+hBLkkZqmPR+dcSODCWmuEf+MXsTJCTXRUqkxFonZroGgOOstHZyyatz58chWO2wlTuYl01TJsXpLLpA=="],
 
     "@ankhorage/paradox/@ankhorage/utility": ["@ankhorage/utility@1.8.1", "", {}, "sha512-jnhaSPD+GDhSJTH3IRzTAaC/6HNDMarffIaY/nuD1PaIQh4I70zsNlvzotuOJzX8v8laa+Wzxl+LXt20L7DRKA=="],
 
