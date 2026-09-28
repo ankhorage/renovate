@@ -74,14 +74,23 @@ describe('package release rollout validation', () => {
 });
 
 describe('release recovery contract', () => {
-  test('recovers only unfinished releases from the exact version commit', () => {
-    expect(releaseWorkflow).toContain('release_tag="v$current_version"');
+  test('recovers the exact version commit and finalizes that commit idempotently', () => {
+    expect(releaseWorkflow).toContain('for candidate_sha in $(git rev-list HEAD)');
     expect(releaseWorkflow).toContain(
-      'git rev-parse -q --verify "refs/tags/${release_tag}^{commit}"',
+      'candidate_subject="$(git show -s --format=%s "$candidate_sha")"',
     );
-    expect(releaseWorkflow).toContain('Release tag mismatch');
-    expect(releaseWorkflow).toContain('is already finalized at');
-    expect(releaseWorkflow).toContain('git checkout --detach "$release_sha"');
+    expect(releaseWorkflow).toContain(
+      'candidate_version="$(git show "${candidate_sha}:package.json"',
+    );
+    expect(releaseWorkflow).toContain('if [ "$candidate_version" = "$current_version" ]; then');
+    expect(releaseWorkflow).toContain('echo "release_sha=$release_sha" >> "$GITHUB_OUTPUT"');
+    expect(releaseWorkflow).toContain('ref: ${{ needs.release.outputs.release_sha }}');
+    expect(releaseWorkflow).toContain(
+      'remote_sha="$(git ls-remote --tags origin "refs/tags/$tag" | cut -f1)"',
+    );
+    expect(releaseWorkflow).toContain('if [ "$remote_sha" != "$RELEASE_SHA" ]; then');
+    expect(releaseWorkflow).toContain('git tag "$tag" "$RELEASE_SHA"');
+    expect(releaseWorkflow).toContain('gh release view "$tag" --repo "$GITHUB_REPOSITORY"');
   });
 });
 
