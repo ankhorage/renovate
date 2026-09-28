@@ -23,6 +23,20 @@ describe('release consumer ruleset sync', () => {
     expect(script).toContain('--method PUT');
   });
 
+  test('asks GitHub which rulesets actually apply to the default branch', () => {
+    expect(script).toContain('rules/branches/$encoded_branch?per_page=100');
+    expect(script).toContain("[.[].ruleset_id] | unique[]");
+    expect(script).not.toContain('ruleset_targets_default_branch');
+    expect(script).toContain('includes_parents=true');
+  });
+
+  test('processes every applicable ruleset and refuses unsafe parent mutation', () => {
+    expect(script).toContain('done <<<"$applicable_ruleset_ids"');
+    expect(script).toContain('if [[ "$source_type" != "Repository" ]]');
+    expect(script).toContain('this repository-scoped sync will not mutate organization-wide policy');
+    expect(script).toContain('had_blocker=true');
+  });
+
   test('creates canonical protections and preserves existing rules while adding the app bypass', () => {
     expect(script).toContain('type: "deletion"');
     expect(script).toContain('type: "non_fast_forward"');
