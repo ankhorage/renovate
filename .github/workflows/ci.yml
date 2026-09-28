@@ -134,11 +134,11 @@ jobs:
           fi
 
       - name: Enforce PKGViz cyclic-dependencies rule
-        run: cd src && bunx pkgviz@0.8.1 --out ../pkgviz-audit.json --rule cyclic-dependencies=block
+        run: cd src && bunx pkgviz@0.8.1 --out pkgviz-audit.json --rule cyclic-dependencies=block
 
       - name: Upload PKGViz audit
-        if: always() && hashFiles('pkgviz-audit.json') != ''
+        if: always() && hashFiles('src/pkgviz-audit.json') != ''
         uses: actions/upload-artifact@v4
         with:
           name: pkgviz-audit
-          path: pkgviz-audit.json
+          path: src/pkgviz-audit.json
