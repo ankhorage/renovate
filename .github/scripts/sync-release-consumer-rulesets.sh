@@ -66,7 +66,10 @@ create_ruleset_payload() {
             dismiss_stale_reviews_on_push: true,
             required_reviewers: [],
             require_code_owner_review: true,
-            dismiss_restriction: false,
+            dismissal_restriction: {
+              enabled: false,
+              allowed_actors: []
+            },
             require_last_push_approval: true,
             required_review_thread_resolution: true,
             require_extra_approval_for_unattributed_changes: true,
