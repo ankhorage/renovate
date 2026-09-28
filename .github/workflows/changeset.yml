@@ -226,10 +226,14 @@ jobs:
               if (typeof selectedVersion !== 'string' || !parseVersion(selectedVersion)) {
                 throw new Error('bun.lock must select one exact root ' + name + ' version.');
               }
-              const declaration = declarations.length === 1 ? declarations[0] : undefined;
-              if (typeof declaration !== 'string' || !isCompatibleSelection(declaration, selectedVersion)) {
+              if (
+                declarations.length === 0 ||
+                !declarations.every((declaration) =>
+                  isCompatibleSelection(declaration, selectedVersion),
+                )
+              ) {
                 throw new Error(
-                  'package.json must declare a compatible root ' + name + ' version range.',
+                  'package.json must declare compatible root ' + name + ' version ranges.',
                 );
               }
               return selectedVersion;
