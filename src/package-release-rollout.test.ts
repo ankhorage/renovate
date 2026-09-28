@@ -9,6 +9,10 @@ const workflow = readFileSync(
   new URL('../.github/workflows/rollout-package-release.yml', import.meta.url),
   'utf8',
 );
+const releaseWorkflow = readFileSync(
+  new URL('../.github/workflows/release.yml', import.meta.url),
+  'utf8',
+);
 
 describe('package release rollout registry', () => {
   test('lists every reviewed managed package consumer exactly once', () => {
@@ -66,6 +70,16 @@ describe('package release rollout validation', () => {
     );
     expect(workflow).toContain('RENOVATE_REPOSITORIES: ${{ matrix.repository }}');
     expect(workflow).toContain('RENOVATE_REQUIRE_CONFIG: required');
+  });
+});
+
+describe('release recovery contract', () => {
+  test('recovers only unfinished releases from the exact version commit', () => {
+    expect(releaseWorkflow).toContain('release_tag="v$current_version"');
+    expect(releaseWorkflow).toContain('git rev-parse -q --verify "refs/tags/${release_tag}^{commit}"');
+    expect(releaseWorkflow).toContain('Release tag mismatch');
+    expect(releaseWorkflow).toContain('is already finalized at');
+    expect(releaseWorkflow).toContain('git checkout --detach "$release_sha"');
   });
 });
 
