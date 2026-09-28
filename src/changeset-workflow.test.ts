@@ -21,7 +21,7 @@ const [commitJob = ''] = afterPrepare.split('\n  merge:');
 describe('trusted Renovate integration', () => {
   test('calls an immutable Changeset workflow without the obsolete empty-Changeset path', () => {
     expect(callerWorkflow).toMatch(
-      /uses:\\s+ankhorage\\/renovate\\/\\.github\\/workflows\\/changeset\\.yml@[0-9a-f]{40}/u,
+      /uses:\s+ankhorage\/renovate\/\.github\/workflows\/changeset\.yml@[0-9a-f]{40}/u,
     );
     expect(workflow).not.toContain("'---\\n---'");
   });
