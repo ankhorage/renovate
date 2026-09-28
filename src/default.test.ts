@@ -211,7 +211,6 @@ describe('consumer unrestricted dependency policy', () => {
       'knip',
       'prettier',
       'prettier-plugin-example',
-      'typescript',
       'typescript-eslint',
       '@typescript-eslint/parser',
     ]) {
@@ -224,6 +223,18 @@ describe('consumer unrestricted dependency policy', () => {
         separateMajorMinor: false,
       });
     }
+  });
+
+  test('holds TypeScript below 7 until the lint toolchain supports it', () => {
+    expect(
+      resolveRules(consumerPreset.packageRules, dependency('typescript', { updateType: 'major' })),
+    ).toMatchObject({
+      allowedVersions: '<7',
+      automerge: true,
+      enabled: true,
+      labels: ['dependencies', 'renovate:automerge'],
+      separateMajorMinor: false,
+    });
   });
 
   test('names only the canonical workflow inventory as Devtools-owned', () => {
@@ -270,6 +281,7 @@ describe('Devtools-owner preset', () => {
     ).toMatchObject({
       automerge: true,
       enabled: true,
+      allowedVersions: '<7',
       groupName: 'Devtools-owned toolchain',
       labels: ['dependencies', 'renovate:automerge'],
       separateMajorMinor: false,
