@@ -59,12 +59,13 @@
     "lint:fix": "ankhorage-eslint . --fix --max-warnings=0",
     "format": "ankhorage-prettier --write .",
     "format:check": "ankhorage-prettier --check .",
-    "knip:check": "ankhorage-knip"
+    "knip:check": "ankhorage-knip",
+    "test:standalone": "bun test src/index.test.ts"
   },
   "devDependencies": {
-    "@ankhorage/devtools": "^2.0.0",
+    "@ankhorage/devtools": "^2.0.1",
     "@ankhorage/paradox": "^0.2.6",
-    "@types/bun": "^1.4.1",
+    "@types/bun": "^1.4.2",
     "@types/node": "^24.13.3",
     "renovate": "^44.43.1",
     "typescript": "~6.0.3"
