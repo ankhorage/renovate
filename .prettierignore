@@ -1,1 +1,5 @@
 paradox/**
+node_modules
+dist
+README.md
+paradox/
