@@ -278,11 +278,13 @@ describe('trusted Devtools owner write boundary', () => {
     expect(workflow).not.toContain("'---\\n---'");
   });
 
-  test('removes only a stale workflow-owned Changeset when a Renovate update becomes no-release', () => {
+  test('removes only a stale real workflow-owned Changeset when a Renovate update becomes no-release', () => {
     expect(workflow).toContain(
       "const changesetPath = '.changeset/renovate-' + pullNumber + '.md';",
     );
     expect(workflow).toContain('currentChangesetContent !== null');
+    expect(workflow).toContain("/^---\\n'[^']+': patch\\n---\\n\\nUpdate");
+    expect(workflow).not.toContain("(?:'[^']+': patch\\n)?");
     expect(workflow).toContain('Update (?:Devtools-owned|Ankhorage) dependencies');
     expect(workflow).toContain('managedDeletions.add(changesetPath);');
   });

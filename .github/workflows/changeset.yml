@@ -874,7 +874,7 @@ jobs:
               }
             } else if (
               currentChangesetContent !== null &&
-              /^---\n(?:'[^']+': patch\n)?---\n\nUpdate (?:Devtools-owned|Ankhorage) dependencies: `[^`]+`(?:, `[^`]+`)*\.\n$/u.test(
+              /^---\n'[^']+': patch\n---\n\nUpdate (?:Devtools-owned|Ankhorage) dependencies: `[^`]+`(?:, `[^`]+`)*\.\n$/u.test(
                 currentChangesetContent,
               )
             ) {
