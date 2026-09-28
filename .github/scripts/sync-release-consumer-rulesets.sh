@@ -11,9 +11,11 @@ fi
 
 APP_ID=4785564
 USER_ID=137318798
+API_VERSION=2026-03-10
 
 repo_root="$(git rev-parse --show-toplevel)"
 registry="$repo_root/release-consumers.json"
+had_blocker=false
 
 if ! command -v gh >/dev/null 2>&1; then
   echo "gh is required." >&2
@@ -121,17 +123,15 @@ update_ruleset_payload() {
   ' <<<"$ruleset"
 }
 
-ruleset_targets_default_branch() {
+has_renovate_sync_bypass() {
   local ruleset="$1"
-  local default_branch="$2"
 
-  jq -e --arg branch "$default_branch" '
-    (.conditions.ref_name.include // []) as $include
-    |
-    (
-      ($include | index("~DEFAULT_BRANCH")) != null
-      or
-      ($include | index("refs/heads/" + $branch)) != null
+  jq -e --argjson app "$APP_ID" '
+    any(
+      (.bypass_actors // [])[];
+      .actor_type == "Integration"
+      and .actor_id == $app
+      and .bypass_mode == "always"
     )
   ' <<<"$ruleset" >/dev/null
 }
@@ -142,29 +142,34 @@ while IFS= read -r full_repo; do
   echo
   echo "=== $full_repo ==="
 
-  default_branch="$(gh api "repos/$full_repo" --jq '.default_branch')"
-  ruleset_id=""
+  default_branch="$(
+    gh api \
+      -H "X-GitHub-Api-Version: $API_VERSION" \
+      "repos/$full_repo" \
+      --jq '.default_branch'
+  )"
+  encoded_branch="$(jq -rn --arg value "$default_branch" '$value | @uri')"
 
-  while IFS= read -r candidate_id; do
-    [[ -z "$candidate_id" ]] && continue
-    candidate="$(gh api "repos/$full_repo/rulesets/$candidate_id")"
-    if ruleset_targets_default_branch "$candidate" "$default_branch"; then
-      ruleset_id="$candidate_id"
-      ruleset="$candidate"
-      break
-    fi
-  done < <(
-    gh api "repos/$full_repo/rulesets" --paginate \
-      --jq '.[] | select(.target == "branch" and .enforcement == "active") | .id'
-  )
+  # Ask GitHub which active rules actually apply to the default branch. This
+  # handles ~ALL, ~DEFAULT_BRANCH, fnmatch includes/excludes, and parent
+  # rulesets using GitHub's own matching semantics.
+  branch_rules="$(
+    gh api \
+      -H "X-GitHub-Api-Version: $API_VERSION" \
+      "repos/$full_repo/rules/branches/$encoded_branch?per_page=100"
+  )"
+  applicable_ruleset_ids="$(
+    jq -r '[.[].ruleset_id] | unique[]' <<<"$branch_rules"
+  )"
 
-  if [[ -z "$ruleset_id" ]]; then
-    echo "CREATE main ruleset"
+  if [[ -z "$applicable_ruleset_ids" ]]; then
+    echo "CREATE canonical main ruleset"
 
     if [[ "$MODE" == "apply" ]]; then
       gh api \
         --method POST \
         -H "Accept: application/vnd.github+json" \
+        -H "X-GitHub-Api-Version: $API_VERSION" \
         "repos/$full_repo/rulesets" \
         --input - <<<"$(create_ruleset_payload)" \
         >/dev/null
@@ -174,36 +179,49 @@ while IFS= read -r full_repo; do
     continue
   fi
 
-  has_app="$(
-    jq -r --argjson app "$APP_ID" '
-      any(
-        (.bypass_actors // [])[];
-        .actor_type == "Integration"
-        and .actor_id == $app
-        and .bypass_mode == "always"
-      )
-    ' <<<"$ruleset"
-  )"
+  while IFS= read -r ruleset_id; do
+    [[ -z "$ruleset_id" ]] && continue
 
-  if [[ "$has_app" == "true" ]]; then
-    echo "OK ruleset $ruleset_id already has Renovate Sync bypass"
-    continue
-  fi
+    ruleset="$(
+      gh api \
+        -H "X-GitHub-Api-Version: $API_VERSION" \
+        "repos/$full_repo/rulesets/$ruleset_id?includes_parents=true"
+    )"
+    source_type="$(jq -r '.source_type' <<<"$ruleset")"
+    source="$(jq -r '.source' <<<"$ruleset")"
 
-  echo "UPDATE ruleset $ruleset_id with Renovate Sync bypass"
+    if has_renovate_sync_bypass "$ruleset"; then
+      echo "OK ruleset $ruleset_id ($source_type: $source) already has Renovate Sync bypass"
+      continue
+    fi
 
-  if [[ "$MODE" == "apply" ]]; then
-    gh api \
-      --method PUT \
-      -H "Accept: application/vnd.github+json" \
-      "repos/$full_repo/rulesets/$ruleset_id" \
-      --input - <<<"$(update_ruleset_payload "$ruleset")" \
-      >/dev/null
-    echo "✓ updated"
-  fi
+    if [[ "$source_type" != "Repository" ]]; then
+      echo "BLOCKED ruleset $ruleset_id ($source_type: $source) applies to $default_branch but lacks the Renovate Sync bypass." >&2
+      echo "Update that parent ruleset explicitly; this repository-scoped sync will not mutate organization-wide policy." >&2
+      had_blocker=true
+      continue
+    fi
+
+    echo "UPDATE ruleset $ruleset_id with Renovate Sync bypass"
+
+    if [[ "$MODE" == "apply" ]]; then
+      gh api \
+        --method PUT \
+        -H "Accept: application/vnd.github+json" \
+        -H "X-GitHub-Api-Version: $API_VERSION" \
+        "repos/$full_repo/rulesets/$ruleset_id" \
+        --input - <<<"$(update_ruleset_payload "$ruleset")" \
+        >/dev/null
+      echo "✓ updated"
+    fi
+  done <<<"$applicable_ruleset_ids"
 done < <(jq -r '.repositories[]' "$registry")
 
 if [[ "$MODE" == "dry-run" ]]; then
   echo
   echo "Dry-run only. Re-run with --apply to write changes."
+fi
+
+if [[ "$had_blocker" == "true" ]]; then
+  exit 1
 fi
