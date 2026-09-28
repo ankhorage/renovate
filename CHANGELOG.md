@@ -1,5 +1,11 @@
 # @ankhorage/renovate
 
+## 0.3.3
+
+### Patch Changes
+
+- b17faf8: Allow trusted consumer synchronization to write the exact Devtools-managed root agent instruction symlinks without broadening the managed write boundary.
+
 ## 0.3.2
 
 ### Patch Changes
