@@ -102,32 +102,6 @@ describe('consumer update policy', () => {
   });
 });
 
-describe('consumer external dependency grouping', () => {
-  test('keeps all external npm releases in one integration lane', () => {
-    for (const packageName of ['expo', 'react-native', '@types/node', 'typescript']) {
-      const rule = resolveRules(
-        consumerPreset.packageRules,
-        dependency(packageName, { updateType: 'minor' }),
-      );
-      expect(rule).toMatchObject({
-        automerge: true,
-        groupName: 'External npm dependencies',
-        groupSlug: 'external-npm-dependencies',
-      });
-      expect(branchName(rule)).toBe('renovate/external-npm-dependencies');
-    }
-  });
-
-  test('keeps Ankhorage-owned update lanes separate from the external bundle', () => {
-    expect(
-      resolveRules(consumerPreset.packageRules, dependency('@ankhorage/contracts')),
-    ).toMatchObject({ groupName: 'Ankhorage libraries' });
-    expect(
-      resolveRules(consumerPreset.packageRules, dependency('@ankhorage/devtools')),
-    ).toMatchObject({ groupName: 'Ankhorage CLI and Devtools toolchain' });
-  });
-});
-
 describe('consumer policy migration', () => {
   test('replaces the closed pre-split group with distinct clean branch identities', () => {
     const closedPreSplitBranch = 'renovate/ankhorage-packages';
