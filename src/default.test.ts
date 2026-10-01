@@ -17,6 +17,11 @@ describe('consumer preset', () => {
       enabled: false,
       matchPackageNames: ['*'],
     });
+    expect(consumerPreset).toMatchObject({
+      branchConcurrentLimit: 4,
+      prConcurrentLimit: 4,
+      rebaseWhen: 'behind-base-branch',
+    });
   });
 
   test('owns the managers required for package and workflow propagation', () => {
@@ -85,6 +90,8 @@ describe('consumer update policy', () => {
           automerge: true,
           automergeType: 'pr',
           enabled: true,
+          groupName: 'External npm dependencies',
+          groupSlug: 'external-npm-dependencies',
           labels: ['dependencies', 'renovate:automerge'],
           platformAutomerge: false,
           rangeStrategy: 'bump',
@@ -92,6 +99,32 @@ describe('consumer update policy', () => {
         });
       }
     }
+  });
+});
+
+describe('consumer external dependency grouping', () => {
+  test('keeps all external npm releases in one integration lane', () => {
+    for (const packageName of ['expo', 'react-native', '@types/node', 'typescript']) {
+      const rule = resolveRules(
+        consumerPreset.packageRules,
+        dependency(packageName, { updateType: 'minor' }),
+      );
+      expect(rule).toMatchObject({
+        automerge: true,
+        groupName: 'External npm dependencies',
+        groupSlug: 'external-npm-dependencies',
+      });
+      expect(branchName(rule)).toBe('renovate/external-npm-dependencies');
+    }
+  });
+
+  test('keeps Ankhorage-owned update lanes separate from the external bundle', () => {
+    expect(
+      resolveRules(consumerPreset.packageRules, dependency('@ankhorage/contracts')),
+    ).toMatchObject({ groupName: 'Ankhorage libraries' });
+    expect(
+      resolveRules(consumerPreset.packageRules, dependency('@ankhorage/devtools')),
+    ).toMatchObject({ groupName: 'Ankhorage CLI and Devtools toolchain' });
   });
 });
 
