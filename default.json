@@ -51,7 +51,7 @@
     {
       "description": ["Bundle external npm updates into one integration lane per repository."],
       "matchDatasources": ["npm"],
-      "matchPackageNames": ["!@ankhorage/**"],
+      "matchPackageNames": ["*"],
       "enabled": true,
       "labels": ["dependencies", "renovate:automerge"],
       "groupName": "External npm dependencies",
