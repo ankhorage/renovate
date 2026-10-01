@@ -276,7 +276,7 @@ describe('trusted Renovate commit boundary', () => {
 });
 
 describe('trusted Devtools owner write boundary', () => {
-  test('creates real release metadata only for release-impacting dependency updates', () => {
+  test('creates patch release metadata for every publishable Renovate update', () => {
     expect(workflow).toContain(
       "const isDevtoolsOwner = owner + '/' + repo === 'ankhorage/devtools';",
     );
@@ -284,19 +284,27 @@ describe('trusted Devtools owner write boundary', () => {
     expect(workflow).toContain('base.packageManager !== effectiveHead.packageManager');
     expect(workflow).toContain("changed.push({ name: 'bun', section: 'packageManager' })");
     expect(workflow).toContain("managedFiles.has('package.json')");
-    expect(workflow).toContain('changed.length > 0 &&');
+    expect(workflow).toContain(
+      '.filter((name) => base[section]?.[name] !== effectiveHead[section]?.[name])',
+    );
+    expect(workflow).toContain(
+      "const allSections = ['dependencies', 'optionalDependencies', 'peerDependencies', 'devDependencies'];",
+    );
+    expect(workflow).toContain('!effectiveHead.private &&');
+    expect(workflow).not.toContain('changed.length > 0 &&');
+    expect(workflow).toContain("'Update Renovate-managed workflows.'");
     expect(workflow).toContain("const frontmatter = '---\\n' + \"'\" + effectiveHead.name");
     expect(workflow).not.toContain("'---\\n---'");
   });
 
-  test('removes only a stale real workflow-owned Changeset when a Renovate update becomes no-release', () => {
+  test('removes only a stale workflow-owned Changeset when the package is private', () => {
     expect(workflow).toContain(
       "const changesetPath = '.changeset/renovate-' + pullNumber + '.md';",
     );
     expect(workflow).toContain('currentChangesetContent !== null');
     expect(workflow).toContain("/^---\\n'[^']+': patch\\n---\\n\\nUpdate");
     expect(workflow).not.toContain("(?:'[^']+': patch\\n)?");
-    expect(workflow).toContain('Update (?:Devtools-owned|Ankhorage) dependencies');
+    expect(workflow).toContain('Renovate-managed workflows');
     expect(workflow).toContain('managedDeletions.add(changesetPath);');
   });
 
