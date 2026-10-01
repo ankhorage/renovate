@@ -14,7 +14,7 @@
     {
       "id": "npm",
       "label": "npm",
-      "value": "v0.2.11",
+      "value": "v0.3.4",
       "color": "cb3837"
     },
     {
@@ -55,31 +55,23 @@
     },
     {
       "id": "docs",
-      "label": "docs",
-      "value": "paradox",
-      "color": "0f766e"
+      "label": "paradox",
+      "value": "canonical",
+      "color": "0a7f3f"
     }
   ],
-  "usage": null,
-  "readmeUsageDescription": "Extend the repository-hosted preset from each Ankhorage repository that Renovate manages.",
-  "readmeUsage": [
-    {
-      "title": "Devtools owner repository configuration",
-      "description": "Devtools owner repository configuration\n\nLoads the owner-specific policy that enables and groups the root Bun, ESLint, Knip, Prettier,\nTypeScript, and validation/publishing dependencies maintained by @ankhorage/devtools. Major\nupgrades remain reviewable. The trusted reusable workflow detects owner updates, runs the fixed\nowner synchronization entrypoint from the Devtools base commit in a read-only preparation job,\nrequires byte stability and current status, then commits only the validated owner-managed output.\nPull-request code never executes in the write-capable job. Do not use this profile in normal\nconsumer repositories.",
-      "language": "",
-      "code": "{\n  $schema: 'https://docs.renovatebot.com/renovate-schema.json',\n  extends: ['github>ankhorage/renovate:devtools-owner'],\n}",
-      "sourcePath": "examples/devtools-renovate.json5"
-    },
-    {
-      "title": "Repository configuration",
-      "description": "Repository configuration\n\nLoads the normal consumer policy from its default branch. Every npm patch release is proposed,\nfully validated by repository CI, and automerged when green. Minor and major external upgrades\nstay disabled. The canonical development toolchain follows the same automatic patch policy\nthrough its Devtools owner release and synchronization chain instead of drifting independently\nin consumers. Compatible @ankhorage/ankh and @ankhorage/devtools releases are grouped for the\ntrusted synchronization workflow. The workflow runs the exact lock-selected provider, requires\nbyte stability and current status, and commits the complete managed result without a manual\nrepository sync. After the one-time release-rollout bootstrap, a published Devtools version\nimmediately starts the same Renovate update flow for every repository in the reviewed consumer\nregistry. The preset explicitly owns bun and custom.regex extraction so self-hosted manager\nfiltering cannot silently drop package propagation. Never edit renovate/* branches manually;\nrequest Renovate rebase/retry to discard edits and return the branch to Renovate ownership.\nRenovate remains the only dependency-branch writer. The shared preset also performs a\none-time migration of the legacy immutable workflow pin; all other canonical workflow changes\nremain owned by Devtools sync.",
-      "language": "",
-      "code": "{\n  $schema: 'https://docs.renovatebot.com/renovate-schema.json',\n  extends: ['github>ankhorage/renovate'],\n}",
-      "sourcePath": "examples/renovate.json5"
-    }
-  ],
-  "readmeCli": null,
-  "readmeConfig": null,
+  "usage": {
+    "packageName": "@ankhorage/renovate",
+    "command": "ankh renovate --help"
+  },
+  "usageEntries": [],
+  "exampleCount": 0,
+  "findings": [],
+  "readmeConfig": {
+    "language": "ts",
+    "code": "import { defineParadoxConfig } from '@ankhorage/paradox';\n\nexport default defineParadoxConfig({\n  mode: 'write',\n  docs: {\n    title: '@ankhorage/renovate',\n    description: 'Ankhorage dependency update policy and automation powered by Renovate.',\n    usage: {\n      description:\n        'Extend the repository-hosted preset from each Ankhorage repository that Renovate manages.',\n      entrypoints: ['examples/renovate.json5', 'examples/devtools-renovate.json5'],\n    },\n  },\n  package: {\n    entrypoints: ['src/index.ts'],\n  },\n  output: {\n    dir: 'paradox',\n  },\n});",
+    "sourcePath": "paradox.config.ts"
+  },
   "config": null,
   "entrypoints": [
     "src/index.ts"
@@ -87,6 +79,20 @@
   "modules": [
     {
       "path": "src/automerge-workflow.test.ts",
+      "isEntrypoint": false,
+      "dependencies": [],
+      "exports": []
+    },
+    {
+      "path": "src/changeset-toolchain-resolution.test.ts",
+      "isEntrypoint": false,
+      "dependencies": [
+        "src/renovatePreset.testSupport.ts"
+      ],
+      "exports": []
+    },
+    {
+      "path": "src/changeset-workflow-write-boundary.test.ts",
       "isEntrypoint": false,
       "dependencies": [],
       "exports": []
@@ -105,12 +111,6 @@
       "dependencies": [
         "src/renovatePreset.testSupport.ts"
       ],
-      "exports": []
-    },
-    {
-      "path": "src/devtools-release-rollout.test.ts",
-      "isEntrypoint": false,
-      "dependencies": [],
       "exports": []
     },
     {
@@ -135,6 +135,26 @@
     },
     {
       "path": "src/merged-branch-cleanup.test.ts",
+      "isEntrypoint": false,
+      "dependencies": [],
+      "exports": []
+    },
+    {
+      "path": "src/package-release-rollout.test.ts",
+      "isEntrypoint": false,
+      "dependencies": [],
+      "exports": []
+    },
+    {
+      "path": "src/policy-owner.test.ts",
+      "isEntrypoint": false,
+      "dependencies": [
+        "src/renovatePreset.testSupport.ts"
+      ],
+      "exports": []
+    },
+    {
+      "path": "src/release-consumer-ruleset-sync.test.ts",
       "isEntrypoint": false,
       "dependencies": [],
       "exports": []
@@ -168,135 +188,165 @@
     {
       "name": "isOwned",
       "description": null,
+      "see": [],
+      "security": [],
       "sourceLocation": {
         "filePath": "src/changeset-workflow.test.ts",
-        "line": 257,
+        "line": 231,
         "column": 11
       }
     },
     {
-      "name": "readReleasePackageRule",
-      "description": "Parse the Devtools release rule from its final protocol-gated rollout step.",
+      "name": "readReleasePackageRules",
+      "description": "Parse the final exact-package rollout rules from the managed workflow fixture.",
+      "see": [],
+      "security": [],
       "sourceLocation": {
-        "filePath": "src/devtools-release-rollout.test.ts",
-        "line": 97,
+        "filePath": "src/package-release-rollout.test.ts",
+        "line": 139,
         "column": 1
       }
     },
     {
       "name": "dependency",
       "description": null,
+      "see": [],
+      "security": [],
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 79,
+        "line": 82,
         "column": 1
       }
     },
     {
       "name": "branchName",
       "description": null,
+      "see": [],
+      "security": [],
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 90,
+        "line": 93,
         "column": 1
       }
     },
     {
       "name": "matchesRule",
       "description": null,
+      "see": [],
+      "security": [],
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 97,
+        "line": 100,
         "column": 1
       }
     },
     {
       "name": "matches",
       "description": null,
+      "see": [],
+      "security": [],
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 107,
+        "line": 110,
         "column": 1
       }
     },
     {
       "name": "readPreset",
       "description": null,
+      "see": [],
+      "security": [],
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 118,
+        "line": 121,
         "column": 1
       }
     },
     {
       "name": "resolveRules",
       "description": null,
+      "see": [],
+      "security": [],
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 122,
+        "line": 125,
         "column": 1
       }
     },
     {
       "name": "resolveTrustedToolchainFixtureVersion",
       "description": null,
+      "see": [],
+      "security": [],
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 146,
+        "line": 153,
         "column": 1
       }
     },
     {
       "name": "isCompatibleSelection",
       "description": null,
+      "see": [],
+      "security": [],
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 192,
+        "line": 201,
         "column": 1
       }
     },
     {
       "name": "isStableAtOrAfter",
       "description": null,
+      "see": [],
+      "security": [],
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 212,
+        "line": 221,
         "column": 1
       }
     },
     {
       "name": "isCaretCompatibleSelection",
       "description": null,
+      "see": [],
+      "security": [],
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 220,
+        "line": 229,
         "column": 1
       }
     },
     {
       "name": "parseVersion",
       "description": null,
+      "see": [],
+      "security": [],
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 228,
+        "line": 237,
         "column": 1
       }
     },
     {
       "name": "compareCoreVersions",
       "description": null,
+      "see": [],
+      "security": [],
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 249,
+        "line": 258,
         "column": 1
       }
     },
     {
       "name": "compareNumber",
       "description": null,
+      "see": [],
+      "security": [],
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 256,
+        "line": 265,
         "column": 1
       }
     }
@@ -304,6 +354,11 @@
   "sequenceScenarios": [],
   "graphs": {
     "imports": [
+      {
+        "fromPath": "src/changeset-toolchain-resolution.test.ts",
+        "toPath": "src/renovatePreset.testSupport.ts",
+        "sourcePath": "src/changeset-toolchain-resolution.test.ts"
+      },
       {
         "fromPath": "src/changeset-workflow.test.ts",
         "toPath": "src/renovatePreset.testSupport.ts",
@@ -318,6 +373,11 @@
         "fromPath": "src/index.test.ts",
         "toPath": "src/index.ts",
         "sourcePath": "src/index.test.ts"
+      },
+      {
+        "fromPath": "src/policy-owner.test.ts",
+        "toPath": "src/renovatePreset.testSupport.ts",
+        "sourcePath": "src/policy-owner.test.ts"
       }
     ],
     "calls": [
@@ -344,6 +404,54 @@
         "toSymbol": "expect",
         "callExpression": "expect",
         "sourcePath": "src/automerge-workflow.test.ts"
+      },
+      {
+        "fromSymbol": "src/changeset-toolchain-resolution.test.ts",
+        "toSymbol": "readFileSync",
+        "callExpression": "readFileSync",
+        "sourcePath": "src/changeset-toolchain-resolution.test.ts"
+      },
+      {
+        "fromSymbol": "src/changeset-toolchain-resolution.test.ts",
+        "toSymbol": "test",
+        "callExpression": "test",
+        "sourcePath": "src/changeset-toolchain-resolution.test.ts"
+      },
+      {
+        "fromSymbol": "src/changeset-toolchain-resolution.test.ts",
+        "toSymbol": "expect",
+        "callExpression": "expect",
+        "sourcePath": "src/changeset-toolchain-resolution.test.ts"
+      },
+      {
+        "fromSymbol": "src/changeset-toolchain-resolution.test.ts",
+        "toSymbol": "resolveTrustedToolchainFixtureVersion",
+        "callExpression": "resolveTrustedToolchainFixtureVersion",
+        "sourcePath": "src/changeset-toolchain-resolution.test.ts"
+      },
+      {
+        "fromSymbol": "src/changeset-workflow-write-boundary.test.ts",
+        "toSymbol": "readFileSync",
+        "callExpression": "readFileSync",
+        "sourcePath": "src/changeset-workflow-write-boundary.test.ts"
+      },
+      {
+        "fromSymbol": "src/changeset-workflow-write-boundary.test.ts",
+        "toSymbol": "describe",
+        "callExpression": "describe",
+        "sourcePath": "src/changeset-workflow-write-boundary.test.ts"
+      },
+      {
+        "fromSymbol": "src/changeset-workflow-write-boundary.test.ts",
+        "toSymbol": "test",
+        "callExpression": "test",
+        "sourcePath": "src/changeset-workflow-write-boundary.test.ts"
+      },
+      {
+        "fromSymbol": "src/changeset-workflow-write-boundary.test.ts",
+        "toSymbol": "expect",
+        "callExpression": "expect",
+        "sourcePath": "src/changeset-workflow-write-boundary.test.ts"
       },
       {
         "fromSymbol": "src/changeset-workflow.test.ts",
@@ -424,36 +532,6 @@
         "sourcePath": "src/default.test.ts"
       },
       {
-        "fromSymbol": "src/devtools-release-rollout.test.ts",
-        "toSymbol": "readFileSync",
-        "callExpression": "readFileSync",
-        "sourcePath": "src/devtools-release-rollout.test.ts"
-      },
-      {
-        "fromSymbol": "src/devtools-release-rollout.test.ts",
-        "toSymbol": "describe",
-        "callExpression": "describe",
-        "sourcePath": "src/devtools-release-rollout.test.ts"
-      },
-      {
-        "fromSymbol": "src/devtools-release-rollout.test.ts",
-        "toSymbol": "test",
-        "callExpression": "test",
-        "sourcePath": "src/devtools-release-rollout.test.ts"
-      },
-      {
-        "fromSymbol": "src/devtools-release-rollout.test.ts",
-        "toSymbol": "expect",
-        "callExpression": "expect",
-        "sourcePath": "src/devtools-release-rollout.test.ts"
-      },
-      {
-        "fromSymbol": "src/devtools-release-rollout.test.ts",
-        "toSymbol": "readReleasePackageRule",
-        "callExpression": "readReleasePackageRule",
-        "sourcePath": "src/devtools-release-rollout.test.ts"
-      },
-      {
         "fromSymbol": "src/devtools-sync-protocol.test.ts",
         "toSymbol": "readFileSync",
         "callExpression": "readFileSync",
@@ -512,6 +590,90 @@
         "toSymbol": "expect",
         "callExpression": "expect",
         "sourcePath": "src/merged-branch-cleanup.test.ts"
+      },
+      {
+        "fromSymbol": "src/package-release-rollout.test.ts",
+        "toSymbol": "readFileSync",
+        "callExpression": "readFileSync",
+        "sourcePath": "src/package-release-rollout.test.ts"
+      },
+      {
+        "fromSymbol": "src/package-release-rollout.test.ts",
+        "toSymbol": "describe",
+        "callExpression": "describe",
+        "sourcePath": "src/package-release-rollout.test.ts"
+      },
+      {
+        "fromSymbol": "src/package-release-rollout.test.ts",
+        "toSymbol": "test",
+        "callExpression": "test",
+        "sourcePath": "src/package-release-rollout.test.ts"
+      },
+      {
+        "fromSymbol": "src/package-release-rollout.test.ts",
+        "toSymbol": "expect",
+        "callExpression": "expect",
+        "sourcePath": "src/package-release-rollout.test.ts"
+      },
+      {
+        "fromSymbol": "src/package-release-rollout.test.ts",
+        "toSymbol": "readReleasePackageRules",
+        "callExpression": "readReleasePackageRules",
+        "sourcePath": "src/package-release-rollout.test.ts"
+      },
+      {
+        "fromSymbol": "src/policy-owner.test.ts",
+        "toSymbol": "readPreset",
+        "callExpression": "readPreset",
+        "sourcePath": "src/policy-owner.test.ts"
+      },
+      {
+        "fromSymbol": "src/policy-owner.test.ts",
+        "toSymbol": "test",
+        "callExpression": "test",
+        "sourcePath": "src/policy-owner.test.ts"
+      },
+      {
+        "fromSymbol": "src/policy-owner.test.ts",
+        "toSymbol": "expect",
+        "callExpression": "expect",
+        "sourcePath": "src/policy-owner.test.ts"
+      },
+      {
+        "fromSymbol": "src/policy-owner.test.ts",
+        "toSymbol": "dependency",
+        "callExpression": "dependency",
+        "sourcePath": "src/policy-owner.test.ts"
+      },
+      {
+        "fromSymbol": "src/policy-owner.test.ts",
+        "toSymbol": "resolveRules",
+        "callExpression": "resolveRules",
+        "sourcePath": "src/policy-owner.test.ts"
+      },
+      {
+        "fromSymbol": "src/release-consumer-ruleset-sync.test.ts",
+        "toSymbol": "readFileSync",
+        "callExpression": "readFileSync",
+        "sourcePath": "src/release-consumer-ruleset-sync.test.ts"
+      },
+      {
+        "fromSymbol": "src/release-consumer-ruleset-sync.test.ts",
+        "toSymbol": "describe",
+        "callExpression": "describe",
+        "sourcePath": "src/release-consumer-ruleset-sync.test.ts"
+      },
+      {
+        "fromSymbol": "src/release-consumer-ruleset-sync.test.ts",
+        "toSymbol": "test",
+        "callExpression": "test",
+        "sourcePath": "src/release-consumer-ruleset-sync.test.ts"
+      },
+      {
+        "fromSymbol": "src/release-consumer-ruleset-sync.test.ts",
+        "toSymbol": "expect",
+        "callExpression": "expect",
+        "sourcePath": "src/release-consumer-ruleset-sync.test.ts"
       },
       {
         "fromSymbol": "src/renovate-caller-workflow.test.ts",
@@ -562,7 +724,7 @@
         "sourcePath": "src/renovatePreset.testSupport.ts"
       },
       {
-        "fromSymbol": "resolveTrustedToolchainFixtureVersion",
+        "fromSymbol": "src/renovatePreset.testSupport.ts",
         "toSymbol": "isCompatibleSelection",
         "callExpression": "isCompatibleSelection",
         "sourcePath": "src/renovatePreset.testSupport.ts"

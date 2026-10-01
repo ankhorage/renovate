@@ -4,14 +4,17 @@ graph TD
   package__ankhorage_renovate --> entrypoint_src_index_ts
   module_src_automerge_workflow_test_ts["src/automerge-workflow.test.ts"]
   package__ankhorage_renovate -.-> module_src_automerge_workflow_test_ts
+  module_src_changeset_toolchain_resolution_test_ts["src/changeset-toolchain-resolution.test.ts"]
+  package__ankhorage_renovate -.-> module_src_changeset_toolchain_resolution_test_ts
+  module_src_changeset_toolchain_resolution_test_ts --> module_src_renovatePreset_testSupport_ts
+  module_src_changeset_workflow_write_boundary_test_ts["src/changeset-workflow-write-boundary.test.ts"]
+  package__ankhorage_renovate -.-> module_src_changeset_workflow_write_boundary_test_ts
   module_src_changeset_workflow_test_ts["src/changeset-workflow.test.ts"]
   package__ankhorage_renovate -.-> module_src_changeset_workflow_test_ts
   module_src_changeset_workflow_test_ts --> module_src_renovatePreset_testSupport_ts
   module_src_default_test_ts["src/default.test.ts"]
   package__ankhorage_renovate -.-> module_src_default_test_ts
   module_src_default_test_ts --> module_src_renovatePreset_testSupport_ts
-  module_src_devtools_release_rollout_test_ts["src/devtools-release-rollout.test.ts"]
-  package__ankhorage_renovate -.-> module_src_devtools_release_rollout_test_ts
   module_src_devtools_sync_protocol_test_ts["src/devtools-sync-protocol.test.ts"]
   package__ankhorage_renovate -.-> module_src_devtools_sync_protocol_test_ts
   module_src_index_test_ts["src/index.test.ts"]
@@ -20,6 +23,13 @@ graph TD
   module_src_index_ts["src/index.ts"]
   module_src_merged_branch_cleanup_test_ts["src/merged-branch-cleanup.test.ts"]
   package__ankhorage_renovate -.-> module_src_merged_branch_cleanup_test_ts
+  module_src_package_release_rollout_test_ts["src/package-release-rollout.test.ts"]
+  package__ankhorage_renovate -.-> module_src_package_release_rollout_test_ts
+  module_src_policy_owner_test_ts["src/policy-owner.test.ts"]
+  package__ankhorage_renovate -.-> module_src_policy_owner_test_ts
+  module_src_policy_owner_test_ts --> module_src_renovatePreset_testSupport_ts
+  module_src_release_consumer_ruleset_sync_test_ts["src/release-consumer-ruleset-sync.test.ts"]
+  package__ankhorage_renovate -.-> module_src_release_consumer_ruleset_sync_test_ts
   module_src_renovate_caller_workflow_test_ts["src/renovate-caller-workflow.test.ts"]
   package__ankhorage_renovate -.-> module_src_renovate_caller_workflow_test_ts
   module_src_renovatePreset_testSupport_ts["src/renovatePreset.testSupport.ts"]

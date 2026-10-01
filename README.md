@@ -3,58 +3,35 @@
 
 # @ankhorage/renovate
 
-![license: MIT](./paradox/badges/license.svg) ![npm: v0.2.11](./paradox/badges/npm.svg) ![runtime: bun](./paradox/badges/runtime.svg) ![typescript: strict](./paradox/badges/typescript.svg) ![eslint: checked](./paradox/badges/eslint.svg) ![prettier: checked](./paradox/badges/prettier.svg) ![build: checked](./paradox/badges/build.svg) ![tests: checked](./paradox/badges/tests.svg) ![docs: paradox](./paradox/badges/docs.svg)
+![license: MIT](./paradox/badges/license.svg) ![npm: v0.3.4](./paradox/badges/npm.svg) ![runtime: bun](./paradox/badges/runtime.svg) ![typescript: strict](./paradox/badges/typescript.svg) ![eslint: checked](./paradox/badges/eslint.svg) ![prettier: checked](./paradox/badges/prettier.svg) ![build: checked](./paradox/badges/build.svg) ![tests: checked](./paradox/badges/tests.svg) ![paradox: canonical](./paradox/badges/docs.svg)
 
 Ankhorage dependency update policy and automation powered by Renovate.
 
-## Usage
+## Configuration
 
-Extend the repository-hosted preset from each Ankhorage repository that Renovate manages.
+### Example
 
-### Devtools owner repository configuration
+```ts
+import { defineParadoxConfig } from '@ankhorage/paradox';
 
-Loads the owner-specific policy that enables and groups the root Bun, ESLint, Knip, Prettier,
-TypeScript, and validation/publishing dependencies maintained by @ankhorage/devtools. Major
-upgrades remain reviewable. The trusted reusable workflow detects owner updates, runs the fixed
-owner synchronization entrypoint from the Devtools base commit in a read-only preparation job,
-requires byte stability and current status, then commits only the validated owner-managed output.
-Pull-request code never executes in the write-capable job. Do not use this profile in normal
-consumer repositories.
-
-Source: `examples/devtools-renovate.json5`
-
-```
-{
-  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
-  extends: ['github>ankhorage/renovate:devtools-owner'],
-}
-```
-
-### Repository configuration
-
-Loads the normal consumer policy from its default branch. Every npm patch release is proposed,
-fully validated by repository CI, and automerged when green. Minor and major external upgrades
-stay disabled. The canonical development toolchain follows the same automatic patch policy
-through its Devtools owner release and synchronization chain instead of drifting independently
-in consumers. Compatible @ankhorage/ankh and @ankhorage/devtools releases are grouped for the
-trusted synchronization workflow. The workflow runs the exact lock-selected provider, requires
-byte stability and current status, and commits the complete managed result without a manual
-repository sync. After the one-time release-rollout bootstrap, a published Devtools version
-immediately starts the same Renovate update flow for every repository in the reviewed consumer
-registry. The preset explicitly owns bun and custom.regex extraction so self-hosted manager
-filtering cannot silently drop package propagation. Never edit renovate/* branches manually;
-request Renovate rebase/retry to discard edits and return the branch to Renovate ownership.
-Renovate remains the only dependency-branch writer. The shared preset also performs a
-one-time migration of the legacy immutable workflow pin; all other canonical workflow changes
-remain owned by Devtools sync.
-
-Source: `examples/renovate.json5`
-
-```
-{
-  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
-  extends: ['github>ankhorage/renovate'],
-}
+export default defineParadoxConfig({
+  mode: 'write',
+  docs: {
+    title: '@ankhorage/renovate',
+    description: 'Ankhorage dependency update policy and automation powered by Renovate.',
+    usage: {
+      description:
+        'Extend the repository-hosted preset from each Ankhorage repository that Renovate manages.',
+      entrypoints: ['examples/renovate.json5', 'examples/devtools-renovate.json5'],
+    },
+  },
+  package: {
+    entrypoints: ['src/index.ts'],
+  },
+  output: {
+    dir: 'paradox',
+  },
+});
 ```
 
 ## Generated documentation

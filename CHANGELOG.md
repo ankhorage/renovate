@@ -1,5 +1,14 @@
 # @ankhorage/renovate
 
+## 0.3.4
+
+### Patch Changes
+
+- dcd0fdd: Align Renovate usage metadata with the current Paradox documentation policy so release documentation can be generated again.
+- 4e0e757: Keep TypeScript below 7 until the canonical lint toolchain declares TypeScript 7 compatibility.
+- 872c5c0: Create a patch Changeset for every publishable Renovate pull request, including external development dependencies and managed workflow updates. Reconcile stale Bun lockfiles before selecting the exact released Devtools toolchain.
+- 490a24f: Scope package-release rollouts to the exact released package and refresh the GitHub App token after any workflow-bootstrap wait.
+
 ## 0.3.3
 
 ### Patch Changes
