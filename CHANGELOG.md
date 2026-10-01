@@ -1,5 +1,11 @@
 # @ankhorage/renovate
 
+## 0.3.6
+
+### Patch Changes
+
+- 8480e47: Widen peer dependency ranges when newer compatible lines are discovered so library updates preserve previously supported consumer versions instead of narrowing them.
+
 ## 0.3.5
 
 ### Patch Changes

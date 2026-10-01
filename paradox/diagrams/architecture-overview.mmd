@@ -25,6 +25,9 @@ graph TD
   package__ankhorage_renovate -.-> module_src_merged_branch_cleanup_test_ts
   module_src_package_release_rollout_test_ts["src/package-release-rollout.test.ts"]
   package__ankhorage_renovate -.-> module_src_package_release_rollout_test_ts
+  module_src_peer_range_policy_test_ts["src/peer-range-policy.test.ts"]
+  package__ankhorage_renovate -.-> module_src_peer_range_policy_test_ts
+  module_src_peer_range_policy_test_ts --> module_src_renovatePreset_testSupport_ts
   module_src_policy_owner_test_ts["src/policy-owner.test.ts"]
   package__ankhorage_renovate -.-> module_src_policy_owner_test_ts
   module_src_policy_owner_test_ts --> module_src_renovatePreset_testSupport_ts

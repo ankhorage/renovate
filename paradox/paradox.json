@@ -14,7 +14,7 @@
     {
       "id": "npm",
       "label": "npm",
-      "value": "v0.3.5",
+      "value": "v0.3.6",
       "color": "cb3837"
     },
     {
@@ -146,6 +146,14 @@
       "exports": []
     },
     {
+      "path": "src/peer-range-policy.test.ts",
+      "isEntrypoint": false,
+      "dependencies": [
+        "src/renovatePreset.testSupport.ts"
+      ],
+      "exports": []
+    },
+    {
       "path": "src/policy-owner.test.ts",
       "isEntrypoint": false,
       "dependencies": [
@@ -214,7 +222,7 @@
       "security": [],
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 82,
+        "line": 84,
         "column": 1
       }
     },
@@ -225,7 +233,7 @@
       "security": [],
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 93,
+        "line": 96,
         "column": 1
       }
     },
@@ -236,7 +244,7 @@
       "security": [],
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 100,
+        "line": 103,
         "column": 1
       }
     },
@@ -247,7 +255,7 @@
       "security": [],
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 110,
+        "line": 114,
         "column": 1
       }
     },
@@ -258,7 +266,7 @@
       "security": [],
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 121,
+        "line": 125,
         "column": 1
       }
     },
@@ -269,7 +277,7 @@
       "security": [],
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 125,
+        "line": 129,
         "column": 1
       }
     },
@@ -280,7 +288,7 @@
       "security": [],
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 153,
+        "line": 157,
         "column": 1
       }
     },
@@ -291,7 +299,7 @@
       "security": [],
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 201,
+        "line": 205,
         "column": 1
       }
     },
@@ -302,7 +310,7 @@
       "security": [],
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 221,
+        "line": 225,
         "column": 1
       }
     },
@@ -313,7 +321,7 @@
       "security": [],
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 229,
+        "line": 233,
         "column": 1
       }
     },
@@ -324,7 +332,7 @@
       "security": [],
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 237,
+        "line": 241,
         "column": 1
       }
     },
@@ -335,7 +343,7 @@
       "security": [],
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 258,
+        "line": 262,
         "column": 1
       }
     },
@@ -346,7 +354,7 @@
       "security": [],
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 265,
+        "line": 269,
         "column": 1
       }
     }
@@ -373,6 +381,11 @@
         "fromPath": "src/index.test.ts",
         "toPath": "src/index.ts",
         "sourcePath": "src/index.test.ts"
+      },
+      {
+        "fromPath": "src/peer-range-policy.test.ts",
+        "toPath": "src/renovatePreset.testSupport.ts",
+        "sourcePath": "src/peer-range-policy.test.ts"
       },
       {
         "fromPath": "src/policy-owner.test.ts",
@@ -620,6 +633,36 @@
         "toSymbol": "readReleasePackageRules",
         "callExpression": "readReleasePackageRules",
         "sourcePath": "src/package-release-rollout.test.ts"
+      },
+      {
+        "fromSymbol": "src/peer-range-policy.test.ts",
+        "toSymbol": "readPreset",
+        "callExpression": "readPreset",
+        "sourcePath": "src/peer-range-policy.test.ts"
+      },
+      {
+        "fromSymbol": "src/peer-range-policy.test.ts",
+        "toSymbol": "test",
+        "callExpression": "test",
+        "sourcePath": "src/peer-range-policy.test.ts"
+      },
+      {
+        "fromSymbol": "src/peer-range-policy.test.ts",
+        "toSymbol": "expect",
+        "callExpression": "expect",
+        "sourcePath": "src/peer-range-policy.test.ts"
+      },
+      {
+        "fromSymbol": "src/peer-range-policy.test.ts",
+        "toSymbol": "resolveRules",
+        "callExpression": "resolveRules",
+        "sourcePath": "src/peer-range-policy.test.ts"
+      },
+      {
+        "fromSymbol": "src/peer-range-policy.test.ts",
+        "toSymbol": "dependency",
+        "callExpression": "dependency",
+        "sourcePath": "src/peer-range-policy.test.ts"
       },
       {
         "fromSymbol": "src/policy-owner.test.ts",

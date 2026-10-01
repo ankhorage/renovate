@@ -153,7 +153,7 @@
       <div class="summary">
         <div><strong>0</strong><span class="muted">public exports</span></div>
         <div><strong>0</strong><span class="muted">components</span></div>
-        <div><strong>14</strong><span class="muted">modules</span></div>
+        <div><strong>15</strong><span class="muted">modules</span></div>
         <div><strong>1</strong><span class="muted">entrypoints</span></div>
       </div>
       <h3>Entrypoints</h3>
@@ -214,6 +214,11 @@
     <h3>src/package-release-rollout.test.ts</h3>
     <p class="muted">Referenced module</p>
     <p><strong>Dependencies:</strong> <span class="empty">None</span></p>
+    <p><strong>Exports:</strong> <span class="empty">None</span></p>
+  </article><article class="item" data-search="src/peer-range-policy.test.ts src/renovatePreset.testSupport.ts">
+    <h3>src/peer-range-policy.test.ts</h3>
+    <p class="muted">Referenced module</p>
+    <p><strong>Dependencies:</strong> <code>src/renovatePreset.testSupport.ts</code></p>
     <p><strong>Exports:</strong> <span class="empty">None</span></p>
   </article><article class="item" data-search="src/policy-owner.test.ts src/renovatePreset.testSupport.ts">
     <h3>src/policy-owner.test.ts</h3>
@@ -277,6 +282,9 @@
   package__ankhorage_renovate -.-&gt; module_src_merged_branch_cleanup_test_ts
   module_src_package_release_rollout_test_ts[&quot;src/package-release-rollout.test.ts&quot;]
   package__ankhorage_renovate -.-&gt; module_src_package_release_rollout_test_ts
+  module_src_peer_range_policy_test_ts[&quot;src/peer-range-policy.test.ts&quot;]
+  package__ankhorage_renovate -.-&gt; module_src_peer_range_policy_test_ts
+  module_src_peer_range_policy_test_ts --&gt; module_src_renovatePreset_testSupport_ts
   module_src_policy_owner_test_ts[&quot;src/policy-owner.test.ts&quot;]
   package__ankhorage_renovate -.-&gt; module_src_policy_owner_test_ts
   module_src_policy_owner_test_ts --&gt; module_src_renovatePreset_testSupport_ts
@@ -316,6 +324,9 @@
   package__ankhorage_renovate -.-&gt; module_src_merged_branch_cleanup_test_ts
   module_src_package_release_rollout_test_ts[&quot;src/package-release-rollout.test.ts&quot;]
   package__ankhorage_renovate -.-&gt; module_src_package_release_rollout_test_ts
+  module_src_peer_range_policy_test_ts[&quot;src/peer-range-policy.test.ts&quot;]
+  package__ankhorage_renovate -.-&gt; module_src_peer_range_policy_test_ts
+  module_src_peer_range_policy_test_ts --&gt; module_src_renovatePreset_testSupport_ts
   module_src_policy_owner_test_ts[&quot;src/policy-owner.test.ts&quot;]
   package__ankhorage_renovate -.-&gt; module_src_policy_owner_test_ts
   module_src_policy_owner_test_ts --&gt; module_src_renovatePreset_testSupport_ts
@@ -341,6 +352,7 @@
   module_src_index_ts[&quot;src/index.ts&quot;]
   module_src_merged_branch_cleanup_test_ts[&quot;src/merged-branch-cleanup.test.ts&quot;]
   module_src_package_release_rollout_test_ts[&quot;src/package-release-rollout.test.ts&quot;]
+  module_src_peer_range_policy_test_ts[&quot;src/peer-range-policy.test.ts&quot;]
   module_src_policy_owner_test_ts[&quot;src/policy-owner.test.ts&quot;]
   module_src_release_consumer_ruleset_sync_test_ts[&quot;src/release-consumer-ruleset-sync.test.ts&quot;]
   module_src_renovate_caller_workflow_test_ts[&quot;src/renovate-caller-workflow.test.ts&quot;]
@@ -349,6 +361,7 @@
   module_src_changeset_workflow_test_ts --&gt; module_src_renovatePreset_testSupport_ts
   module_src_default_test_ts --&gt; module_src_renovatePreset_testSupport_ts
   module_src_index_test_ts --&gt; module_src_index_ts
+  module_src_peer_range_policy_test_ts --&gt; module_src_renovatePreset_testSupport_ts
   module_src_policy_owner_test_ts --&gt; module_src_renovatePreset_testSupport_ts
 </div>
     <details>
@@ -364,6 +377,7 @@
   module_src_index_ts[&quot;src/index.ts&quot;]
   module_src_merged_branch_cleanup_test_ts[&quot;src/merged-branch-cleanup.test.ts&quot;]
   module_src_package_release_rollout_test_ts[&quot;src/package-release-rollout.test.ts&quot;]
+  module_src_peer_range_policy_test_ts[&quot;src/peer-range-policy.test.ts&quot;]
   module_src_policy_owner_test_ts[&quot;src/policy-owner.test.ts&quot;]
   module_src_release_consumer_ruleset_sync_test_ts[&quot;src/release-consumer-ruleset-sync.test.ts&quot;]
   module_src_renovate_caller_workflow_test_ts[&quot;src/renovate-caller-workflow.test.ts&quot;]
@@ -372,6 +386,7 @@
   module_src_changeset_workflow_test_ts --&gt; module_src_renovatePreset_testSupport_ts
   module_src_default_test_ts --&gt; module_src_renovatePreset_testSupport_ts
   module_src_index_test_ts --&gt; module_src_index_ts
+  module_src_peer_range_policy_test_ts --&gt; module_src_renovatePreset_testSupport_ts
   module_src_policy_owner_test_ts --&gt; module_src_renovatePreset_testSupport_ts
 </pre>
     </details>
@@ -389,6 +404,7 @@
   module_src_index_ts[&quot;src/index.ts&quot;]
   module_src_merged_branch_cleanup_test_ts[&quot;src/merged-branch-cleanup.test.ts&quot;]
   module_src_package_release_rollout_test_ts[&quot;src/package-release-rollout.test.ts&quot;]
+  module_src_peer_range_policy_test_ts[&quot;src/peer-range-policy.test.ts&quot;]
   module_src_policy_owner_test_ts[&quot;src/policy-owner.test.ts&quot;]
   module_src_release_consumer_ruleset_sync_test_ts[&quot;src/release-consumer-ruleset-sync.test.ts&quot;]
   module_src_renovate_caller_workflow_test_ts[&quot;src/renovate-caller-workflow.test.ts&quot;]
@@ -407,6 +423,7 @@
   module_src_index_ts[&quot;src/index.ts&quot;]
   module_src_merged_branch_cleanup_test_ts[&quot;src/merged-branch-cleanup.test.ts&quot;]
   module_src_package_release_rollout_test_ts[&quot;src/package-release-rollout.test.ts&quot;]
+  module_src_peer_range_policy_test_ts[&quot;src/peer-range-policy.test.ts&quot;]
   module_src_policy_owner_test_ts[&quot;src/policy-owner.test.ts&quot;]
   module_src_release_consumer_ruleset_sync_test_ts[&quot;src/release-consumer-ruleset-sync.test.ts&quot;]
   module_src_renovate_caller_workflow_test_ts[&quot;src/renovate-caller-workflow.test.ts&quot;]
@@ -441,67 +458,67 @@
       <h2>src/renovatePreset.testSupport.ts</h2>
       <article class="item" data-search="dependency src/renovatePreset.testSupport.ts ">
     <h3>dependency</h3>
-    <p class="muted"><code>src/renovatePreset.testSupport.ts:82:1</code></p>
+    <p class="muted"><code>src/renovatePreset.testSupport.ts:84:1</code></p>
     <p class="empty">No description available.</p>
     
   </article><article class="item" data-search="branchName src/renovatePreset.testSupport.ts ">
     <h3>branchName</h3>
-    <p class="muted"><code>src/renovatePreset.testSupport.ts:93:1</code></p>
+    <p class="muted"><code>src/renovatePreset.testSupport.ts:96:1</code></p>
     <p class="empty">No description available.</p>
     
   </article><article class="item" data-search="matchesRule src/renovatePreset.testSupport.ts ">
     <h3>matchesRule</h3>
-    <p class="muted"><code>src/renovatePreset.testSupport.ts:100:1</code></p>
+    <p class="muted"><code>src/renovatePreset.testSupport.ts:103:1</code></p>
     <p class="empty">No description available.</p>
     
   </article><article class="item" data-search="matches src/renovatePreset.testSupport.ts ">
     <h3>matches</h3>
-    <p class="muted"><code>src/renovatePreset.testSupport.ts:110:1</code></p>
+    <p class="muted"><code>src/renovatePreset.testSupport.ts:114:1</code></p>
     <p class="empty">No description available.</p>
     
   </article><article class="item" data-search="readPreset src/renovatePreset.testSupport.ts ">
     <h3>readPreset</h3>
-    <p class="muted"><code>src/renovatePreset.testSupport.ts:121:1</code></p>
+    <p class="muted"><code>src/renovatePreset.testSupport.ts:125:1</code></p>
     <p class="empty">No description available.</p>
     
   </article><article class="item" data-search="resolveRules src/renovatePreset.testSupport.ts ">
     <h3>resolveRules</h3>
-    <p class="muted"><code>src/renovatePreset.testSupport.ts:125:1</code></p>
+    <p class="muted"><code>src/renovatePreset.testSupport.ts:129:1</code></p>
     <p class="empty">No description available.</p>
     
   </article><article class="item" data-search="resolveTrustedToolchainFixtureVersion src/renovatePreset.testSupport.ts ">
     <h3>resolveTrustedToolchainFixtureVersion</h3>
-    <p class="muted"><code>src/renovatePreset.testSupport.ts:153:1</code></p>
+    <p class="muted"><code>src/renovatePreset.testSupport.ts:157:1</code></p>
     <p class="empty">No description available.</p>
     
   </article><article class="item" data-search="isCompatibleSelection src/renovatePreset.testSupport.ts ">
     <h3>isCompatibleSelection</h3>
-    <p class="muted"><code>src/renovatePreset.testSupport.ts:201:1</code></p>
+    <p class="muted"><code>src/renovatePreset.testSupport.ts:205:1</code></p>
     <p class="empty">No description available.</p>
     
   </article><article class="item" data-search="isStableAtOrAfter src/renovatePreset.testSupport.ts ">
     <h3>isStableAtOrAfter</h3>
-    <p class="muted"><code>src/renovatePreset.testSupport.ts:221:1</code></p>
+    <p class="muted"><code>src/renovatePreset.testSupport.ts:225:1</code></p>
     <p class="empty">No description available.</p>
     
   </article><article class="item" data-search="isCaretCompatibleSelection src/renovatePreset.testSupport.ts ">
     <h3>isCaretCompatibleSelection</h3>
-    <p class="muted"><code>src/renovatePreset.testSupport.ts:229:1</code></p>
+    <p class="muted"><code>src/renovatePreset.testSupport.ts:233:1</code></p>
     <p class="empty">No description available.</p>
     
   </article><article class="item" data-search="parseVersion src/renovatePreset.testSupport.ts ">
     <h3>parseVersion</h3>
-    <p class="muted"><code>src/renovatePreset.testSupport.ts:237:1</code></p>
+    <p class="muted"><code>src/renovatePreset.testSupport.ts:241:1</code></p>
     <p class="empty">No description available.</p>
     
   </article><article class="item" data-search="compareCoreVersions src/renovatePreset.testSupport.ts ">
     <h3>compareCoreVersions</h3>
-    <p class="muted"><code>src/renovatePreset.testSupport.ts:258:1</code></p>
+    <p class="muted"><code>src/renovatePreset.testSupport.ts:262:1</code></p>
     <p class="empty">No description available.</p>
     
   </article><article class="item" data-search="compareNumber src/renovatePreset.testSupport.ts ">
     <h3>compareNumber</h3>
-    <p class="muted"><code>src/renovatePreset.testSupport.ts:265:1</code></p>
+    <p class="muted"><code>src/renovatePreset.testSupport.ts:269:1</code></p>
     <p class="empty">No description available.</p>
     
   </article>
