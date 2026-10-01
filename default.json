@@ -5,6 +5,9 @@
   "enabledManagers": ["bun", "custom.regex"],
   "gitIgnoredAuthors": ["323340348+ankhorage-renovate-sync[bot]@users.noreply.github.com"],
   "labels": ["dependencies"],
+  "prConcurrentLimit": 4,
+  "branchConcurrentLimit": 4,
+  "rebaseWhen": "behind-base-branch",
   "ignorePaths": [
     "**/node_modules/**",
     "**/bower_components/**",
@@ -44,6 +47,20 @@
       "automerge": true,
       "automergeType": "pr",
       "platformAutomerge": false
+    },
+    {
+      "description": ["Bundle external npm updates into one integration lane per repository."],
+      "matchDatasources": ["npm"],
+      "matchPackageNames": ["*"],
+      "enabled": true,
+      "labels": ["dependencies", "renovate:automerge"],
+      "groupName": "External npm dependencies",
+      "groupSlug": "external-npm-dependencies",
+      "rangeStrategy": "bump",
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": false,
+      "separateMajorMinor": false
     },
     {
       "description": "Keep TypeScript on the latest currently compatible major line.",

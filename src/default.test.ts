@@ -17,6 +17,11 @@ describe('consumer preset', () => {
       enabled: false,
       matchPackageNames: ['*'],
     });
+    expect(consumerPreset).toMatchObject({
+      branchConcurrentLimit: 4,
+      prConcurrentLimit: 4,
+      rebaseWhen: 'behind-base-branch',
+    });
   });
 
   test('owns the managers required for package and workflow propagation', () => {
@@ -85,6 +90,8 @@ describe('consumer update policy', () => {
           automerge: true,
           automergeType: 'pr',
           enabled: true,
+          groupName: 'External npm dependencies',
+          groupSlug: 'external-npm-dependencies',
           labels: ['dependencies', 'renovate:automerge'],
           platformAutomerge: false,
           rangeStrategy: 'bump',
