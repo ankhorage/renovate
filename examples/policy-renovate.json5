@@ -6,7 +6,7 @@
  * normal consumer repositories.
  *
  * @usage
- * @readme
+ * @title Policy owner repository configuration
  */
 {
   $schema: 'https://docs.renovatebot.com/renovate-schema.json',

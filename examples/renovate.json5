@@ -20,6 +20,7 @@
  *
  * @usage
  * @readme
+ * @title Consumer repository configuration
  */
 {
   $schema: 'https://docs.renovatebot.com/renovate-schema.json',
