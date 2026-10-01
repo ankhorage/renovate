@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { readPreset } from './renovatePreset.testSupport';
+import { dependency, readPreset, resolveRules } from './renovatePreset.testSupport';
 
 const consumerPreset = readPreset('../default.json');
 
@@ -21,4 +21,16 @@ test('requires deliberate platform release-line upgrades before widening peers',
     matchDepTypes: ['peerDependencies'],
     rangeStrategy: 'widen',
   });
+  expect(
+    resolveRules(
+      consumerPreset.packageRules,
+      dependency('react-native', { depType: 'peerDependencies', updateType: 'patch' }),
+    ),
+  ).toMatchObject({ rangeStrategy: 'widen' });
+  expect(
+    resolveRules(
+      consumerPreset.packageRules,
+      dependency('react-native', { depType: 'devDependencies', updateType: 'patch' }),
+    ),
+  ).toMatchObject({ rangeStrategy: 'bump' });
 });
