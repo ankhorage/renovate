@@ -160,6 +160,16 @@ jobs:
           path: trusted-owner
           persist-credentials: false
 
+      - name: Set up the trusted Bun runtime
+        if: steps.metadata.outputs.sync-mode != 'none'
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: ${{ steps.metadata.outputs.bun-version }}
+
+      - name: Reconcile the Renovate lockfile without scripts
+        if: steps.metadata.outputs.sync-mode == 'consumer'
+        run: bun install --cwd repository --ignore-scripts --lockfile-only --registry=https://registry.npmjs.org
+
       - name: Resolve the exact selected toolchain
         if: steps.metadata.outputs.sync-mode == 'consumer'
         id: toolchain
@@ -243,12 +253,6 @@ jobs:
               resolveVersion('@ankhorage/ankh', process.env.CANONICAL_ANKH_VERSION),
             );
             core.setOutput('devtools-version', resolveVersion('@ankhorage/devtools'));
-
-      - name: Set up the trusted Bun runtime
-        if: steps.metadata.outputs.sync-mode != 'none'
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: ${{ steps.metadata.outputs.bun-version }}
 
       - name: Install the exact released toolchain
         if: steps.metadata.outputs.sync-mode == 'consumer'
@@ -861,8 +865,7 @@ jobs:
             };
             const base = await readManifest(pull.base.sha);
             const head = await readManifest(pull.head.sha);
-            const releaseSections = ['dependencies', 'optionalDependencies', 'peerDependencies'];
-            const allSections = [...releaseSections, 'devDependencies'];
+            const allSections = ['dependencies', 'optionalDependencies', 'peerDependencies', 'devDependencies'];
             const toolchainNames = new Set(['@ankhorage/ankh', '@ankhorage/devtools']);
             const toolchainChanged = allSections.some((section) =>
               [...toolchainNames].some((name) => base[section]?.[name] !== head[section]?.[name])
@@ -905,13 +908,10 @@ jobs:
                 ...Object.keys(effectiveHead[section] ?? {}),
               ]);
               return [...names]
-                .filter((name) =>
-                  (isDevtoolsOwner || name.startsWith('@ankhorage/')) &&
-                  base[section]?.[name] !== effectiveHead[section]?.[name]
-                )
+                .filter((name) => base[section]?.[name] !== effectiveHead[section]?.[name])
                 .map((name) => ({ name, section }));
             });
-            if (isDevtoolsOwner && base.packageManager !== effectiveHead.packageManager) {
+            if (base.packageManager !== effectiveHead.packageManager) {
               changed.push({ name: 'bun', section: 'packageManager' });
             }
 
@@ -935,10 +935,8 @@ jobs:
               if (error.status !== 404) throw error;
             }
             const release =
-              changed.length > 0 &&
               !effectiveHead.private &&
-              typeof effectiveHead.name === 'string' &&
-              (isDevtoolsOwner || changed.some(({ section }) => releaseSections.includes(section)));
+              typeof effectiveHead.name === 'string';
             if (release) {
               const frontmatter = '---\n' + "'" + effectiveHead.name + "': patch\n---";
               const tick = String.fromCharCode(96);
@@ -947,15 +945,18 @@ jobs:
                 .join(', ');
               const subject = isDevtoolsOwner
                 ? 'Update Devtools-owned dependencies: '
-                : 'Update Ankhorage dependencies: ';
-              const content = frontmatter + '\n\n' + subject + names + '.\n';
+                : 'Update dependencies: ';
+              const summary = changed.length > 0
+                ? subject + names + '.'
+                : 'Update Renovate-managed workflows.';
+              const content = frontmatter + '\n\n' + summary + '\n';
               if (currentChangesetContent !== content) {
                 managedFiles.set(changesetPath, Buffer.from(content));
                 managedFileModes.set(changesetPath, '100644');
               }
             } else if (
               currentChangesetContent !== null &&
-              /^---\n'[^']+': patch\n---\n\nUpdate (?:Devtools-owned|Ankhorage) dependencies: `[^`]+`(?:, `[^`]+`)*\.\n$/u.test(
+              /^---\n'[^']+': patch\n---\n\nUpdate (?:(?:(?:Devtools-owned|Ankhorage) )?dependencies: `[^`]+`(?:, `[^`]+`)*|Renovate-managed workflows)\.\n$/u.test(
                 currentChangesetContent,
               )
             ) {
