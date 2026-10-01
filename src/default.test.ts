@@ -75,8 +75,8 @@ describe('consumer path discovery', () => {
 });
 
 describe('consumer update policy', () => {
-  test('automerges every validated npm release across patch, minor, and major updates', () => {
-    for (const packageName of ['expo', 'react', 'vitest']) {
+  test('automerges ordinary npm releases across patch, minor, and major updates', () => {
+    for (const packageName of ['react', 'vitest']) {
       for (const updateType of ['patch', 'minor', 'major'] as const) {
         expect(
           resolveRules(
@@ -99,6 +99,33 @@ describe('consumer update policy', () => {
         });
       }
     }
+  });
+
+  test('keeps Expo patches and minors automatic while requiring deliberate SDK majors', () => {
+    for (const updateType of ['patch', 'minor'] as const) {
+      expect(
+        resolveRules(
+          consumerPreset.packageRules,
+          dependency('expo', {
+            fileName: 'examples/expo-showcase/package.json',
+            updateType,
+          }),
+        ),
+      ).toMatchObject({
+        automerge: true,
+        enabled: true,
+        groupName: 'External npm dependencies',
+      });
+    }
+    expect(
+      resolveRules(
+        consumerPreset.packageRules,
+        dependency('expo', {
+          fileName: 'examples/expo-showcase/package.json',
+          updateType: 'major',
+        }),
+      ),
+    ).toMatchObject({ enabled: false });
   });
 });
 
