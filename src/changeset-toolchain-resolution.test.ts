@@ -9,6 +9,21 @@ const workflow = readFileSync(
   'utf8',
 );
 
+test('reconciles stale Renovate lockfiles before selecting the exact released toolchain', () => {
+  const setup = workflow.indexOf('      - name: Set up the trusted Bun runtime');
+  const reconcile = workflow.indexOf(
+    '      - name: Reconcile the Renovate lockfile without scripts',
+  );
+  const resolve = workflow.indexOf('      - name: Resolve the exact selected toolchain');
+
+  expect(setup).toBeGreaterThan(-1);
+  expect(reconcile).toBeGreaterThan(setup);
+  expect(resolve).toBeGreaterThan(reconcile);
+  expect(workflow).toContain(
+    'run: bun install --cwd repository --ignore-scripts --lockfile-only --registry=https://registry.npmjs.org',
+  );
+});
+
 test('trusted toolchain accepts compatible declarations across dependency sections', () => {
   const selected = resolveTrustedToolchainFixtureVersion(
     {
