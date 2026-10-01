@@ -121,6 +121,20 @@
       "platformAutomerge": false
     },
     {
+      "description": "Require deliberate React Native release-line upgrades.",
+      "matchDatasources": ["npm"],
+      "matchPackageNames": ["react-native"],
+      "matchUpdateTypes": ["minor", "major"],
+      "enabled": false
+    },
+    {
+      "description": "Require deliberate Expo SDK major upgrades.",
+      "matchDatasources": ["npm"],
+      "matchPackageNames": ["expo", "expo-*"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    },
+    {
       "description": "Widen peer dependency compatibility instead of replacing the previously supported range.",
       "matchDatasources": ["npm"],
       "matchDepTypes": ["peerDependencies"],
