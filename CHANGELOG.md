@@ -1,5 +1,11 @@
 # @ankhorage/renovate
 
+## 0.3.5
+
+### Patch Changes
+
+- 18098ae: Group external npm dependency updates into one consumer integration lane, cap Renovate at four concurrent branches and pull requests per repository, and rebase active dependency branches whenever main advances.
+
 ## 0.3.4
 
 ### Patch Changes
