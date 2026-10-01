@@ -35,7 +35,6 @@ test('requires deliberate platform release-line upgrades before widening peers',
   ).toMatchObject({ rangeStrategy: 'bump' });
 });
 
-
 test('keeps Expo patches and minors automatic while requiring deliberate SDK majors', () => {
   for (const updateType of ['patch', 'minor'] as const) {
     expect(
