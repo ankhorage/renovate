@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 
 interface Dependency {
   readonly datasource: string;
+  readonly depType: string;
   readonly fileName: string;
   readonly manager: string;
   readonly packageName: string;
@@ -18,6 +19,7 @@ interface PackageRule {
   readonly groupSlug?: string;
   readonly labels?: readonly string[];
   readonly matchDatasources?: readonly string[];
+  readonly matchDepTypes?: readonly string[];
   readonly matchFileNames?: readonly string[];
   readonly matchManagers?: readonly string[];
   readonly matchPackageNames?: readonly string[];
@@ -82,6 +84,7 @@ export const surfaceToolchainFixtureLock = `
 export function dependency(packageName: string, overrides: Partial<Dependency> = {}): Dependency {
   return {
     datasource: 'npm',
+    depType: 'dependencies',
     fileName: 'package.json',
     manager: 'bun',
     packageName,
@@ -100,6 +103,7 @@ export function branchName(rule: Partial<PackageRule>): string {
 function matchesRule(rule: PackageRule, candidate: Dependency): boolean {
   return (
     matches(rule.matchDatasources, candidate.datasource) &&
+    matches(rule.matchDepTypes, candidate.depType) &&
     matches(rule.matchFileNames, candidate.fileName) &&
     matches(rule.matchManagers, candidate.manager) &&
     matches(rule.matchPackageNames, candidate.packageName) &&
