@@ -75,8 +75,8 @@ describe('consumer path discovery', () => {
 });
 
 describe('consumer update policy', () => {
-  test('automerges every validated npm release across patch, minor, and major updates', () => {
-    for (const packageName of ['expo', 'react', 'vitest']) {
+  test('automerges ordinary npm releases across patch, minor, and major updates', () => {
+    for (const packageName of ['react', 'vitest']) {
       for (const updateType of ['patch', 'minor', 'major'] as const) {
         expect(
           resolveRules(
