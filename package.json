@@ -67,7 +67,7 @@
     "@ankhorage/paradox": "^0.2.21",
     "@types/bun": "^1.4.2",
     "@types/node": "^26.6.4",
-    "renovate": "^44.132.0",
+    "renovate": "^44.132.1",
     "typescript": "~6.0.3"
   },
   "packageManager": "bun@1.4.2"
