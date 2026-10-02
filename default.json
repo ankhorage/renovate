@@ -8,6 +8,7 @@
   "prConcurrentLimit": 0,
   "branchConcurrentLimit": 0,
   "rebaseWhen": "behind-base-branch",
+  "pruneStaleBranches": true,
   "ignorePaths": [
     "**/node_modules/**",
     "**/bower_components/**",
