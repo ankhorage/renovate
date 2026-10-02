@@ -1,5 +1,12 @@
 # @ankhorage/renovate
 
+## 0.3.7
+
+### Patch Changes
+
+- 0fe66b5: Enable GitHub platform automerge for validated Renovate pull requests and remove Renovate branch and
+  pull-request concurrency caps.
+
 ## 0.3.6
 
 ### Patch Changes

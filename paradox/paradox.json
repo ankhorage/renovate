@@ -14,7 +14,7 @@
     {
       "id": "npm",
       "label": "npm",
-      "value": "v0.3.6",
+      "value": "v0.3.7",
       "color": "cb3837"
     },
     {
@@ -567,6 +567,12 @@
         "toSymbol": "expect",
         "callExpression": "expect",
         "sourcePath": "src/devtools-sync-protocol.test.ts"
+      },
+      {
+        "fromSymbol": "src/index.test.ts",
+        "toSymbol": "readFileSync",
+        "callExpression": "readFileSync",
+        "sourcePath": "src/index.test.ts"
       },
       {
         "fromSymbol": "src/index.test.ts",
