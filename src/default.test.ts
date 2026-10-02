@@ -17,11 +17,6 @@ describe('consumer preset', () => {
       enabled: false,
       matchPackageNames: ['*'],
     });
-    expect(consumerPreset).toMatchObject({
-      branchConcurrentLimit: 0,
-      prConcurrentLimit: 0,
-      rebaseWhen: 'behind-base-branch',
-    });
   });
 
   test('owns the managers required for package and workflow propagation', () => {
@@ -56,6 +51,15 @@ describe('consumer preset', () => {
         separateMajorMinor: false,
       });
     }
+  });
+});
+
+test('keeps dependency lanes unlimited while pruning stale Renovate state', () => {
+  expect(consumerPreset).toMatchObject({
+    branchConcurrentLimit: 0,
+    prConcurrentLimit: 0,
+    pruneStaleBranches: true,
+    rebaseWhen: 'behind-base-branch',
   });
 });
 
