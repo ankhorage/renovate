@@ -1,5 +1,11 @@
 # @ankhorage/renovate
 
+## 0.3.8
+
+### Patch Changes
+
+- b277ab1: Reconcile every managed repository against the full Renovate policy and prune stale dependency branches without limiting concurrent update lanes.
+
 ## 0.3.7
 
 ### Patch Changes

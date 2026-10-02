@@ -3,36 +3,9 @@
 
 # @ankhorage/renovate
 
-![license: MIT](./paradox/badges/license.svg) ![npm: v0.3.7](./paradox/badges/npm.svg) ![runtime: bun](./paradox/badges/runtime.svg) ![typescript: strict](./paradox/badges/typescript.svg) ![eslint: checked](./paradox/badges/eslint.svg) ![prettier: checked](./paradox/badges/prettier.svg) ![build: checked](./paradox/badges/build.svg) ![tests: checked](./paradox/badges/tests.svg) ![paradox: canonical](./paradox/badges/docs.svg)
+![license: MIT](./paradox/badges/license.svg) ![npm: v0.3.8](./paradox/badges/npm.svg) ![runtime: bun](./paradox/badges/runtime.svg) ![typescript: strict](./paradox/badges/typescript.svg) ![eslint: checked](./paradox/badges/eslint.svg) ![prettier: checked](./paradox/badges/prettier.svg) ![build: checked](./paradox/badges/build.svg) ![tests: checked](./paradox/badges/tests.svg) ![paradox: canonical](./paradox/badges/docs.svg)
 
 Ankhorage dependency update policy and automation powered by Renovate.
-
-## Configuration
-
-### Example
-
-```ts
-import { defineParadoxConfig } from '@ankhorage/paradox';
-
-export default defineParadoxConfig({
-  mode: 'write',
-  docs: {
-    title: '@ankhorage/renovate',
-    description: 'Ankhorage dependency update policy and automation powered by Renovate.',
-    usage: {
-      description:
-        'Extend the repository-hosted preset from each Ankhorage repository that Renovate manages.',
-      entrypoints: ['examples/renovate.json5', 'examples/devtools-renovate.json5'],
-    },
-  },
-  package: {
-    entrypoints: ['src/index.ts'],
-  },
-  output: {
-    dir: 'paradox',
-  },
-});
-```
 
 ## Generated documentation
 

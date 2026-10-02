@@ -14,7 +14,7 @@
     {
       "id": "npm",
       "label": "npm",
-      "value": "v0.3.7",
+      "value": "v0.3.8",
       "color": "cb3837"
     },
     {
@@ -67,11 +67,6 @@
   "usageEntries": [],
   "exampleCount": 0,
   "findings": [],
-  "readmeConfig": {
-    "language": "ts",
-    "code": "import { defineParadoxConfig } from '@ankhorage/paradox';\n\nexport default defineParadoxConfig({\n  mode: 'write',\n  docs: {\n    title: '@ankhorage/renovate',\n    description: 'Ankhorage dependency update policy and automation powered by Renovate.',\n    usage: {\n      description:\n        'Extend the repository-hosted preset from each Ankhorage repository that Renovate manages.',\n      entrypoints: ['examples/renovate.json5', 'examples/devtools-renovate.json5'],\n    },\n  },\n  package: {\n    entrypoints: ['src/index.ts'],\n  },\n  output: {\n    dir: 'paradox',\n  },\n});",
-    "sourcePath": "paradox.config.ts"
-  },
   "config": null,
   "entrypoints": [
     "src/index.ts"
@@ -159,6 +154,12 @@
       "dependencies": [
         "src/renovatePreset.testSupport.ts"
       ],
+      "exports": []
+    },
+    {
+      "path": "src/reconciliation-workflow.test.ts",
+      "isEntrypoint": false,
+      "dependencies": [],
       "exports": []
     },
     {
@@ -699,6 +700,30 @@
         "toSymbol": "resolveRules",
         "callExpression": "resolveRules",
         "sourcePath": "src/policy-owner.test.ts"
+      },
+      {
+        "fromSymbol": "src/reconciliation-workflow.test.ts",
+        "toSymbol": "readFileSync",
+        "callExpression": "readFileSync",
+        "sourcePath": "src/reconciliation-workflow.test.ts"
+      },
+      {
+        "fromSymbol": "src/reconciliation-workflow.test.ts",
+        "toSymbol": "describe",
+        "callExpression": "describe",
+        "sourcePath": "src/reconciliation-workflow.test.ts"
+      },
+      {
+        "fromSymbol": "src/reconciliation-workflow.test.ts",
+        "toSymbol": "test",
+        "callExpression": "test",
+        "sourcePath": "src/reconciliation-workflow.test.ts"
+      },
+      {
+        "fromSymbol": "src/reconciliation-workflow.test.ts",
+        "toSymbol": "expect",
+        "callExpression": "expect",
+        "sourcePath": "src/reconciliation-workflow.test.ts"
       },
       {
         "fromSymbol": "src/release-consumer-ruleset-sync.test.ts",
