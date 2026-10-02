@@ -20,6 +20,7 @@ describe('consumer preset', () => {
     expect(consumerPreset).toMatchObject({
       branchConcurrentLimit: 0,
       prConcurrentLimit: 0,
+      pruneStaleBranches: true,
       rebaseWhen: 'behind-base-branch',
     });
   });
