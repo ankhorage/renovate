@@ -49,7 +49,7 @@ test('groups policy literals with matching root package updates', () => {
       groupName: 'Policy-owned runtime',
       groupSlug: 'policy-owned-runtime',
       labels: ['dependencies', 'renovate:automerge'],
-      platformAutomerge: false,
+      platformAutomerge: true,
     });
   }
 });
@@ -69,7 +69,7 @@ test('automerges major runtime upgrades on the latest line', () => {
     enabled: true,
     groupName: 'Policy-owned runtime',
     labels: ['dependencies', 'renovate:automerge'],
-    platformAutomerge: false,
+    platformAutomerge: true,
     separateMajorMinor: false,
   });
 });
