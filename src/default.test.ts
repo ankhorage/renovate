@@ -18,8 +18,8 @@ describe('consumer preset', () => {
       matchPackageNames: ['*'],
     });
     expect(consumerPreset).toMatchObject({
-      branchConcurrentLimit: 4,
-      prConcurrentLimit: 4,
+      branchConcurrentLimit: 0,
+      prConcurrentLimit: 0,
       rebaseWhen: 'behind-base-branch',
     });
   });
@@ -51,7 +51,7 @@ describe('consumer preset', () => {
         groupName: 'Ankhorage CLI and Devtools toolchain',
         groupSlug: 'ankhorage-cli-and-devtools-toolchain',
         labels: ['dependencies', 'renovate:automerge'],
-        platformAutomerge: false,
+        platformAutomerge: true,
         rangeStrategy: 'bump',
         separateMajorMinor: false,
       });
@@ -93,7 +93,7 @@ describe('consumer update policy', () => {
           groupName: 'External npm dependencies',
           groupSlug: 'external-npm-dependencies',
           labels: ['dependencies', 'renovate:automerge'],
-          platformAutomerge: false,
+          platformAutomerge: true,
           rangeStrategy: 'bump',
           separateMajorMinor: false,
         });
@@ -172,7 +172,7 @@ describe('consumer workflow update permissions', () => {
       groupName: 'Ankhorage Renovate workflow',
       groupSlug: 'ankhorage-renovate-workflow',
       labels: ['dependencies', 'renovate:automerge'],
-      platformAutomerge: false,
+      platformAutomerge: true,
     });
 
     expect(
@@ -278,7 +278,7 @@ describe('Devtools-owner preset', () => {
         enabled: true,
         groupName: 'Devtools-owned toolchain',
         labels: ['dependencies', 'renovate:automerge'],
-        platformAutomerge: false,
+        platformAutomerge: true,
         rangeStrategy: 'bump',
       });
     }
