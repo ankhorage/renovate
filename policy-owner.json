@@ -33,7 +33,7 @@
       "rangeStrategy": "bump",
       "automerge": true,
       "automergeType": "pr",
-      "platformAutomerge": false,
+      "platformAutomerge": true,
       "separateMajorMinor": false
     }
   ]

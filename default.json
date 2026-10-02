@@ -5,8 +5,8 @@
   "enabledManagers": ["bun", "custom.regex"],
   "gitIgnoredAuthors": ["323340348+ankhorage-renovate-sync[bot]@users.noreply.github.com"],
   "labels": ["dependencies"],
-  "prConcurrentLimit": 4,
-  "branchConcurrentLimit": 4,
+  "prConcurrentLimit": 0,
+  "branchConcurrentLimit": 0,
   "rebaseWhen": "behind-base-branch",
   "ignorePaths": [
     "**/node_modules/**",
@@ -46,7 +46,7 @@
       "separateMajorMinor": false,
       "automerge": true,
       "automergeType": "pr",
-      "platformAutomerge": false
+      "platformAutomerge": true
     },
     {
       "description": ["Bundle external npm updates into one integration lane per repository."],
@@ -59,7 +59,7 @@
       "rangeStrategy": "bump",
       "automerge": true,
       "automergeType": "pr",
-      "platformAutomerge": false,
+      "platformAutomerge": true,
       "separateMajorMinor": false
     },
     {
@@ -79,7 +79,7 @@
       "rangeStrategy": "bump",
       "automerge": true,
       "automergeType": "pr",
-      "platformAutomerge": false,
+      "platformAutomerge": true,
       "separateMajorMinor": false
     },
     {
@@ -93,7 +93,7 @@
       "rangeStrategy": "bump",
       "automerge": true,
       "automergeType": "pr",
-      "platformAutomerge": false,
+      "platformAutomerge": true,
       "separateMajorMinor": false
     },
     {
@@ -118,7 +118,7 @@
       "groupSlug": "ankhorage-renovate-workflow",
       "automerge": true,
       "automergeType": "pr",
-      "platformAutomerge": false
+      "platformAutomerge": true
     },
     {
       "description": "Require deliberate React Native release-line upgrades.",
