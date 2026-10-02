@@ -1,0 +1,101 @@
+name: Reconcile Renovate state
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/reconcile.yml
+      - default.json
+      - devtools-owner.json
+      - policy-owner.json
+      - release-consumers.json
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: renovate-reconciliation
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      repositories: ${{ steps.registry.outputs.repositories }}
+    steps:
+      - name: Check out canonical Renovate policy
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Validate reconciliation registry
+        id: registry
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const fs = require('node:fs');
+            const registry = JSON.parse(fs.readFileSync('release-consumers.json', 'utf8'));
+            if (!Array.isArray(registry.repositories) || registry.repositories.length === 0) {
+              throw new Error('The Renovate reconciliation registry must contain repositories.');
+            }
+            const uniqueRepositories = new Set(registry.repositories);
+            if (uniqueRepositories.size !== registry.repositories.length) {
+              throw new Error('The Renovate reconciliation registry must not contain duplicates.');
+            }
+            for (const repository of registry.repositories) {
+              if (typeof repository !== 'string' || !/^ankhorage\/[a-z0-9-]+$/.test(repository)) {
+                throw new Error('The Renovate reconciliation registry contains an invalid repository.');
+              }
+            }
+            core.setOutput('repositories', JSON.stringify(registry.repositories));
+
+  reconcile:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        repository: ${{ fromJSON(needs.prepare.outputs.repositories) }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out canonical Renovate policy
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: '1.4.2'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install the pinned Renovate runner
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Mint the organization Renovate Sync App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.ANKHORAGE_RENOVATE_SYNC_CLIENT_ID }}
+          private-key: ${{ secrets.ANKHORAGE_RENOVATE_SYNC_PRIVATE_KEY }}
+          owner: ankhorage
+          permission-contents: write
+          permission-issues: write
+          permission-pull-requests: write
+          permission-workflows: write
+
+      - name: Reconcile full Renovate state
+        env:
+          RENOVATE_AUTODISCOVER: 'false'
+          RENOVATE_ONBOARDING: 'false'
+          RENOVATE_PLATFORM: github
+          RENOVATE_REPOSITORIES: ${{ matrix.repository }}
+          RENOVATE_REQUIRE_CONFIG: required
+          RENOVATE_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          echo "Reconciling full Renovate state for $RENOVATE_REPOSITORIES"
+          bun x renovate
