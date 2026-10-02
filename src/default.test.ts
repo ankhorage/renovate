@@ -18,8 +18,9 @@ describe('consumer preset', () => {
       matchPackageNames: ['*'],
     });
     expect(consumerPreset).toMatchObject({
-      branchConcurrentLimit: 0,
-      prConcurrentLimit: 0,
+      branchConcurrentLimit: 2,
+      prConcurrentLimit: 2,
+      pruneStaleBranches: true,
       rebaseWhen: 'behind-base-branch',
     });
   });
