@@ -5,9 +5,10 @@
   "enabledManagers": ["bun", "custom.regex"],
   "gitIgnoredAuthors": ["323340348+ankhorage-renovate-sync[bot]@users.noreply.github.com"],
   "labels": ["dependencies"],
-  "prConcurrentLimit": 0,
-  "branchConcurrentLimit": 0,
+  "prConcurrentLimit": 2,
+  "branchConcurrentLimit": 2,
   "rebaseWhen": "behind-base-branch",
+  "pruneStaleBranches": true,
   "ignorePaths": [
     "**/node_modules/**",
     "**/bower_components/**",
