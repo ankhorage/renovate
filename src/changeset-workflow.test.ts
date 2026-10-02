@@ -269,9 +269,7 @@ describe('trusted Renovate commit boundary', () => {
   test('pins every third-party action by immutable commit', () => {
     const uses = [...workflow.matchAll(/^\s*uses: ([^\s#]+)/gm)].map((match) => match[1]);
     expect(uses.length).toBeGreaterThan(0);
-    for (const action of uses) {
-      expect(action).toMatch(/@[0-9a-f]{40}$/);
-    }
+    for (const action of uses) expect(action).toMatch(/@[0-9a-f]{40}$/);
   });
 });
 
@@ -298,7 +296,7 @@ describe('trusted Devtools owner write boundary', () => {
     );
     expect(workflow).toContain('!effectiveHead.private &&');
     expect(workflow).toContain('releaseImpact;');
-    expect(workflow).not.toContain("const summary = changed.length > 0");
+    expect(workflow).not.toContain('const summary = changed.length > 0');
     expect(workflow).toContain("const frontmatter = '---\\n' + \"'\" + effectiveHead.name");
     expect(workflow).not.toContain("'---\\n---'");
   });
