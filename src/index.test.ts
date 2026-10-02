@@ -22,9 +22,7 @@ test('lets GitHub merge every validated Renovate pull request without concurrenc
     expect(preset).not.toContain('"platformAutomerge": false');
 
     const automergeRuleCount = [...preset.matchAll(/"automerge": true/gu)].length;
-    const platformAutomergeRuleCount = [
-      ...preset.matchAll(/"platformAutomerge": true/gu),
-    ].length;
+    const platformAutomergeRuleCount = [...preset.matchAll(/"platformAutomerge": true/gu)].length;
 
     expect(automergeRuleCount).toBeGreaterThan(0);
     expect(platformAutomergeRuleCount).toBe(automergeRuleCount);
