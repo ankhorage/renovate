@@ -64,7 +64,7 @@
   },
   "devDependencies": {
     "@ankhorage/devtools": "^2.0.65",
-    "@ankhorage/paradox": "^0.2.17",
+    "@ankhorage/paradox": "^0.2.18",
     "@types/bun": "^1.4.2",
     "@types/node": "^26.6.4",
     "renovate": "^44.131.3",
