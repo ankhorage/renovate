@@ -35,9 +35,6 @@
     "ankhorage/surface",
     "ankhorage/templates",
     "ankhorage/utility",
-    "ankhorage/zora",
-    "ankhorage/zora-chess",
-    "ankhorage/zora-game",
-    "ankhorage/zora-tabletop"
+    "ankhorage/zora"
   ]
 }
