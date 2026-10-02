@@ -276,7 +276,7 @@ describe('trusted Renovate commit boundary', () => {
 });
 
 describe('trusted Devtools owner write boundary', () => {
-  test('creates patch release metadata for every publishable Renovate update', () => {
+  test('creates patch release metadata only for publishable runtime dependency updates', () => {
     expect(workflow).toContain(
       "const isDevtoolsOwner = owner + '/' + repo === 'ankhorage/devtools';",
     );
@@ -290,14 +290,20 @@ describe('trusted Devtools owner write boundary', () => {
     expect(workflow).toContain(
       "const allSections = ['dependencies', 'optionalDependencies', 'peerDependencies', 'devDependencies'];",
     );
+    expect(workflow).toContain(
+      "const releaseSections = new Set([\\n              'dependencies',\\n              'optionalDependencies',\\n              'peerDependencies',",
+    );
+    expect(workflow).toContain(
+      'const releaseImpact = changed.some(({ section }) => releaseSections.has(section));',
+    );
     expect(workflow).toContain('!effectiveHead.private &&');
-    expect(workflow).not.toContain('changed.length > 0 &&');
-    expect(workflow).toContain("'Update Renovate-managed workflows.'");
+    expect(workflow).toContain('releaseImpact;');
+    expect(workflow).not.toContain("const summary = changed.length > 0");
     expect(workflow).toContain("const frontmatter = '---\\n' + \"'\" + effectiveHead.name");
     expect(workflow).not.toContain("'---\\n---'");
   });
 
-  test('removes only a stale workflow-owned Changeset when the package is private', () => {
+  test('removes a stale workflow-owned Changeset when the update has no release impact', () => {
     expect(workflow).toContain(
       "const changesetPath = '.changeset/renovate-' + pullNumber + '.md';",
     );
