@@ -1419,7 +1419,6 @@ jobs:
               core.info('The merged Renovate branch was already deleted.');
             }
 
-
       - name: Create central Renovate reconciliation token
         if: steps.gate.outputs.head-sha != ''
         id: renovate-reconcile-token
