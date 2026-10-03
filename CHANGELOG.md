@@ -1,5 +1,11 @@
 # @ankhorage/renovate
 
+## 0.3.11
+
+### Patch Changes
+
+- e2db647: Reconcile each consumer repository immediately after a trusted Renovate automerge so sibling Renovate pull requests are regenerated against the new base branch.
+
 ## 0.3.10
 
 ### Patch Changes
