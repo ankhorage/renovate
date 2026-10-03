@@ -1,5 +1,11 @@
 # @ankhorage/renovate
 
+## 0.3.9
+
+### Patch Changes
+
+- 92c6b72: Stop creating package releases for Renovate updates that only change development tooling, the package manager, or managed workflows.
+
 ## 0.3.8
 
 ### Patch Changes
