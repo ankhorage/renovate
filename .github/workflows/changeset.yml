@@ -1418,3 +1418,36 @@ jobs:
               }
               core.info('The merged Renovate branch was already deleted.');
             }
+
+      - name: Create central Renovate reconciliation token
+        if: steps.gate.outputs.head-sha != ''
+        id: renovate-reconcile-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ inputs.renovate_sync_client_id }}
+          private-key: ${{ secrets.renovate_sync_private_key }}
+          owner: ankhorage
+          repositories: renovate
+          permission-contents: write
+
+      - name: Reconcile sibling Renovate pull requests
+        if: steps.gate.outputs.head-sha != ''
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          TARGET_REPOSITORY: ${{ github.repository }}
+        with:
+          github-token: ${{ steps.renovate-reconcile-token.outputs.token }}
+          script: |
+            await github.rest.repos.createDispatchEvent({
+              owner: 'ankhorage',
+              repo: 'renovate',
+              event_type: 'renovate-reconcile',
+              client_payload: {
+                repository: process.env.TARGET_REPOSITORY,
+              },
+            });
+            core.info(
+              'Dispatched targeted Renovate reconciliation for ' +
+                process.env.TARGET_REPOSITORY +
+                '.',
+            );
