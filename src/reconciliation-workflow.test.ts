@@ -23,7 +23,7 @@ describe('Renovate reconciliation workflow', () => {
     expect(workflow).toContain("context.eventName === 'repository_dispatch'");
     expect(workflow).toContain('context.payload.client_payload?.repository');
     expect(workflow).toContain('!uniqueRepositories.has(requestedRepository)');
-    expect(workflow).toContain("JSON.stringify([requestedRepository])");
+    expect(workflow).toContain('JSON.stringify([requestedRepository])');
     expect(workflow).toContain('repository: ${{ fromJSON(needs.prepare.outputs.repositories) }}');
     expect(workflow).toContain('RENOVATE_REPOSITORIES: ${{ matrix.repository }}');
     expect(workflow).toContain("RENOVATE_AUTODISCOVER: 'false'");
