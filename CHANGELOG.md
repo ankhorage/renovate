@@ -1,5 +1,11 @@
 # @ankhorage/renovate
 
+## 0.3.12
+
+### Patch Changes
+
+- 6cb49d6: Prevent generic Renovate updates from changing Studio dependencies owned by the Expo Runtime platform contract.
+
 ## 0.3.11
 
 ### Patch Changes

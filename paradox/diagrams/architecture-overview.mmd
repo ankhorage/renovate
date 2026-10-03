@@ -41,3 +41,6 @@ graph TD
   package__ankhorage_renovate -.-> module_src_renovate_caller_workflow_test_ts
   module_src_renovatePreset_testSupport_ts["src/renovatePreset.testSupport.ts"]
   package__ankhorage_renovate -.-> module_src_renovatePreset_testSupport_ts
+  module_src_studio_platform_ownership_test_ts["src/studio-platform-ownership.test.ts"]
+  package__ankhorage_renovate -.-> module_src_studio_platform_ownership_test_ts
+  module_src_studio_platform_ownership_test_ts --> module_src_renovatePreset_testSupport_ts

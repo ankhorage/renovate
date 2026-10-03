@@ -14,7 +14,7 @@
     {
       "id": "npm",
       "label": "npm",
-      "value": "v0.3.11",
+      "value": "v0.3.12",
       "color": "cb3837"
     },
     {
@@ -195,6 +195,14 @@
         "surfaceToolchainFixtureManifest",
         "TrustedToolchainFixtureManifest"
       ]
+    },
+    {
+      "path": "src/studio-platform-ownership.test.ts",
+      "isEntrypoint": false,
+      "dependencies": [
+        "src/renovatePreset.testSupport.ts"
+      ],
+      "exports": []
     }
   ],
   "exports": [],
@@ -229,7 +237,7 @@
       "security": [],
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 84,
+        "line": 86,
         "column": 1
       }
     },
@@ -240,7 +248,7 @@
       "security": [],
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 96,
+        "line": 99,
         "column": 1
       }
     },
@@ -251,7 +259,7 @@
       "security": [],
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 103,
+        "line": 106,
         "column": 1
       }
     },
@@ -262,7 +270,7 @@
       "security": [],
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 114,
+        "line": 118,
         "column": 1
       }
     },
@@ -273,7 +281,7 @@
       "security": [],
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 125,
+        "line": 129,
         "column": 1
       }
     },
@@ -284,7 +292,7 @@
       "security": [],
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 129,
+        "line": 133,
         "column": 1
       }
     },
@@ -295,7 +303,7 @@
       "security": [],
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 157,
+        "line": 161,
         "column": 1
       }
     },
@@ -306,7 +314,7 @@
       "security": [],
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 205,
+        "line": 209,
         "column": 1
       }
     },
@@ -317,7 +325,7 @@
       "security": [],
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 225,
+        "line": 229,
         "column": 1
       }
     },
@@ -328,7 +336,7 @@
       "security": [],
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 233,
+        "line": 237,
         "column": 1
       }
     },
@@ -339,7 +347,7 @@
       "security": [],
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 241,
+        "line": 245,
         "column": 1
       }
     },
@@ -350,7 +358,7 @@
       "security": [],
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 262,
+        "line": 266,
         "column": 1
       }
     },
@@ -361,7 +369,7 @@
       "security": [],
       "sourceLocation": {
         "filePath": "src/renovatePreset.testSupport.ts",
-        "line": 269,
+        "line": 273,
         "column": 1
       }
     }
@@ -398,6 +406,11 @@
         "fromPath": "src/policy-owner.test.ts",
         "toPath": "src/renovatePreset.testSupport.ts",
         "sourcePath": "src/policy-owner.test.ts"
+      },
+      {
+        "fromPath": "src/studio-platform-ownership.test.ts",
+        "toPath": "src/renovatePreset.testSupport.ts",
+        "sourcePath": "src/studio-platform-ownership.test.ts"
       }
     ],
     "calls": [
@@ -868,6 +881,42 @@
         "toSymbol": "compareNumber",
         "callExpression": "compareNumber",
         "sourcePath": "src/renovatePreset.testSupport.ts"
+      },
+      {
+        "fromSymbol": "src/studio-platform-ownership.test.ts",
+        "toSymbol": "readPreset",
+        "callExpression": "readPreset",
+        "sourcePath": "src/studio-platform-ownership.test.ts"
+      },
+      {
+        "fromSymbol": "src/studio-platform-ownership.test.ts",
+        "toSymbol": "describe",
+        "callExpression": "describe",
+        "sourcePath": "src/studio-platform-ownership.test.ts"
+      },
+      {
+        "fromSymbol": "src/studio-platform-ownership.test.ts",
+        "toSymbol": "test",
+        "callExpression": "test",
+        "sourcePath": "src/studio-platform-ownership.test.ts"
+      },
+      {
+        "fromSymbol": "src/studio-platform-ownership.test.ts",
+        "toSymbol": "expect",
+        "callExpression": "expect",
+        "sourcePath": "src/studio-platform-ownership.test.ts"
+      },
+      {
+        "fromSymbol": "src/studio-platform-ownership.test.ts",
+        "toSymbol": "resolveRules",
+        "callExpression": "resolveRules",
+        "sourcePath": "src/studio-platform-ownership.test.ts"
+      },
+      {
+        "fromSymbol": "src/studio-platform-ownership.test.ts",
+        "toSymbol": "dependency",
+        "callExpression": "dependency",
+        "sourcePath": "src/studio-platform-ownership.test.ts"
       }
     ],
     "typeReferences": [],
