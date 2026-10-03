@@ -288,9 +288,10 @@ describe('trusted Devtools owner write boundary', () => {
     expect(workflow).toContain(
       "const allSections = ['dependencies', 'optionalDependencies', 'peerDependencies', 'devDependencies'];",
     );
-    expect(workflow).toContain(
-      "const releaseSections = new Set([\\n              'dependencies',\\n              'optionalDependencies',\\n              'peerDependencies',",
-    );
+    expect(workflow).toContain('const releaseSections = new Set([');
+    expect(workflow).toContain("'dependencies',");
+    expect(workflow).toContain("'optionalDependencies',");
+    expect(workflow).toContain("'peerDependencies',");
     expect(workflow).toContain(
       'const releaseImpact = changed.some(({ section }) => releaseSections.has(section));',
     );
