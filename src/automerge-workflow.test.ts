@@ -39,5 +39,11 @@ describe('trusted Renovate automerge', () => {
     expect(mergeJob).toContain("reviewState.reviewDecision === 'CHANGES_REQUESTED'");
     expect(mergeJob).toContain('reviewState.unresolved');
     expect(mergeJob).toContain('reviewThreads(first: 100, after: $cursor)');
+    expect(mergeJob).toContain('id: renovate-reconcile-token');
+    expect(mergeJob).toContain('repositories: renovate');
+    expect(mergeJob).toContain('permission-contents: write');
+    expect(mergeJob).toContain("event_type: 'renovate-reconcile'");
+    expect(mergeJob).toContain('repository: process.env.TARGET_REPOSITORY');
+    expect(mergeJob).toContain('github-token: ${{ steps.renovate-reconcile-token.outputs.token }}');
   });
 });
