@@ -12,14 +12,17 @@ on:
       - release-consumers.json
   schedule:
     - cron: '17 3 * * *'
+  repository_dispatch:
+    types:
+      - renovate-reconcile
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: renovate-reconciliation
-  cancel-in-progress: false
+  group: renovate-reconciliation-${{ github.event.client_payload.repository || 'all' }}
+  cancel-in-progress: true
 
 jobs:
   prepare:
@@ -48,6 +51,26 @@ jobs:
               if (typeof repository !== 'string' || !/^ankhorage\/[a-z0-9-]+$/.test(repository)) {
                 throw new Error('The Renovate reconciliation registry contains an invalid repository.');
               }
+            }
+            const requestedRepository =
+              context.eventName === 'repository_dispatch'
+                ? context.payload.client_payload?.repository
+                : undefined;
+            if (requestedRepository !== undefined) {
+              if (
+                typeof requestedRepository !== 'string' ||
+                !/^ankhorage\/[a-z0-9-]+$/.test(requestedRepository)
+              ) {
+                throw new Error('Targeted Renovate reconciliation requires one valid repository.');
+              }
+              if (!uniqueRepositories.has(requestedRepository)) {
+                throw new Error(
+                  'Targeted Renovate reconciliation repository is not registered: ' +
+                    requestedRepository,
+                );
+              }
+              core.setOutput('repositories', JSON.stringify([requestedRepository]));
+              return;
             }
             core.setOutput('repositories', JSON.stringify(registry.repositories));
 
