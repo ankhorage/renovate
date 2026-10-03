@@ -1226,74 +1226,191 @@ jobs:
           script: |
             const pullNumber = context.payload.pull_request?.number;
             const permittedActors = new Set(['renovate[bot]', 'ankhorage-renovate-sync[bot]']);
+            const allowedConclusions = new Set(['neutral', 'skipped', 'success']);
+            const mergeAttempts = 6;
+            const mergeRetryDelayMs = 5000;
+            const expectedHead = process.env.EXPECTED_HEAD_SHA;
             const { owner, repo } = context.repo;
-            const { data: pull } = await github.rest.pulls.get({
-              owner,
-              repo,
-              pull_number: pullNumber,
-            });
-            const labels = new Set(pull.labels.map(({ name }) => name));
-            const events = await github.paginate(github.rest.issues.listEventsForTimeline, {
-              owner,
-              repo,
-              issue_number: pullNumber,
-              per_page: 100,
-            });
-            const labelEvent = events
-              .filter(
-                ({ event, label }) =>
-                  event === 'labeled' && label?.name === 'renovate:automerge',
-              )
-              .at(-1);
-            const review = await github.graphql(
-              `query($owner: String!, $repo: String!, $number: Int!) {
-                repository(owner: $owner, name: $repo) {
-                  pullRequest(number: $number) {
-                    reviewDecision
-                    reviewThreads(first: 100) {
-                      nodes { isResolved }
-                      pageInfo { hasNextPage }
+
+            const readTrustedLabel = async () => {
+              const events = await github.paginate(github.rest.issues.listEventsForTimeline, {
+                owner,
+                repo,
+                issue_number: pullNumber,
+                per_page: 100,
+              });
+              const event = events
+                .filter(
+                  ({ event, label }) =>
+                    event === 'labeled' && label?.name === 'renovate:automerge',
+                )
+                .at(-1);
+              return event && permittedActors.has(event.actor?.login);
+            };
+
+            const readReviewState = async () => {
+              let cursor = null;
+              let reviewDecision = null;
+              let unresolved = false;
+              do {
+                const result = await github.graphql(
+                  `query($owner: String!, $repo: String!, $number: Int!, $cursor: String) {
+                    repository(owner: $owner, name: $repo) {
+                      pullRequest(number: $number) {
+                        reviewDecision
+                        reviewThreads(first: 100, after: $cursor) {
+                          nodes { isResolved }
+                          pageInfo { hasNextPage endCursor }
+                        }
+                      }
                     }
-                  }
+                  }`,
+                  { owner, repo, number: pullNumber, cursor },
+                );
+                const pullRequest = result.repository?.pullRequest;
+                if (!pullRequest) throw new Error('Pull request review state is unavailable.');
+                reviewDecision = pullRequest.reviewDecision;
+                unresolved ||= pullRequest.reviewThreads.nodes.some(({ isResolved }) => !isResolved);
+                cursor = pullRequest.reviewThreads.pageInfo.hasNextPage
+                  ? pullRequest.reviewThreads.pageInfo.endCursor
+                  : null;
+              } while (cursor);
+              return { reviewDecision, unresolved };
+            };
+
+            const readChecks = async () => {
+              const runs = await github.paginate(github.rest.checks.listForRef, {
+                owner,
+                repo,
+                ref: expectedHead,
+                filter: 'latest',
+                per_page: 100,
+              });
+              const latestRuns = new Map();
+              for (const run of runs) {
+                if (run.name.startsWith('changeset /')) continue;
+                const key = String(run.app?.id ?? 'unknown') + ':' + run.name;
+                const current = latestRuns.get(key);
+                if (!current || run.id > current.id) latestRuns.set(key, run);
+              }
+              const checks = [...latestRuns.values()];
+              const validate = checks.find(
+                ({ app, name }) => app?.slug === 'github-actions' && name === 'validate',
+              );
+              const failed = checks.some(
+                ({ conclusion, status }) =>
+                  status === 'completed' && !allowedConclusions.has(conclusion),
+              );
+              const pending =
+                !validate ||
+                validate.status !== 'completed' ||
+                validate.conclusion !== 'success' ||
+                checks.some(({ status }) => status !== 'completed');
+
+              const statuses = await github.paginate(github.rest.repos.listCommitStatusesForRef, {
+                owner,
+                repo,
+                ref: expectedHead,
+                per_page: 100,
+              });
+              const latestStatuses = new Map();
+              for (const status of statuses) {
+                if (!latestStatuses.has(status.context)) latestStatuses.set(status.context, status);
+              }
+              const statusFailed = [...latestStatuses.values()].some(
+                ({ state }) => state === 'error' || state === 'failure',
+              );
+              const statusPending = [...latestStatuses.values()].some(
+                ({ state }) => state === 'pending',
+              );
+              return {
+                failed: failed || statusFailed,
+                pending: pending || statusPending,
+              };
+            };
+
+            const readMergeState = async () => {
+              const { data: pull } = await github.rest.pulls.get({
+                owner,
+                repo,
+                pull_number: pullNumber,
+              });
+              const labels = new Set(pull.labels.map(({ name }) => name));
+              const [trustedLabel, reviewState, checks] = await Promise.all([
+                readTrustedLabel(),
+                readReviewState(),
+                readChecks(),
+              ]);
+              if (
+                pull.state !== 'open' ||
+                pull.draft ||
+                pull.head.sha !== expectedHead ||
+                pull.head.repo?.full_name !== owner + '/' + repo ||
+                !pull.head.ref.startsWith('renovate/') ||
+                !permittedActors.has(pull.user?.login) ||
+                !labels.has('renovate:automerge') ||
+                labels.has('renovate:review-required') ||
+                !trustedLabel ||
+                reviewState.reviewDecision === 'CHANGES_REQUESTED' ||
+                reviewState.unresolved
+              ) {
+                throw new Error('The pull request changed after its merge gate passed.');
+              }
+              if (checks.failed) {
+                throw new Error('The exact Renovate head has failing CI.');
+              }
+              return { pull, checks };
+            };
+
+            let mergedPull = null;
+            for (let attempt = 1; attempt <= mergeAttempts; attempt += 1) {
+              const { pull, checks } = await readMergeState();
+              if (pull.mergeable === false) {
+                throw new Error('The pull request is no longer mergeable.');
+              }
+              if (pull.mergeable !== true || checks.pending) {
+                if (attempt === mergeAttempts) {
+                  throw new Error('Timed out waiting for mergeability to settle after a base update.');
                 }
-              }`,
-              { owner, repo, number: pullNumber },
-            );
-            const reviewState = review.repository?.pullRequest;
-            if (
-              pull.state !== 'open' ||
-              pull.draft ||
-              pull.mergeable !== true ||
-              pull.head.sha !== process.env.EXPECTED_HEAD_SHA ||
-              pull.head.repo?.full_name !== owner + '/' + repo ||
-              !pull.head.ref.startsWith('renovate/') ||
-              !permittedActors.has(pull.user?.login) ||
-              !labels.has('renovate:automerge') ||
-              labels.has('renovate:review-required') ||
-              !labelEvent ||
-              !permittedActors.has(labelEvent.actor?.login) ||
-              !reviewState ||
-              reviewState.reviewDecision === 'CHANGES_REQUESTED' ||
-              reviewState.reviewThreads.pageInfo.hasNextPage ||
-              reviewState.reviewThreads.nodes.some(({ isResolved }) => !isResolved)
-            ) {
-              throw new Error('The pull request changed after its merge gate passed.');
+                core.info('Mergeability is being recalculated; revalidating before retry.');
+                await new Promise((resolve) => setTimeout(resolve, mergeRetryDelayMs));
+                continue;
+              }
+
+              try {
+                const result = await github.rest.pulls.merge({
+                  owner,
+                  repo,
+                  pull_number: pullNumber,
+                  merge_method: 'squash',
+                  sha: expectedHead,
+                });
+                if (!result.data.merged) {
+                  throw new Error(result.data.message || 'GitHub did not merge the pull request.');
+                }
+                mergedPull = pull;
+                break;
+              } catch (error) {
+                const message = error.response?.data?.message ?? error.message;
+                const baseBranchRace =
+                  error.status === 405 &&
+                  message === 'Base branch was modified. Review and try the merge again.';
+                if (!baseBranchRace || attempt === mergeAttempts) {
+                  throw error;
+                }
+                core.info('The base branch changed during merge; revalidating before retry.');
+                await new Promise((resolve) => setTimeout(resolve, mergeRetryDelayMs));
+              }
             }
-            const result = await github.rest.pulls.merge({
-              owner,
-              repo,
-              pull_number: pullNumber,
-              merge_method: 'squash',
-              sha: process.env.EXPECTED_HEAD_SHA,
-            });
-            if (!result.data.merged) {
-              throw new Error(result.data.message || 'GitHub did not merge the pull request.');
+
+            if (!mergedPull) {
+              throw new Error('GitHub did not merge the pull request after bounded retries.');
             }
             try {
               await github.rest.git.deleteRef({
                 owner,
                 repo,
-                ref: 'heads/' + pull.head.ref,
+                ref: 'heads/' + mergedPull.head.ref,
               });
             } catch (error) {
               if (error.status !== 404) {
