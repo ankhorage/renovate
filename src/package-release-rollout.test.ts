@@ -16,7 +16,7 @@ const releaseWorkflow = readFileSync(
 
 describe('package release rollout registry', () => {
   test('lists every reviewed managed package consumer exactly once', () => {
-    expect(registry.repositories).toHaveLength(37);
+    expect(registry.repositories).toHaveLength(34);
     expect(new Set(registry.repositories).size).toBe(registry.repositories.length);
     expect(registry.repositories).toContain('ankhorage/apm');
     expect(registry.repositories).toContain('ankhorage/devtools');
@@ -26,7 +26,10 @@ describe('package release rollout registry', () => {
     expect(registry.repositories).toContain('ankhorage/renovate');
     expect(registry.repositories).not.toContain('ankhorage/api-gateway');
     expect(registry.repositories).not.toContain('ankhorage/gh');
+    expect(registry.repositories).not.toContain('ankhorage/zora-chess');
+    expect(registry.repositories).not.toContain('ankhorage/zora-game');
     expect(registry.repositories).not.toContain('ankhorage/zora-navigation');
+    expect(registry.repositories).not.toContain('ankhorage/zora-tabletop');
     for (const repository of registry.repositories) {
       expect(repository).toMatch(/^ankhorage\/[a-z0-9-]+$/);
     }
