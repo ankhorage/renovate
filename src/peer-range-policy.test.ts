@@ -5,7 +5,15 @@ import { dependency, readPreset, resolveRules } from './renovatePreset.testSuppo
 const consumerPreset = readPreset('../default.json');
 
 test('requires deliberate platform release-line upgrades before widening peers', () => {
-  const [reactNativeRule, expoRule, peerRule] = consumerPreset.packageRules.slice(-3);
+  const reactNativeRule = consumerPreset.packageRules.find((rule) =>
+    rule.description.includes('React Native release-line upgrades'),
+  );
+  const expoRule = consumerPreset.packageRules.find((rule) =>
+    rule.description.includes('Expo SDK major upgrades'),
+  );
+  const peerRule = consumerPreset.packageRules.find((rule) =>
+    rule.description.includes('Widen peer dependency compatibility'),
+  );
   expect(reactNativeRule).toMatchObject({
     enabled: false,
     matchPackageNames: ['react-native'],

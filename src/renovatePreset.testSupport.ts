@@ -6,6 +6,7 @@ interface Dependency {
   readonly fileName: string;
   readonly manager: string;
   readonly packageName: string;
+  readonly repository: string;
   readonly updateType: string;
 }
 
@@ -23,6 +24,7 @@ interface PackageRule {
   readonly matchFileNames?: readonly string[];
   readonly matchManagers?: readonly string[];
   readonly matchPackageNames?: readonly string[];
+  readonly matchRepositories?: readonly string[];
   readonly matchUpdateTypes?: readonly string[];
   readonly platformAutomerge?: boolean;
   readonly rangeStrategy?: string;
@@ -88,6 +90,7 @@ export function dependency(packageName: string, overrides: Partial<Dependency> =
     fileName: 'package.json',
     manager: 'bun',
     packageName,
+    repository: 'ankhorage/example',
     updateType: 'minor',
     ...overrides,
   };
@@ -107,6 +110,7 @@ function matchesRule(rule: PackageRule, candidate: Dependency): boolean {
     matches(rule.matchFileNames, candidate.fileName) &&
     matches(rule.matchManagers, candidate.manager) &&
     matches(rule.matchPackageNames, candidate.packageName) &&
+    matches(rule.matchRepositories, candidate.repository) &&
     matches(rule.matchUpdateTypes, candidate.updateType)
   );
 }
