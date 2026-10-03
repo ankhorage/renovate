@@ -14,7 +14,7 @@
     {
       "id": "npm",
       "label": "npm",
-      "value": "v0.3.9",
+      "value": "v0.3.10",
       "color": "cb3837"
     },
     {
@@ -84,6 +84,12 @@
       "dependencies": [
         "src/renovatePreset.testSupport.ts"
       ],
+      "exports": []
+    },
+    {
+      "path": "src/changeset-workflow-merge.test.ts",
+      "isEntrypoint": false,
+      "dependencies": [],
       "exports": []
     },
     {
@@ -442,6 +448,30 @@
         "toSymbol": "resolveTrustedToolchainFixtureVersion",
         "callExpression": "resolveTrustedToolchainFixtureVersion",
         "sourcePath": "src/changeset-toolchain-resolution.test.ts"
+      },
+      {
+        "fromSymbol": "src/changeset-workflow-merge.test.ts",
+        "toSymbol": "readFileSync",
+        "callExpression": "readFileSync",
+        "sourcePath": "src/changeset-workflow-merge.test.ts"
+      },
+      {
+        "fromSymbol": "src/changeset-workflow-merge.test.ts",
+        "toSymbol": "describe",
+        "callExpression": "describe",
+        "sourcePath": "src/changeset-workflow-merge.test.ts"
+      },
+      {
+        "fromSymbol": "src/changeset-workflow-merge.test.ts",
+        "toSymbol": "test",
+        "callExpression": "test",
+        "sourcePath": "src/changeset-workflow-merge.test.ts"
+      },
+      {
+        "fromSymbol": "src/changeset-workflow-merge.test.ts",
+        "toSymbol": "expect",
+        "callExpression": "expect",
+        "sourcePath": "src/changeset-workflow-merge.test.ts"
       },
       {
         "fromSymbol": "src/changeset-workflow-write-boundary.test.ts",

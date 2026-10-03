@@ -1,5 +1,11 @@
 # @ankhorage/renovate
 
+## 0.3.10
+
+### Patch Changes
+
+- a2d6d25: Retry trusted Renovate automerges when GitHub reports a transient base-branch modification race.
+
 ## 0.3.9
 
 ### Patch Changes
