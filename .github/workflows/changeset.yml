@@ -934,9 +934,16 @@ jobs:
             } catch (error) {
               if (error.status !== 404) throw error;
             }
+            const releaseSections = new Set([
+              'dependencies',
+              'optionalDependencies',
+              'peerDependencies',
+            ]);
+            const releaseImpact = changed.some(({ section }) => releaseSections.has(section));
             const release =
               !effectiveHead.private &&
-              typeof effectiveHead.name === 'string';
+              typeof effectiveHead.name === 'string' &&
+              releaseImpact;
             if (release) {
               const frontmatter = '---\n' + "'" + effectiveHead.name + "': patch\n---";
               const tick = String.fromCharCode(96);
@@ -946,9 +953,7 @@ jobs:
               const subject = isDevtoolsOwner
                 ? 'Update Devtools-owned dependencies: '
                 : 'Update dependencies: ';
-              const summary = changed.length > 0
-                ? subject + names + '.'
-                : 'Update Renovate-managed workflows.';
+              const summary = subject + names + '.';
               const content = frontmatter + '\n\n' + summary + '\n';
               if (currentChangesetContent !== content) {
                 managedFiles.set(changesetPath, Buffer.from(content));
