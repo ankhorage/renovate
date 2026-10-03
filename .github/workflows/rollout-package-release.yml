@@ -23,7 +23,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: package-release-rollout
+  group: package-release-rollout-${{ github.event.client_payload.package_name || inputs.package_name }}
   cancel-in-progress: false
 
 jobs:
