@@ -126,11 +126,11 @@ describe('package release rollout execution', () => {
     expect(workflow).not.toContain('pulls.create');
   });
 
-  test('serializes grouped package releases without cancelling an in-flight rollout', () => {
-    expect(workflow).toContain('group: package-release-rollout');
-    expect(workflow).not.toContain(
+  test('serializes releases per package without cancelling an in-flight rollout', () => {
+    expect(workflow).toContain(
       'group: package-release-rollout-${{ github.event.client_payload.package_name || inputs.package_name }}',
     );
+    expect(workflow).not.toContain('group: package-release-rollout\n');
     expect(workflow).toContain('cancel-in-progress: false');
     expect(workflow).toContain("node-version: '24'");
   });
