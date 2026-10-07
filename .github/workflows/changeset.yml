@@ -107,7 +107,7 @@ jobs:
             }
 
             const sections = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'];
-            const toolchainNames = new Set(['@ankhorage/ankh', '@ankhorage/devtools']);
+            const toolchainNames = new Set(['@ankhorage/devtools']);
             const toolchainChanged = sections.some((section) =>
               [...toolchainNames].some((name) => base[section]?.[name] !== head[section]?.[name])
             );
@@ -174,8 +174,6 @@ jobs:
         if: steps.metadata.outputs.sync-mode == 'consumer'
         id: toolchain
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
-        env:
-          CANONICAL_ANKH_VERSION: '0.4.0'
         with:
           script: |
             const fs = require('node:fs');
@@ -216,17 +214,10 @@ jobs:
               }
               return false;
             };
-            const resolveVersion = (name, fallbackVersion) => {
+            const resolveVersion = (name) => {
               const declarations = sections
                 .map((section) => manifest[section]?.[name])
                 .filter((value) => typeof value === 'string');
-              if (declarations.length === 0 && fallbackVersion) {
-                // This immutable workflow owns the CLI version for Devtools-only consumers.
-                if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(fallbackVersion)) {
-                  throw new Error('The trusted workflow must pin an exact fallback ' + name + ' version.');
-                }
-                return fallbackVersion;
-              }
               const escaped = name.replace(/[.*+?^$()|[\]\\]/g, '\\$&');
               const matches = [...lock.matchAll(new RegExp(
                 '^    "' + escaped + '": \\["' + escaped + '@([^"]+)"',
@@ -248,32 +239,55 @@ jobs:
               }
               return selectedVersion;
             };
-            core.setOutput(
-              'ankh-version',
-              resolveVersion('@ankhorage/ankh', process.env.CANONICAL_ANKH_VERSION),
-            );
             core.setOutput('devtools-version', resolveVersion('@ankhorage/devtools'));
 
       - name: Install the exact released toolchain
         if: steps.metadata.outputs.sync-mode == 'consumer'
         env:
-          ANKH_VERSION: ${{ steps.toolchain.outputs.ankh-version }}
           DEVTOOLS_VERSION: ${{ steps.toolchain.outputs.devtools-version }}
         run: |
           mkdir -p "$RUNNER_TEMP/toolchain"
-          ANKH_VERSION="$ANKH_VERSION" DEVTOOLS_VERSION="$DEVTOOLS_VERSION" bun -e '
+          DEVTOOLS_VERSION="$DEVTOOLS_VERSION" bun -e '
             import { writeFileSync } from "node:fs";
             writeFileSync(
               process.env.RUNNER_TEMP + "/toolchain/package.json",
               JSON.stringify({
                 private: true,
                 dependencies: {
-                  "@ankhorage/ankh": process.env.ANKH_VERSION,
                   "@ankhorage/devtools": process.env.DEVTOOLS_VERSION,
                 },
               }, null, 2) + "\n",
             );
           '
+          cat > "$RUNNER_TEMP/toolchain/run-devtools-command.mjs" <<'EOF'
+          import provider from '@ankhorage/devtools/cli';
+
+          const operation = process.argv[2];
+          const matchesPath = (path) =>
+            Array.isArray(path) && path.length === 1 && path[0] === operation;
+          const command = provider.commands.find((candidate) => matchesPath(candidate.path));
+          const handler = provider.handlers?.find((candidate) => matchesPath(candidate.path));
+          if (!command || !handler) {
+            throw new Error(`Devtools provider does not expose the ${operation} repository command.`);
+          }
+
+          const result = await handler.handler({
+            argv: ['.'],
+            command,
+            provider,
+            context: {
+              cwd: process.cwd(),
+              env: process.env,
+              writeStdout(text) {
+                process.stdout.write(text);
+              },
+              writeStderr(text) {
+                process.stderr.write(text);
+              },
+            },
+          });
+          process.exitCode = result?.exitCode ?? 0;
+          EOF
           bun install \
             --cwd "$RUNNER_TEMP/toolchain" \
             --ignore-scripts \
@@ -302,13 +316,13 @@ jobs:
           SAFE_REAL_BUN="$(command -v bun)"
           export PATH="$RUNNER_TEMP/safe-bin:$PATH"
           cd repository
-          "$RUNNER_TEMP/toolchain/node_modules/.bin/ankh" devtools sync .
+          bun "$RUNNER_TEMP/toolchain/run-devtools-command.mjs" sync
           rm node_modules
           git add -N -f -- .
           first_hash="$(git diff --binary | shasum -a 256)"
           ln -s "$RUNNER_TEMP/toolchain/node_modules" node_modules
-          "$RUNNER_TEMP/toolchain/node_modules/.bin/ankh" devtools sync .
-          "$RUNNER_TEMP/toolchain/node_modules/.bin/ankh" devtools status .
+          bun "$RUNNER_TEMP/toolchain/run-devtools-command.mjs" sync
+          bun "$RUNNER_TEMP/toolchain/run-devtools-command.mjs" status
           rm node_modules
           git add -N -f -- .
           second_hash="$(git diff --binary | shasum -a 256)"
