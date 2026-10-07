@@ -149,9 +149,7 @@ describe('trusted Renovate synchronization', () => {
     const syncCommand = 'bun "$RUNNER_TEMP/toolchain/run-devtools-command.mjs" sync';
     expect(workflow.split(syncCommand)).toHaveLength(3);
     expect(workflow).toContain('test "$first_hash" = "$second_hash"');
-    expect(workflow).toContain(
-      'bun "$RUNNER_TEMP/toolchain/run-devtools-command.mjs" status',
-    );
+    expect(workflow).toContain('bun "$RUNNER_TEMP/toolchain/run-devtools-command.mjs" status');
     expect(workflow).not.toContain('node_modules/.bin/ankh');
     expect(prepareJob.split('git add -N -f -- .')).toHaveLength(3);
   });
