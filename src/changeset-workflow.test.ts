@@ -52,7 +52,7 @@ describe('trusted Renovate integration', () => {
 describe('trusted Renovate toolchain policy', () => {
   test('uses the exact lock-selected provider without package scripts', () => {
     expect(workflow).toContain("resolveVersion('@ankhorage/devtools')");
-    expect(workflow).toContain('"@ankhorage/ankh": process.env.ANKH_VERSION');
+    expect(workflow).not.toContain('"@ankhorage/ankh": process.env.ANKH_VERSION');
     expect(workflow).toContain('"@ankhorage/devtools": process.env.DEVTOOLS_VERSION');
     expect(workflow).toContain('package.json must declare compatible root');
     expect(workflow).toContain('--ignore-scripts --lockfile-only');
@@ -60,15 +60,7 @@ describe('trusted Renovate toolchain policy', () => {
     expect(workflow).not.toContain('@latest');
   });
 
-  test('supports the real Surface shape with a canonical exact CLI fallback', () => {
-    expect(
-      resolveTrustedToolchainFixtureVersion(
-        surfaceToolchainFixtureManifest,
-        surfaceToolchainFixtureLock,
-        '@ankhorage/ankh',
-        '0.4.0',
-      ),
-    ).toBe('0.4.0');
+  test('uses only the released Devtools package for consumer synchronization', () => {
     expect(
       resolveTrustedToolchainFixtureVersion(
         surfaceToolchainFixtureManifest,
@@ -76,11 +68,10 @@ describe('trusted Renovate toolchain policy', () => {
         '@ankhorage/devtools',
       ),
     ).toBe('1.7.0');
-    expect(workflow).toContain("CANONICAL_ANKH_VERSION: '0.4.0'");
-    expect(workflow).toContain('if (declarations.length === 0 && fallbackVersion)');
-    expect(workflow).toContain(
-      "resolveVersion('@ankhorage/ankh', process.env.CANONICAL_ANKH_VERSION)",
-    );
+    expect(workflow).not.toContain('CANONICAL_ANKH_VERSION');
+    expect(workflow).not.toContain("resolveVersion('@ankhorage/ankh'");
+    expect(workflow).toContain("resolveVersion('@ankhorage/devtools')");
+    expect(workflow).toContain("import provider from '@ankhorage/devtools/cli';");
   });
 });
 
@@ -154,11 +145,12 @@ describe('trusted Renovate invalid toolchain selection', () => {
 });
 
 describe('trusted Renovate synchronization', () => {
-  test('requires a byte-stable second sync and current status', () => {
-    const syncCommand = '"$RUNNER_TEMP/toolchain/node_modules/.bin/ankh" devtools sync .';
+  test('requires a byte-stable second direct Devtools sync and current status', () => {
+    const syncCommand = 'bun "$RUNNER_TEMP/toolchain/run-devtools-command.mjs" sync';
     expect(workflow.split(syncCommand)).toHaveLength(3);
     expect(workflow).toContain('test "$first_hash" = "$second_hash"');
-    expect(workflow).toContain('"$RUNNER_TEMP/toolchain/node_modules/.bin/ankh" devtools status .');
+    expect(workflow).toContain('bun "$RUNNER_TEMP/toolchain/run-devtools-command.mjs" status');
+    expect(workflow).not.toContain('node_modules/.bin/ankh');
     expect(prepareJob.split('git add -N -f -- .')).toHaveLength(3);
   });
 });
