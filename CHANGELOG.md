@@ -1,5 +1,11 @@
 # @ankhorage/renovate
 
+## 0.3.13
+
+### Patch Changes
+
+- 475e760: Run trusted consumer repository synchronization directly through the released Devtools provider instead of resolving the global Ankh provider catalog.
+
 ## 0.3.12
 
 ### Patch Changes

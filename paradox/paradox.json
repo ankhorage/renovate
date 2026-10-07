@@ -14,7 +14,7 @@
     {
       "id": "npm",
       "label": "npm",
-      "value": "v0.3.12",
+      "value": "v0.3.13",
       "color": "cb3837"
     },
     {
@@ -215,7 +215,7 @@
       "security": [],
       "sourceLocation": {
         "filePath": "src/changeset-workflow.test.ts",
-        "line": 231,
+        "line": 223,
         "column": 11
       }
     },
