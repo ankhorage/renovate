@@ -107,7 +107,7 @@ jobs:
             }
 
             const sections = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'];
-            const toolchainNames = new Set(['@ankhorage/devtools']);
+            const toolchainNames = new Set(['@ankhorage/ankh', '@ankhorage/devtools']);
             const toolchainChanged = sections.some((section) =>
               [...toolchainNames].some((name) => base[section]?.[name] !== head[section]?.[name])
             );
