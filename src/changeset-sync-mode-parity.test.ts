@@ -21,10 +21,7 @@ function readToolchainNames(job: string): string[] {
 describe('Renovate sync mode parity', () => {
   test('prepare and commit classify identical toolchain dependencies', () => {
     expect(readToolchainNames(prepareJob)).toEqual(readToolchainNames(commitJob));
-    expect(readToolchainNames(prepareJob)).toEqual([
-      '@ankhorage/ankh',
-      '@ankhorage/devtools',
-    ]);
+    expect(readToolchainNames(prepareJob)).toEqual(['@ankhorage/ankh', '@ankhorage/devtools']);
   });
 
   test('preserves the commit-side sync mode integrity check', () => {
