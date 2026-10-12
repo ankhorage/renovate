@@ -297,6 +297,14 @@ jobs:
         if: steps.metadata.outputs.sync-mode == 'devtools-owner'
         run: bun install --cwd trusted-owner --frozen-lockfile --ignore-scripts
 
+      - name: Install consumer dependencies without lifecycle scripts
+        if: steps.metadata.outputs.sync-mode == 'consumer'
+        run: |
+          before_lock_hash="$(shasum -a 256 repository/bun.lock)"
+          bun install --cwd repository --ignore-scripts --registry=https://registry.npmjs.org
+          after_lock_hash="$(shasum -a 256 repository/bun.lock)"
+          test "$before_lock_hash" = "$after_lock_hash"
+
       - name: Synchronize the consumer and prove byte stability
         if: steps.metadata.outputs.sync-mode == 'consumer'
         run: |
@@ -311,19 +319,24 @@ jobs:
             'exec "$SAFE_REAL_BUN" "$@"' \
             > "$RUNNER_TEMP/safe-bin/bun"
           chmod +x "$RUNNER_TEMP/safe-bin/bun"
-          ln -s "$RUNNER_TEMP/toolchain/node_modules" repository/node_modules
           export SAFE_REAL_BUN
           SAFE_REAL_BUN="$(command -v bun)"
           export PATH="$RUNNER_TEMP/safe-bin:$PATH"
           cd repository
-          bun "$RUNNER_TEMP/toolchain/run-devtools-command.mjs" sync
-          rm node_modules
+          if ! bun "$RUNNER_TEMP/toolchain/run-devtools-command.mjs" sync; then
+            if [ -f src/capabilities/index.ts ]; then
+              "$SAFE_REAL_BUN" build src/capabilities/index.ts \
+                --target=bun --outdir "$RUNNER_TEMP/capability-bundle-diagnostics" || :
+            fi
+            exit 1
+          fi
+          mv node_modules "$RUNNER_TEMP/consumer-node-modules"
           git add -N -f -- .
           first_hash="$(git diff --binary | shasum -a 256)"
-          ln -s "$RUNNER_TEMP/toolchain/node_modules" node_modules
+          mv "$RUNNER_TEMP/consumer-node-modules" node_modules
           bun "$RUNNER_TEMP/toolchain/run-devtools-command.mjs" sync
           bun "$RUNNER_TEMP/toolchain/run-devtools-command.mjs" status
-          rm node_modules
+          mv node_modules "$RUNNER_TEMP/consumer-node-modules"
           git add -N -f -- .
           second_hash="$(git diff --binary | shasum -a 256)"
           test "$first_hash" = "$second_hash"
