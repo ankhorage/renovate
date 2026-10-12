@@ -14,6 +14,7 @@ describe('Renovate reconciliation workflow', () => {
     expect(workflow).toContain('repository_dispatch:');
     expect(workflow).toContain('- renovate-reconcile');
     expect(workflow).toContain('workflow_dispatch:');
+    expect(workflow).toContain('- .github/workflows/changeset.yml');
     expect(workflow).toContain('- default.json');
     expect(workflow).toContain('- release-consumers.json');
   });

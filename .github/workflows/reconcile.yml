@@ -5,6 +5,7 @@ on:
     branches:
       - main
     paths:
+      - .github/workflows/changeset.yml
       - .github/workflows/reconcile.yml
       - default.json
       - devtools-owner.json
