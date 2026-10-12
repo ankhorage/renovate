@@ -75,16 +75,14 @@ test('installs consumer dependencies without scripts before bundling capability 
 });
 
 test('keeps installed consumer dependencies for both deterministic sync passes', () => {
-  const section = workflow.split('      - name: Synchronize the consumer and prove byte stability')[1];
-  const [consumerSync = '', ownerSync = ''] = section?.split(
-    '      - name: Synchronize the Devtools owner and prove byte stability',
-  ) ?? [];
+  const consumerSync = workflow.slice(
+    workflow.indexOf('      - name: Synchronize the consumer and prove byte stability'),
+    workflow.indexOf('      - name: Synchronize the Devtools owner and prove byte stability'),
+  );
   expect(consumerSync).toContain('mv node_modules "$RUNNER_TEMP/consumer-node-modules"');
   expect(consumerSync).toContain('mv "$RUNNER_TEMP/consumer-node-modules" node_modules');
-  expect(consumerSync).toContain(
-    'bun "$RUNNER_TEMP/toolchain/run-devtools-command.mjs" status',
-  );
+  expect(consumerSync).toContain('bun "$RUNNER_TEMP/toolchain/run-devtools-command.mjs" status');
   expect(consumerSync).toContain('"$SAFE_REAL_BUN" build src/capabilities/index.ts');
   expect(consumerSync).toContain('exit 1');
-  expect(ownerSync).not.toContain('"$RUNNER_TEMP/consumer-node-modules"');
+  expect(consumerSync).not.toContain('ln -s "$RUNNER_TEMP/toolchain/node_modules"');
 });
