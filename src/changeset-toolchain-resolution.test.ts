@@ -54,7 +54,6 @@ test('trusted toolchain accepts compatible declarations across dependency sectio
   expect(workflow).toContain('declarations.every((declaration) =>');
 });
 
-
 test('installs consumer dependencies without scripts before bundling capability catalogs', () => {
   const install = workflow.indexOf(
     '      - name: Install consumer dependencies without lifecycle scripts',
@@ -76,9 +75,10 @@ test('installs consumer dependencies without scripts before bundling capability 
 });
 
 test('keeps installed consumer dependencies for both deterministic sync passes', () => {
-  const [consumerSync = '', ownerSync = ''] = workflow
-    .split('      - name: Synchronize the consumer and prove byte stability')[1]
-    ?.split('      - name: Synchronize the Devtools owner and prove byte stability') ?? [];
+  const section = workflow.split('      - name: Synchronize the consumer and prove byte stability')[1];
+  const [consumerSync = '', ownerSync = ''] = section?.split(
+    '      - name: Synchronize the Devtools owner and prove byte stability',
+  ) ?? [];
   expect(consumerSync).toContain('mv node_modules "$RUNNER_TEMP/consumer-node-modules"');
   expect(consumerSync).toContain('mv "$RUNNER_TEMP/consumer-node-modules" node_modules');
   expect(consumerSync).toContain(
