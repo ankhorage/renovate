@@ -4,6 +4,7 @@ import { dependency, readPreset, resolveRules } from './renovatePreset.testSuppo
 
 const preset = readPreset('../default.json');
 const effectiveRules = preset.packageRules;
+const devtoolsOwnerPreset = readPreset('../devtools-owner.json');
 
 test('detects precisely the two canonical Bun owner literals', () => {
   const source = `const BUN_VERSION = '1.4.2';
@@ -37,5 +38,13 @@ test('does not widen Bun update ownership to unrelated repositories or example m
     expect(resolveRules(effectiveRules, root).enabled).toBe(false);
     expect(resolveRules(effectiveRules, owner).enabled).toBe(true);
     expect(resolveRules(effectiveRules, ownerExample).enabled).toBe(false);
+  }
+});
+
+test('keeps Devtools Bun updates behind the released Rules contract', () => {
+  const ownerRules = [...preset.packageRules, ...devtoolsOwnerPreset.packageRules];
+  for (const name of ['bun', '@types/bun']) {
+    expect(resolveRules(ownerRules, dependency(name)).enabled).toBe(false);
+    expect(resolveRules(ownerRules, dependency('typescript')).enabled).toBe(true);
   }
 });
