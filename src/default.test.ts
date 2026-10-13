@@ -263,4 +263,3 @@ describe('consumer unrestricted dependency policy', () => {
     expect(canonicalRule?.matchFileNames).not.toContain('.github/workflows/studio-acceptance.yml');
   });
 });
-
