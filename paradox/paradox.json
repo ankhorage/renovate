@@ -14,7 +14,7 @@
     {
       "id": "npm",
       "label": "npm",
-      "value": "v0.3.13",
+      "value": "v0.3.14",
       "color": "cb3837"
     },
     {
@@ -79,6 +79,20 @@
       "exports": []
     },
     {
+      "path": "src/bun-runtime-owner.test.ts",
+      "isEntrypoint": false,
+      "dependencies": [
+        "src/renovatePreset.testSupport.ts"
+      ],
+      "exports": []
+    },
+    {
+      "path": "src/changeset-sync-mode-parity.test.ts",
+      "isEntrypoint": false,
+      "dependencies": [],
+      "exports": []
+    },
+    {
       "path": "src/changeset-toolchain-resolution.test.ts",
       "isEntrypoint": false,
       "dependencies": [
@@ -108,6 +122,14 @@
     },
     {
       "path": "src/default.test.ts",
+      "isEntrypoint": false,
+      "dependencies": [
+        "src/renovatePreset.testSupport.ts"
+      ],
+      "exports": []
+    },
+    {
+      "path": "src/devtools-owner.test.ts",
       "isEntrypoint": false,
       "dependencies": [
         "src/renovatePreset.testSupport.ts"
@@ -148,14 +170,6 @@
     },
     {
       "path": "src/peer-range-policy.test.ts",
-      "isEntrypoint": false,
-      "dependencies": [
-        "src/renovatePreset.testSupport.ts"
-      ],
-      "exports": []
-    },
-    {
-      "path": "src/policy-owner.test.ts",
       "isEntrypoint": false,
       "dependencies": [
         "src/renovatePreset.testSupport.ts"
@@ -208,6 +222,17 @@
   "exports": [],
   "components": [],
   "sourceFunctions": [
+    {
+      "name": "readToolchainNames",
+      "description": "Reads the canonical toolchain dependency names checked in one synchronization stage.",
+      "see": [],
+      "security": [],
+      "sourceLocation": {
+        "filePath": "src/changeset-sync-mode-parity.test.ts",
+        "line": 15,
+        "column": 1
+      }
+    },
     {
       "name": "isOwned",
       "description": null,
@@ -378,6 +403,11 @@
   "graphs": {
     "imports": [
       {
+        "fromPath": "src/bun-runtime-owner.test.ts",
+        "toPath": "src/renovatePreset.testSupport.ts",
+        "sourcePath": "src/bun-runtime-owner.test.ts"
+      },
+      {
         "fromPath": "src/changeset-toolchain-resolution.test.ts",
         "toPath": "src/renovatePreset.testSupport.ts",
         "sourcePath": "src/changeset-toolchain-resolution.test.ts"
@@ -393,6 +423,11 @@
         "sourcePath": "src/default.test.ts"
       },
       {
+        "fromPath": "src/devtools-owner.test.ts",
+        "toPath": "src/renovatePreset.testSupport.ts",
+        "sourcePath": "src/devtools-owner.test.ts"
+      },
+      {
         "fromPath": "src/index.test.ts",
         "toPath": "src/index.ts",
         "sourcePath": "src/index.test.ts"
@@ -401,11 +436,6 @@
         "fromPath": "src/peer-range-policy.test.ts",
         "toPath": "src/renovatePreset.testSupport.ts",
         "sourcePath": "src/peer-range-policy.test.ts"
-      },
-      {
-        "fromPath": "src/policy-owner.test.ts",
-        "toPath": "src/renovatePreset.testSupport.ts",
-        "sourcePath": "src/policy-owner.test.ts"
       },
       {
         "fromPath": "src/studio-platform-ownership.test.ts",
@@ -437,6 +467,66 @@
         "toSymbol": "expect",
         "callExpression": "expect",
         "sourcePath": "src/automerge-workflow.test.ts"
+      },
+      {
+        "fromSymbol": "src/bun-runtime-owner.test.ts",
+        "toSymbol": "readPreset",
+        "callExpression": "readPreset",
+        "sourcePath": "src/bun-runtime-owner.test.ts"
+      },
+      {
+        "fromSymbol": "src/bun-runtime-owner.test.ts",
+        "toSymbol": "test",
+        "callExpression": "test",
+        "sourcePath": "src/bun-runtime-owner.test.ts"
+      },
+      {
+        "fromSymbol": "src/bun-runtime-owner.test.ts",
+        "toSymbol": "expect",
+        "callExpression": "expect",
+        "sourcePath": "src/bun-runtime-owner.test.ts"
+      },
+      {
+        "fromSymbol": "src/bun-runtime-owner.test.ts",
+        "toSymbol": "dependency",
+        "callExpression": "dependency",
+        "sourcePath": "src/bun-runtime-owner.test.ts"
+      },
+      {
+        "fromSymbol": "src/bun-runtime-owner.test.ts",
+        "toSymbol": "resolveRules",
+        "callExpression": "resolveRules",
+        "sourcePath": "src/bun-runtime-owner.test.ts"
+      },
+      {
+        "fromSymbol": "src/changeset-sync-mode-parity.test.ts",
+        "toSymbol": "readFileSync",
+        "callExpression": "readFileSync",
+        "sourcePath": "src/changeset-sync-mode-parity.test.ts"
+      },
+      {
+        "fromSymbol": "src/changeset-sync-mode-parity.test.ts",
+        "toSymbol": "describe",
+        "callExpression": "describe",
+        "sourcePath": "src/changeset-sync-mode-parity.test.ts"
+      },
+      {
+        "fromSymbol": "src/changeset-sync-mode-parity.test.ts",
+        "toSymbol": "test",
+        "callExpression": "test",
+        "sourcePath": "src/changeset-sync-mode-parity.test.ts"
+      },
+      {
+        "fromSymbol": "src/changeset-sync-mode-parity.test.ts",
+        "toSymbol": "expect",
+        "callExpression": "expect",
+        "sourcePath": "src/changeset-sync-mode-parity.test.ts"
+      },
+      {
+        "fromSymbol": "src/changeset-sync-mode-parity.test.ts",
+        "toSymbol": "readToolchainNames",
+        "callExpression": "readToolchainNames",
+        "sourcePath": "src/changeset-sync-mode-parity.test.ts"
       },
       {
         "fromSymbol": "src/changeset-toolchain-resolution.test.ts",
@@ -589,6 +679,42 @@
         "sourcePath": "src/default.test.ts"
       },
       {
+        "fromSymbol": "src/devtools-owner.test.ts",
+        "toSymbol": "readPreset",
+        "callExpression": "readPreset",
+        "sourcePath": "src/devtools-owner.test.ts"
+      },
+      {
+        "fromSymbol": "src/devtools-owner.test.ts",
+        "toSymbol": "describe",
+        "callExpression": "describe",
+        "sourcePath": "src/devtools-owner.test.ts"
+      },
+      {
+        "fromSymbol": "src/devtools-owner.test.ts",
+        "toSymbol": "test",
+        "callExpression": "test",
+        "sourcePath": "src/devtools-owner.test.ts"
+      },
+      {
+        "fromSymbol": "src/devtools-owner.test.ts",
+        "toSymbol": "expect",
+        "callExpression": "expect",
+        "sourcePath": "src/devtools-owner.test.ts"
+      },
+      {
+        "fromSymbol": "src/devtools-owner.test.ts",
+        "toSymbol": "resolveRules",
+        "callExpression": "resolveRules",
+        "sourcePath": "src/devtools-owner.test.ts"
+      },
+      {
+        "fromSymbol": "src/devtools-owner.test.ts",
+        "toSymbol": "dependency",
+        "callExpression": "dependency",
+        "sourcePath": "src/devtools-owner.test.ts"
+      },
+      {
         "fromSymbol": "src/devtools-sync-protocol.test.ts",
         "toSymbol": "readFileSync",
         "callExpression": "readFileSync",
@@ -713,36 +839,6 @@
         "toSymbol": "dependency",
         "callExpression": "dependency",
         "sourcePath": "src/peer-range-policy.test.ts"
-      },
-      {
-        "fromSymbol": "src/policy-owner.test.ts",
-        "toSymbol": "readPreset",
-        "callExpression": "readPreset",
-        "sourcePath": "src/policy-owner.test.ts"
-      },
-      {
-        "fromSymbol": "src/policy-owner.test.ts",
-        "toSymbol": "test",
-        "callExpression": "test",
-        "sourcePath": "src/policy-owner.test.ts"
-      },
-      {
-        "fromSymbol": "src/policy-owner.test.ts",
-        "toSymbol": "expect",
-        "callExpression": "expect",
-        "sourcePath": "src/policy-owner.test.ts"
-      },
-      {
-        "fromSymbol": "src/policy-owner.test.ts",
-        "toSymbol": "dependency",
-        "callExpression": "dependency",
-        "sourcePath": "src/policy-owner.test.ts"
-      },
-      {
-        "fromSymbol": "src/policy-owner.test.ts",
-        "toSymbol": "resolveRules",
-        "callExpression": "resolveRules",
-        "sourcePath": "src/policy-owner.test.ts"
       },
       {
         "fromSymbol": "src/reconciliation-workflow.test.ts",

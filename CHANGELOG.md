@@ -1,5 +1,11 @@
 # @ankhorage/renovate
 
+## 0.3.14
+
+### Patch Changes
+
+- 96fd057: Route Bun runtime and type updates through the canonical Rules owner; prevent direct consumer drift and remove the obsolete Policy-owner preset.
+
 ## 0.3.13
 
 ### Patch Changes
