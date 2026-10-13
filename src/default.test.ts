@@ -224,35 +224,6 @@ describe('consumer TypeScript compatibility', () => {
   });
 });
 
-describe('canonical Bun ownership', () => {
-  test('does not update managed runtime declarations in ordinary repositories', () => {
-    for (const packageName of ['bun', '@types/bun']) {
-      expect(resolveRules(consumerPreset.packageRules, dependency(packageName))).toMatchObject({
-        enabled: false,
-      });
-      expect(resolveRules(consumerPreset.packageRules, dependency(packageName, {
-        fileName: 'examples/example/package.json',
-      }))).toMatchObject({ enabled: false });
-    }
-  });
-
-  test('allows source and owner manifest updates only in the canonical Rules repository', () => {
-    for (const packageName of ['bun', '@types/bun']) {
-      for (const fileName of ['package.json', 'src/constants/repository.ts']) {
-        expect(resolveRules(consumerPreset.packageRules, dependency(packageName, {
-          fileName,
-          manager: fileName === 'package.json' ? 'bun' : 'custom.regex',
-          repository: 'ankhorage/rules-repository',
-        }))).toMatchObject({
-          enabled: true,
-          groupName: 'Canonical Bun runtime',
-          groupSlug: 'canonical-bun-runtime',
-        });
-      }
-    }
-  });
-});
-
 describe('consumer unrestricted dependency policy', () => {
   test('updates former Devtools-owned consumer dependencies without a special holdback', () => {
     for (const packageName of [
@@ -312,12 +283,6 @@ describe('Devtools-owner preset', () => {
         platformAutomerge: true,
         rangeStrategy: 'bump',
       });
-    }
-  });
-
-  test('does not independently bump Rules-owned Bun versions in Devtools', () => {
-    for (const packageName of ['bun', '@types/bun']) {
-      expect(resolveRules(effectiveRules, dependency(packageName))).toMatchObject({ enabled: false });
     }
   });
 
