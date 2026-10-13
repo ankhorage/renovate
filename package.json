@@ -40,7 +40,8 @@
     },
     "./default.json": "./default.json",
     "./devtools-owner.json": "./devtools-owner.json",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./policy-owner.json": "./policy-owner.json"
   },
   "publishConfig": {
     "access": "public"
