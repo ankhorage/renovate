@@ -224,11 +224,38 @@ describe('consumer TypeScript compatibility', () => {
   });
 });
 
+describe('canonical Bun ownership', () => {
+  test('does not update managed runtime declarations in ordinary repositories', () => {
+    for (const packageName of ['bun', '@types/bun']) {
+      expect(resolveRules(consumerPreset.packageRules, dependency(packageName))).toMatchObject({
+        enabled: false,
+      });
+      expect(resolveRules(consumerPreset.packageRules, dependency(packageName, {
+        fileName: 'examples/example/package.json',
+      }))).toMatchObject({ enabled: false });
+    }
+  });
+
+  test('allows source and owner manifest updates only in the canonical Rules repository', () => {
+    for (const packageName of ['bun', '@types/bun']) {
+      for (const fileName of ['package.json', 'src/constants/repository.ts']) {
+        expect(resolveRules(consumerPreset.packageRules, dependency(packageName, {
+          fileName,
+          manager: fileName === 'package.json' ? 'bun' : 'custom.regex',
+          repository: 'ankhorage/rules-repository',
+        }))).toMatchObject({
+          enabled: true,
+          groupName: 'Canonical Bun runtime',
+          groupSlug: 'canonical-bun-runtime',
+        });
+      }
+    }
+  });
+});
+
 describe('consumer unrestricted dependency policy', () => {
   test('updates former Devtools-owned consumer dependencies without a special holdback', () => {
     for (const packageName of [
-      'bun',
-      '@types/bun',
       '@types/node',
       '@eslint/js',
       'eslint',
@@ -274,8 +301,8 @@ describe('Devtools-owner preset', () => {
     expect(devtoolsOwnerPreset.extends).toEqual(['./default']);
   });
 
-  test('enables and groups the complete root Bun package toolchain', () => {
-    for (const packageName of ['bun', '@types/bun', 'eslint', 'knip', 'prettier', 'typescript']) {
+  test('enables and groups the non-runtime Devtools root toolchain', () => {
+    for (const packageName of ['eslint', 'knip', 'prettier', 'typescript']) {
       expect(resolveRules(effectiveRules, dependency(packageName))).toMatchObject({
         automerge: true,
         automergeType: 'pr',
@@ -285,6 +312,12 @@ describe('Devtools-owner preset', () => {
         platformAutomerge: true,
         rangeStrategy: 'bump',
       });
+    }
+  });
+
+  test('does not independently bump Rules-owned Bun versions in Devtools', () => {
+    for (const packageName of ['bun', '@types/bun']) {
+      expect(resolveRules(effectiveRules, dependency(packageName))).toMatchObject({ enabled: false });
     }
   });
 
