@@ -27,7 +27,6 @@
     "dist",
     "default.json",
     "devtools-owner.json",
-    "policy-owner.json",
     "examples",
     "paradox",
     "README.md",
@@ -41,8 +40,7 @@
     },
     "./default.json": "./default.json",
     "./devtools-owner.json": "./devtools-owner.json",
-    "./package.json": "./package.json",
-    "./policy-owner.json": "./policy-owner.json"
+    "./package.json": "./package.json"
   },
   "publishConfig": {
     "access": "public"
@@ -52,7 +50,7 @@
     "changeset": "ankhorage-changeset",
     "changeset:status": "ankhorage-changeset status --since=origin/main",
     "docs": "paradox",
-    "test": "bun test src && RENOVATE_X_IGNORE_RE2=true renovate-config-validator default.json devtools-owner.json policy-owner.json",
+    "test": "bun test src && RENOVATE_X_IGNORE_RE2=true renovate-config-validator default.json devtools-owner.json",
     "typecheck": "bun x tsc --noEmit -p tsconfig.json",
     "version-packages": "ankhorage-changeset version",
     "lint": "ankhorage-eslint . --max-warnings=0",

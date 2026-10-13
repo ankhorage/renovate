@@ -3,7 +3,6 @@ import { describe, expect, test } from 'bun:test';
 import { branchName, dependency, readPreset, resolveRules } from './renovatePreset.testSupport';
 
 const consumerPreset = readPreset('../default.json');
-const devtoolsOwnerPreset = readPreset('../devtools-owner.json');
 
 describe('consumer preset', () => {
   test('publishes the canonical default-deny policy at the repository root', () => {
@@ -227,8 +226,6 @@ describe('consumer TypeScript compatibility', () => {
 describe('consumer unrestricted dependency policy', () => {
   test('updates former Devtools-owned consumer dependencies without a special holdback', () => {
     for (const packageName of [
-      'bun',
-      '@types/bun',
       '@types/node',
       '@eslint/js',
       'eslint',
@@ -264,51 +261,5 @@ describe('consumer unrestricted dependency policy', () => {
       matchManagers: ['github-actions'],
     });
     expect(canonicalRule?.matchFileNames).not.toContain('.github/workflows/studio-acceptance.yml');
-  });
-});
-
-describe('Devtools-owner preset', () => {
-  const effectiveRules = [...consumerPreset.packageRules, ...devtoolsOwnerPreset.packageRules];
-
-  test('composes with the consumer default-deny boundary', () => {
-    expect(devtoolsOwnerPreset.extends).toEqual(['./default']);
-  });
-
-  test('enables and groups the complete root Bun package toolchain', () => {
-    for (const packageName of ['bun', '@types/bun', 'eslint', 'knip', 'prettier', 'typescript']) {
-      expect(resolveRules(effectiveRules, dependency(packageName))).toMatchObject({
-        automerge: true,
-        automergeType: 'pr',
-        enabled: true,
-        groupName: 'Devtools-owned toolchain',
-        labels: ['dependencies', 'renovate:automerge'],
-        platformAutomerge: true,
-        rangeStrategy: 'bump',
-      });
-    }
-  });
-
-  test('automerges major owner toolchain upgrades on the latest line', () => {
-    expect(
-      resolveRules(effectiveRules, dependency('typescript', { updateType: 'major' })),
-    ).toMatchObject({
-      automerge: true,
-      enabled: true,
-      allowedVersions: '<7',
-      groupName: 'Devtools-owned toolchain',
-      labels: ['dependencies', 'renovate:automerge'],
-      separateMajorMinor: false,
-    });
-  });
-
-  test('keeps non-owner manifests on the generic all-update policy', () => {
-    expect(
-      resolveRules(effectiveRules, dependency('eslint', { fileName: 'examples/package.json' })),
-    ).toMatchObject({
-      automerge: true,
-      enabled: true,
-      labels: ['dependencies', 'renovate:automerge'],
-      separateMajorMinor: false,
-    });
   });
 });

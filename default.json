@@ -30,6 +30,22 @@
       "depNameTemplate": "ankhorage/renovate",
       "datasourceTemplate": "github-digest",
       "autoReplaceStringTemplate": "uses: ankhorage/renovate/.github/workflows/changeset.yml@{{{newDigest}}}"
+    },
+    {
+      "customType": "regex",
+      "description": "Update the canonical Bun runtime literal in @ankhorage/rules-repository.",
+      "managerFilePatterns": ["/^src\\/constants\\/repository\\.ts$/"],
+      "matchStrings": ["const BUN_VERSION = '(?<currentValue>[^']+)';"],
+      "depNameTemplate": "bun",
+      "datasourceTemplate": "npm"
+    },
+    {
+      "customType": "regex",
+      "description": "Update the canonical Bun type version in @ankhorage/rules-repository.",
+      "managerFilePatterns": ["/^src\\/constants\\/repository\\.ts$/"],
+      "matchStrings": ["const BUN_TYPES_VERSION = '(?<currentValue>[^']+)';"],
+      "depNameTemplate": "@types/bun",
+      "datasourceTemplate": "npm"
     }
   ],
   "packageRules": [
@@ -163,6 +179,28 @@
         "typescript"
       ],
       "enabled": false
+    },
+    {
+      "description": "Do not directly update Devtools-managed Bun runtime declarations in ordinary consumers.",
+      "matchDatasources": ["npm"],
+      "matchPackageNames": ["bun", "@types/bun"],
+      "enabled": false
+    },
+    {
+      "description": "Update Rules-owned Bun literals and the matching owner manifest as one candidate.",
+      "matchRepositories": ["ankhorage/rules-repository"],
+      "matchDatasources": ["npm"],
+      "matchPackageNames": ["bun", "@types/bun"],
+      "matchFileNames": ["package.json", "src/constants/repository.ts"],
+      "enabled": true,
+      "labels": ["dependencies", "renovate:automerge"],
+      "groupName": "Canonical Bun runtime",
+      "groupSlug": "canonical-bun-runtime",
+      "rangeStrategy": "bump",
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": true,
+      "separateMajorMinor": false
     }
   ]
 }

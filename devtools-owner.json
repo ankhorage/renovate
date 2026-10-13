@@ -15,6 +15,13 @@
       "automergeType": "pr",
       "platformAutomerge": true,
       "separateMajorMinor": false
+    },
+    {
+      "description": "Devtools receives Bun versions via the Rules release, not direct Renovate updates.",
+      "matchManagers": ["bun"],
+      "matchPackageNames": ["bun", "@types/bun"],
+      "matchFileNames": ["package.json"],
+      "enabled": false
     }
   ]
 }

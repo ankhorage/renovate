@@ -1,0 +1,14 @@
+/***
+ * Canonical Bun owner repository configuration
+ *
+ * Loads the standard Ankhorage policy. The shared preset tracks the Bun runtime and types
+ * literals from the Rules repository and groups them with the matching owner manifest changes.
+ * Consumer repositories cannot change these managed values directly.
+ *
+ * @usage
+ * @title Bun repository owner configuration
+ */
+{
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  extends: ['github>ankhorage/renovate'],
+}
