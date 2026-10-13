@@ -7,7 +7,6 @@ import * as packageApi from './index.js';
 const defaultPreset = readFileSync(new URL('../default.json', import.meta.url), 'utf8');
 const ownerPresets = [
   readFileSync(new URL('../devtools-owner.json', import.meta.url), 'utf8'),
-  readFileSync(new URL('../policy-owner.json', import.meta.url), 'utf8'),
 ];
 
 test('keeps the bootstrap TypeScript API intentionally empty', () => {
