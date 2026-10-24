@@ -1115,7 +1115,7 @@ jobs:
               return { reviewDecision, unresolved };
             };
 
-            const readTrustedLabel = async () => {
+            const readTrustedLabel = async (labelName = 'renovate:automerge') => {
               const events = await github.paginate(github.rest.issues.listEventsForTimeline, {
                 owner,
                 repo,
@@ -1123,12 +1123,12 @@ jobs:
                 per_page: 100,
               });
               const event = events
-                .filter(({ event, label }) => event === 'labeled' && label?.name === automergeLabel)
+                .filter(({ event, label }) => event === 'labeled' && label?.name === labelName)
                 .at(-1);
               return event && permittedActors.has(event.actor?.login);
             };
 
-            const readChecks = async (headSha) => {
+            const readChecks = async (headSha, trustedPatch) => {
               const runs = await github.paginate(github.rest.checks.listForRef, {
                 owner,
                 repo,
@@ -1154,7 +1154,7 @@ jobs:
               const pending =
                 !validate ||
                 validate.status !== 'completed' ||
-                validate.conclusion !== 'success' ||
+                (validate.conclusion !== 'success' && !(trustedPatch && validate.conclusion === 'skipped')) ||
                 checks.some(({ status }) => status !== 'completed');
 
               const statuses = await github.paginate(github.rest.repos.listCommitStatusesForRef, {
@@ -1182,6 +1182,10 @@ jobs:
             const initial = await github.rest.pulls.get({ owner, repo, pull_number: pullNumber });
             const expectedHead = initial.data.head.sha;
             const labels = new Set(initial.data.labels.map(({ name }) => name));
+            const trustedPatch =
+              initial.data.head.ref.startsWith('renovate/patch-') &&
+              labels.has('renovate:patch') &&
+              Boolean(await readTrustedLabel('renovate:patch'));
             if (
               initial.data.user?.login === undefined ||
               !permittedActors.has(initial.data.user.login) ||
@@ -1211,7 +1215,7 @@ jobs:
                 return;
               }
 
-              const checks = await readChecks(expectedHead);
+              const checks = await readChecks(expectedHead, trustedPatch);
               if (checks.failed) {
                 core.info('The exact Renovate head has failing CI.');
                 return;
@@ -1259,7 +1263,7 @@ jobs:
             const expectedHead = process.env.EXPECTED_HEAD_SHA;
             const { owner, repo } = context.repo;
 
-            const readTrustedLabel = async () => {
+            const readTrustedLabel = async (labelName = 'renovate:automerge') => {
               const events = await github.paginate(github.rest.issues.listEventsForTimeline, {
                 owner,
                 repo,
@@ -1269,7 +1273,7 @@ jobs:
               const event = events
                 .filter(
                   ({ event, label }) =>
-                    event === 'labeled' && label?.name === 'renovate:automerge',
+                    event === 'labeled' && label?.name === labelName,
                 )
                 .at(-1);
               return event && permittedActors.has(event.actor?.login);
@@ -1305,7 +1309,7 @@ jobs:
               return { reviewDecision, unresolved };
             };
 
-            const readChecks = async () => {
+            const readChecks = async (trustedPatch) => {
               const runs = await github.paginate(github.rest.checks.listForRef, {
                 owner,
                 repo,
@@ -1331,7 +1335,7 @@ jobs:
               const pending =
                 !validate ||
                 validate.status !== 'completed' ||
-                validate.conclusion !== 'success' ||
+                (validate.conclusion !== 'success' && !(trustedPatch && validate.conclusion === 'skipped')) ||
                 checks.some(({ status }) => status !== 'completed');
 
               const statuses = await github.paginate(github.rest.repos.listCommitStatusesForRef, {
@@ -1363,10 +1367,14 @@ jobs:
                 pull_number: pullNumber,
               });
               const labels = new Set(pull.labels.map(({ name }) => name));
+              const trustedPatch =
+                pull.head.ref.startsWith('renovate/patch-') &&
+                labels.has('renovate:patch') &&
+                Boolean(await readTrustedLabel('renovate:patch'));
               const [trustedLabel, reviewState, checks] = await Promise.all([
                 readTrustedLabel(),
                 readReviewState(),
-                readChecks(),
+                readChecks(trustedPatch),
               ]);
               if (
                 pull.state !== 'open' ||
