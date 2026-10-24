@@ -58,7 +58,7 @@ test('keeps dependency lanes unlimited while pruning stale Renovate state', () =
     branchConcurrentLimit: 0,
     prConcurrentLimit: 0,
     pruneStaleBranches: true,
-    rebaseWhen: 'behind-base-branch',
+    rebaseWhen: 'conflicted',
   });
 });
 
@@ -80,7 +80,7 @@ describe('consumer path discovery', () => {
 describe('consumer update policy', () => {
   test('automerges ordinary npm releases across patch, minor, and major updates', () => {
     for (const packageName of ['react', 'vitest']) {
-      for (const updateType of ['patch', 'minor', 'major'] as const) {
+      for (const updateType of ['minor', 'major'] as const) {
         expect(
           resolveRules(
             consumerPreset.packageRules,
@@ -103,6 +103,48 @@ describe('consumer update policy', () => {
       }
     }
   });
+  test('isolates trusted patch-only PRs without unblocking disabled packages', () => {
+    const fixtures = [
+      ['react', 'patch-external-npm-dependencies'],
+      ['@ankhorage/paradox', 'patch-ankhorage-libraries'],
+      ['@ankhorage/devtools', 'patch-ankhorage-cli-and-devtools-toolchain'],
+      ['@ankhorage/ankh', 'patch-ankhorage-cli-and-devtools-toolchain'],
+    ] as const;
+    for (const [packageName, groupSlug] of fixtures) {
+      const patch = resolveRules(
+        consumerPreset.packageRules,
+        dependency(packageName, { updateType: 'patch' }),
+      );
+      expect(patch).toMatchObject({
+        enabled: true,
+        groupSlug,
+        labels: ['dependencies', 'renovate:automerge', 'renovate:patch'],
+        automerge: false,
+        platformAutomerge: false,
+        ignoreTests: true,
+      });
+      expect(branchName(patch)).toStartWith('renovate/patch-');
+    }
+    expect(
+      resolveRules(
+        consumerPreset.packageRules,
+        dependency('react-native', { updateType: 'minor' }),
+      ).enabled,
+    ).toBe(false);
+    expect(
+      resolveRules(
+        consumerPreset.packageRules,
+        dependency('expo', { updateType: 'major' }),
+      ).enabled,
+    ).toBe(false);
+    expect(
+      resolveRules(
+        consumerPreset.packageRules,
+        dependency('@types/bun', { updateType: 'patch' }),
+      ).enabled,
+    ).toBe(false);
+  });
+
 });
 
 describe('consumer policy migration', () => {
