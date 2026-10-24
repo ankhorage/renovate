@@ -78,7 +78,7 @@ describe('consumer path discovery', () => {
 });
 
 describe('consumer update policy', () => {
-  test('automerges ordinary npm releases across patch, minor, and major updates', () => {
+  test('automerges ordinary npm minor and major updates', () => {
     for (const packageName of ['react', 'vitest']) {
       for (const updateType of ['minor', 'major'] as const) {
         expect(
@@ -103,6 +103,9 @@ describe('consumer update policy', () => {
       }
     }
   });
+});
+
+describe('consumer patch-only policy', () => {
   test('isolates trusted patch-only PRs without unblocking disabled packages', () => {
     const fixtures = [
       ['react', 'patch-external-npm-dependencies'],
@@ -123,28 +126,17 @@ describe('consumer update policy', () => {
         platformAutomerge: false,
         ignoreTests: true,
       });
-      expect(branchName(patch)).toStartWith('renovate/patch-');
+      expect(branchName(patch)).toMatch(/^renovate\/patch-/u);
     }
-    expect(
-      resolveRules(
-        consumerPreset.packageRules,
-        dependency('react-native', { updateType: 'minor' }),
-      ).enabled,
-    ).toBe(false);
-    expect(
-      resolveRules(
-        consumerPreset.packageRules,
-        dependency('expo', { updateType: 'major' }),
-      ).enabled,
-    ).toBe(false);
-    expect(
-      resolveRules(
-        consumerPreset.packageRules,
-        dependency('@types/bun', { updateType: 'patch' }),
-      ).enabled,
-    ).toBe(false);
+    for (const [packageName, updateType] of [
+      ['react-native', 'minor'],
+      ['expo', 'major'],
+      ['@types/bun', 'patch'],
+    ] as const) {
+      const resolved = resolveRules(consumerPreset.packageRules, dependency(packageName, { updateType }));
+      expect(resolved.enabled).toBe(false);
+    }
   });
-
 });
 
 describe('consumer policy migration', () => {
