@@ -133,7 +133,10 @@ describe('consumer patch-only policy', () => {
       ['expo', 'major'],
       ['@types/bun', 'patch'],
     ] as const) {
-      const resolved = resolveRules(consumerPreset.packageRules, dependency(packageName, { updateType }));
+      const resolved = resolveRules(
+        consumerPreset.packageRules,
+        dependency(packageName, { updateType }),
+      );
       expect(resolved.enabled).toBe(false);
     }
   });
