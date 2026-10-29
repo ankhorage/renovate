@@ -20,8 +20,10 @@ describe('package release rollout registry', () => {
     expect(new Set(registry.repositories).size).toBe(registry.repositories.length);
     expect(registry.repositories).toContain('ankhorage/apm');
     expect(registry.repositories).toContain('ankhorage/devtools');
-    expect(registry.repositories).toContain('ankhorage/local');
-    expect(registry.repositories).toContain('ankhorage/minikube');
+    expect(registry.repositories).toContain('ankhorage/infra-local');
+    expect(registry.repositories).toContain('ankhorage/infra-minikube');
+    expect(registry.repositories).not.toContain('ankhorage/local');
+    expect(registry.repositories).not.toContain('ankhorage/minikube');
     expect(registry.repositories).toContain('ankhorage/studio');
     expect(registry.repositories).toContain('ankhorage/renovate');
     expect(registry.repositories).not.toContain('ankhorage/api-gateway');
