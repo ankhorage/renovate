@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "kind": "configuration",
+  "title": "Ankhorage Renovate",
+  "summary": "Publishes the canonical Renovate dependency-update presets and synchronization workflow used by Ankhorage repositories.",
+  "purpose": "Centralize dependency-update ownership, grouping, safety exceptions, and rollout behavior so standalone repositories receive consistent automated updates.",
+  "domain": "dependency update automation",
+  "responsibilities": [
+    "Publish the shared Renovate preset and the Devtools-owner specialization.",
+    "Group and automerge validated npm and Ankhorage package updates while reserving owner-managed runtime and platform upgrades.",
+    "Synchronize the immutable Renovate workflow and validate selected-repository GitHub App coverage."
+  ],
+  "boundaries": [
+    "Does not implement package-manager installation, project migration, or release publishing.",
+    "Does not grant the Renovate GitHub App access to repositories; organization owners manage the selected-repository installation.",
+    "Does not own Bun, Expo, React Native, or Devtools policy values that are managed by their canonical owner repositories."
+  ],
+  "audience": [
+    "Maintainers of standalone Ankhorage repositories.",
+    "Automation that distributes and validates the canonical Renovate configuration."
+  ],
+  "useCases": [
+    "Apply the shared dependency-update policy to an Ankhorage repository.",
+    "Use the Devtools-owner preset for dependencies validated by the Devtools repository.",
+    "Propagate a reviewed immutable Renovate workflow revision across selected repositories."
+  ],
+  "architecture": {
+    "role": "A configuration and automation repository that publishes Renovate presets and a reusable synchronization workflow.",
+    "invariants": [
+      "Dependency families are enabled by explicit ownership rules after the default-deny package rule.",
+      "Owner-managed runtime and platform versions are not updated through competing consumer rules.",
+      "Repository synchronization is limited to repositories explicitly accessible to the GitHub App installation."
+    ]
+  },
+  "constraints": {
+    "configuration": [
+      "The ankhorage-renovate-sync GitHub App installation must explicitly include every managed repository."
+    ],
+    "limitations": [
+      "Renovate applies only the managers and dependency families enabled by the published presets."
+    ]
+  }
+}
