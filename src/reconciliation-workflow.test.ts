@@ -30,4 +30,9 @@ describe('Renovate reconciliation workflow', () => {
     expect(workflow).toContain("RENOVATE_AUTODISCOVER: 'false'");
     expect(workflow).toContain("RENOVATE_ONBOARDING: 'false'");
   });
+
+  test('does not independently advance Ankhorage packages during scheduled reconciliation', () => {
+    expect(workflow).toContain('RENOVATE_PACKAGE_RULES');
+    expect(workflow).toContain('"@ankhorage/**"');
+  });
 });

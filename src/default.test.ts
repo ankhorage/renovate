@@ -22,30 +22,26 @@ describe('consumer preset', () => {
     expect(consumerPreset.enabledManagers).toEqual(['bun', 'custom.regex']);
   });
 
-  test('keeps ordinary Ankhorage packages eligible', () => {
+  test('reserves ordinary Ankhorage packages for an authorized release wave', () => {
     expect(
       resolveRules(consumerPreset.packageRules, dependency('@ankhorage/contracts')),
     ).toMatchObject({
-      automerge: true,
-      enabled: true,
+      enabled: false,
       groupName: 'Ankhorage release wave',
       groupSlug: 'ankhorage-release-wave',
-      labels: ['dependencies', 'renovate:automerge'],
+      labels: ['dependencies', 'release-wave'],
       rangeStrategy: 'bump',
       separateMajorMinor: false,
     });
   });
 
-  test('groups the compatible CLI and provider pair with every other Ankhorage dependency', () => {
+  test('keeps the CLI and provider pair out of independent Renovate execution', () => {
     for (const packageName of ['@ankhorage/ankh', '@ankhorage/devtools']) {
       expect(resolveRules(consumerPreset.packageRules, dependency(packageName))).toMatchObject({
-        automerge: true,
-        automergeType: 'pr',
-        enabled: true,
+        enabled: false,
         groupName: 'Ankhorage release wave',
         groupSlug: 'ankhorage-release-wave',
-        labels: ['dependencies', 'renovate:automerge'],
-        platformAutomerge: true,
+        labels: ['dependencies', 'release-wave'],
         rangeStrategy: 'bump',
         separateMajorMinor: false,
       });
@@ -189,17 +185,16 @@ describe('consumer workflow update permissions', () => {
 });
 
 describe('consumer toolchain safeguards', () => {
-  test('keeps major CLI and provider upgrades on the latest validated automerge path', () => {
+  test('keeps major CLI and provider upgrades behind coordinator authorization', () => {
     expect(
       resolveRules(
         consumerPreset.packageRules,
         dependency('@ankhorage/devtools', { updateType: 'major' }),
       ),
     ).toMatchObject({
-      automerge: true,
-      enabled: true,
+      enabled: false,
       groupName: 'Ankhorage release wave',
-      labels: ['dependencies', 'renovate:automerge'],
+      labels: ['dependencies', 'release-wave'],
       separateMajorMinor: false,
     });
   });

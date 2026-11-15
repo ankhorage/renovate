@@ -115,6 +115,8 @@ jobs:
         env:
           RENOVATE_AUTODISCOVER: 'false'
           RENOVATE_ONBOARDING: 'false'
+          RENOVATE_PACKAGE_RULES: >-
+            [{"matchDatasources":["npm"],"matchPackageNames":["@ankhorage/**"],"enabled":false}]
           RENOVATE_PLATFORM: github
           RENOVATE_REPOSITORIES: ${{ matrix.repository }}
           RENOVATE_REQUIRE_CONFIG: required

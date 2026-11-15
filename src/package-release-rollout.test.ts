@@ -11,29 +11,25 @@ const releaseWorkflow = readFileSync(
   'utf8',
 );
 
-describe('package release-wave coordinator', () => {
+describe('package release rollout', () => {
+  test('keeps the production package-release event contract active', () => {
+    expect(workflow).toContain('package_name:');
+    expect(workflow).toContain('version:');
+    expect(workflow).toContain('source_repository:');
+    expect(workflow).toContain('Run Renovate immediately for the released package');
+  });
+
   test('uses only the paginated App installation as positive enrollment', () => {
     expect(workflow).toContain(
-      'github.paginate(github.rest.apps.listReposAccessibleToInstallation',
+      'github.paginate(\n              github.rest.apps.listReposAccessibleToInstallation',
     );
     expect(workflow).toContain("repository.owner?.login === 'ankhorage'");
     expect(workflow).not.toContain('release-consumers.json');
-    expect(workflow).toContain('release-wave-exclusions.json');
   });
 
-  test('collects default-branch manifests and verifies stable published npm identities', () => {
-    expect(workflow).toContain("const manifestText = await readFile(repository, 'package.json')");
+  test('verifies exact published npm identities before starting a rollout', () => {
     expect(workflow).toContain('https://registry.npmjs.org/');
-    expect(workflow).toContain("metadata?.['dist-tags']?.latest");
-    expect(workflow).toContain("latest.includes('-')");
-  });
-
-  test('writes a deterministic resumable checkpoint and keeps execution explicitly disabled', () => {
-    expect(workflow).toContain('bun src/cli/commands/release/plan.ts');
-    expect(workflow).toContain('actions/upload-artifact@v4');
-    expect(workflow).toContain('retention-days: 90');
-    expect(workflow).toContain("vars.ANKHORAGE_RELEASE_WAVES_ENABLED == 'true'");
-    expect(workflow).toContain('intentionally gated until independent review approves activation');
+    expect(workflow).toContain('The npm release manifest does not match');
   });
 });
 

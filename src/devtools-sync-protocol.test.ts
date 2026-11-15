@@ -16,13 +16,11 @@ describe('Devtools sync protocol release contract', () => {
     expect(protocolManifest.version).toBe(2);
   });
 
-  test('keeps bootstrap state visible in the coordinator inventory', () => {
-    expect(workflow).toContain(
-      "const workflow = await readFile(repository, '.github/workflows/renovate.yml')",
-    );
+  test('keeps bootstrap state visible to legacy package propagation', () => {
+    expect(workflow).toContain("path: '.github/workflows/renovate.yml'");
     expect(workflow).toContain(
       "github.event.pull_request.user.login == 'ankhorage-renovate-sync[bot]'",
     );
-    expect(workflow).toContain('bootstrapReady');
+    expect(workflow).toContain('waitingRepositories');
   });
 });

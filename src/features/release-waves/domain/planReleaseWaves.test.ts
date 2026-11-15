@@ -41,7 +41,7 @@ test('settles a dependency diamond before one consolidated consumer release', ()
     }),
     repository('ankhorage/right', '@ankhorage/right', '1.0.1', {
       ...emptyDependencies,
-      devDependencies: { '@ankhorage/base': '^1.0.0' },
+      dependencies: { '@ankhorage/base': '^1.0.0' },
     }),
     repository('ankhorage/base', '@ankhorage/base', '1.0.1'),
     repository('ankhorage/left', '@ankhorage/left', '1.0.1', {
@@ -85,7 +85,7 @@ test('is deterministic across delayed and duplicate release input ordering', () 
   ).toEqual([['ankhorage/a', 'ankhorage/b']]);
 });
 
-test('reports cycles, incompatible versions, and peer incompatibilities without releasing dependents', () => {
+test('reports runtime cycles without treating toolchain edges as release prerequisites', () => {
   const cycle = [
     repository('ankhorage/a', '@ankhorage/a', '1.0.0', {
       ...emptyDependencies,
@@ -104,22 +104,22 @@ test('reports cycles, incompatible versions, and peer incompatibilities without 
     ).blocked,
   ).toEqual(['release dependency cycle: ankhorage/a, ankhorage/b']);
 
-  const incompatible = repository('ankhorage/consumer', '@ankhorage/consumer', '1.0.0', {
+  const upgrade = repository('ankhorage/consumer', '@ankhorage/consumer', '1.0.0', {
     ...emptyDependencies,
-    dependencies: { '@ankhorage/provider': '~1.0.0' },
-    peerDependencies: { '@ankhorage/peer': '^2.0.0' },
+    dependencies: { '@ankhorage/provider': '^25.0.0' },
+    peerDependencies: { '@ankhorage/peer': '^24.1.2 || ^25.0.0' },
   });
-  expect(
-    planReleaseWaves(
-      [incompatible],
-      [
-        { name: '@ankhorage/consumer', version: '1.0.0' },
-        { name: '@ankhorage/provider', version: '1.1.0' },
-        { name: '@ankhorage/peer', version: '1.0.0' },
-      ],
-      'incompatible',
-    ).blocked,
-  ).toEqual(['ankhorage/consumer: incompatible peerDependencies @ankhorage/peer@^2.0.0']);
+  const provider = repository('ankhorage/provider', '@ankhorage/provider', '25.0.0');
+  const plan = planReleaseWaves(
+    [upgrade, provider],
+    [
+      { name: '@ankhorage/consumer', version: '1.0.0' },
+      { name: '@ankhorage/provider', version: '26.0.0' },
+    ],
+    'upgrade',
+  );
+  expect(plan.blocked).toEqual([]);
+  expect(plan.waves).toEqual([['ankhorage/provider'], ['ankhorage/consumer']]);
 });
 
 test('keeps private, non-publishable, excluded, archived, and pending-bootstrap inventory entries visible', () => {
@@ -147,12 +147,38 @@ test('keeps private, non-publishable, excluded, archived, and pending-bootstrap 
   );
 
   expect(plan.pendingBootstrap).toEqual(['ankhorage/pending']);
-  expect(plan.blocked).toEqual([
+  expect(plan.blocked).toEqual([]);
+  expect(plan.excluded).toEqual([
     'ankhorage/docs: non-publishable',
     'ankhorage/exception: excluded: security boundary',
     'ankhorage/old: archived',
     'ankhorage/private: private',
   ]);
+});
+
+test('blocks a selected dependent when its selected provider is pending or absent', () => {
+  const consumer = repository('ankhorage/consumer', '@ankhorage/consumer', '1.0.0', {
+    ...emptyDependencies,
+    dependencies: { '@ankhorage/provider': '^1.0.0' },
+  });
+  const pending = {
+    ...repository('ankhorage/provider', '@ankhorage/provider', '1.0.0'),
+    bootstrapReady: false,
+  };
+  expect(
+    planReleaseWaves(
+      [consumer, pending],
+      [{ name: '@ankhorage/consumer', version: '1.0.0' }],
+      'blocked-provider',
+    ).blocked,
+  ).toEqual(['ankhorage/consumer: blocked provider @ankhorage/provider (pending-bootstrap)']);
+  expect(
+    planReleaseWaves(
+      [consumer],
+      [{ name: '@ankhorage/consumer', version: '1.0.0' }],
+      'missing-provider',
+    ).blocked,
+  ).toEqual(['ankhorage/consumer: missing selected provider @ankhorage/provider']);
 });
 
 test('bounds concurrent work and makes terminal releases idempotent across recovery', () => {

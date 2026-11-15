@@ -1,3 +1,5 @@
+import { gte, valid, validRange } from 'semver';
+
 import type {
   DependencyKind,
   PublishedPackage,
@@ -7,53 +9,51 @@ import type {
   ReleaseWaveRepository,
 } from '../../../types/releaseWave.js';
 
-const orderingDependencyKinds: readonly DependencyKind[] = [
-  'dependencies',
-  'devDependencies',
-  'optionalDependencies',
-];
-
 /*** Build a deterministic, fail-closed release plan from the selected App installation inventory. */
 export function planReleaseWaves(
   repositories: readonly ReleaseWaveRepository[],
   publishedPackages: readonly PublishedPackage[],
   runId: string,
 ): ReleaseWavePlan {
-  const publishedByName = new Map(
-    publishedPackages.map((publishedPackage) => [publishedPackage.name, publishedPackage]),
-  );
+  const publishedByName = new Map(publishedPackages.map((item) => [item.name, item]));
   const classified = [...repositories].sort((left, right) =>
     left.fullName.localeCompare(right.fullName),
   );
-  const pendingBootstrap = classified
-    .filter((repository) => isPendingBootstrap(repository))
-    .map((repository) => repository.fullName);
-  const blocked = classified.flatMap((repository) =>
-    classifyBlockedRepository(repository, publishedByName),
+  const pendingBootstrap = classified.filter(isPendingBootstrap).map((item) => item.fullName);
+  const excluded = classified.flatMap(classifyIntentionalExclusion);
+  const eligibility = new Map(
+    classified.map((item) => [item.fullName, classifyEligibility(item, publishedByName)]),
   );
-  const eligible = classified.filter((repository) => isEligible(repository));
-  const packagesByName = new Map<string, ReleaseWaveRepository>(
-    eligible
-      .filter(
-        (repository): repository is ReleaseWaveRepository & { readonly packageName: string } =>
-          repository.packageName !== undefined,
-      )
-      .map((repository) => [repository.packageName, repository]),
+  const eligible = classified.filter(
+    (item) => isEligible(item) && eligibility.get(item.fullName) === undefined,
   );
-  const nodeResults = eligible.map((repository) =>
-    createReleaseWaveNode(repository, packagesByName, publishedByName),
+  const selectedProviders = new Map(
+    classified.flatMap((item) =>
+      item.packageName === undefined ? [] : [[item.packageName, item] as const],
+    ),
+  );
+  const readyProviders = new Map(
+    eligible.flatMap((item) =>
+      item.packageName === undefined ? [] : [[item.packageName, item] as const],
+    ),
+  );
+  const nodeResults = eligible.map((item) =>
+    createReleaseWaveNode(item, selectedProviders, readyProviders, eligibility),
   );
   const nodes = nodeResults.filter((result): result is ReleaseWaveNode => !Array.isArray(result));
   const graphProblems = nodeResults.filter(isProblemList).flat();
   const cycleProblems = findCycleProblems(nodes);
-  const allBlocked = [...blocked, ...graphProblems, ...cycleProblems].sort();
+  const blocked = [...eligibility.values(), ...graphProblems, ...cycleProblems]
+    .filter((entry): entry is string => entry !== undefined)
+    .sort();
 
   return {
-    blocked: allBlocked,
+    blocked,
+    excluded,
     nodes,
     pendingBootstrap,
     runId,
-    waves: allBlocked.length === 0 ? createWaves(nodes) : [],
+    waves: cycleProblems.length === 0 ? createWaves(nodes) : [],
   };
 }
 
@@ -71,28 +71,25 @@ export function partitionReleaseWave(
   );
 }
 
-/*** Merge terminal release evidence idempotently so retried events cannot create another release. */
+/*** Merge checkpoint transitions idempotently without permitting terminal releases to regress. */
 export function mergeReleaseWaveLedger(
   ledger: ReleaseWaveLedger,
   repository: string,
   status: ReleaseWaveLedger['nodes'][string],
 ): ReleaseWaveLedger {
-  const current = new Map(Object.entries(ledger.nodes)).get(repository);
-  if (current === 'released' && status !== 'released') return ledger;
-  return {
-    ...ledger,
-    nodes: { ...ledger.nodes, [repository]: status },
-  };
+  const current = Object.entries(ledger.nodes).find(([name]) => name === repository)?.[1];
+  if (current === 'released' || (current === 'verified' && status !== 'released')) return ledger;
+  return { ...ledger, nodes: { ...ledger.nodes, [repository]: status } };
 }
 
-/*** Identify selected repositories that remain visible but cannot run until their managed workflow is bootstrapped. */
+/*** Identify selected repositories that require the managed workflow before they can participate. */
 function isPendingBootstrap(repository: ReleaseWaveRepository): boolean {
   return (
     !repository.archived && repository.excludedReason === undefined && !repository.bootstrapReady
   );
 }
 
-/*** Accept only installation-selected, active, bootstrapped publishable package repositories into a release wave. */
+/*** Accept only active, bootstrapped public packages with a complete identity into a release wave. */
 function isEligible(repository: ReleaseWaveRepository): boolean {
   return (
     !repository.archived &&
@@ -105,89 +102,139 @@ function isEligible(repository: ReleaseWaveRepository): boolean {
   );
 }
 
-/*** Report terminal classifications that must be visible in the release ledger rather than silently skipped. */
-function classifyBlockedRepository(
-  repository: ReleaseWaveRepository,
-  publishedByName: ReadonlyMap<string, PublishedPackage>,
-): readonly string[] {
+/*** Keep intentional inventory profiles visible without allowing them to block unrelated components. */
+function classifyIntentionalExclusion(repository: ReleaseWaveRepository): readonly string[] {
   if (repository.archived) return [repository.fullName + ': archived'];
   if (repository.excludedReason !== undefined)
     return [repository.fullName + ': excluded: ' + repository.excludedReason];
-  if (!repository.bootstrapReady) return [];
   if (repository.private) return [repository.fullName + ': private'];
   if (!repository.publishable) return [repository.fullName + ': non-publishable'];
-  if (repository.packageName === undefined || repository.packageVersion === undefined) {
-    return [repository.fullName + ': missing publishable package identity'];
-  }
-  const published = publishedByName.get(repository.packageName);
-  if (published === undefined) {
-    return [repository.fullName + ': no verified stable published package version'];
-  }
   return [];
 }
 
-/*** Build one node and validate all ordering and peer contracts against verified stable publications. */
+/*** Report only accidental release blockers; profile exclusions remain separate. */
+function classifyEligibility(
+  repository: ReleaseWaveRepository,
+  publishedByName: ReadonlyMap<string, PublishedPackage>,
+): string | undefined {
+  if (classifyIntentionalExclusion(repository).length > 0 || !repository.bootstrapReady)
+    return undefined;
+  if (repository.packageName === undefined || repository.packageVersion === undefined) {
+    return repository.fullName + ': missing publishable package identity';
+  }
+  const published = publishedByName.get(repository.packageName);
+  if (published === undefined)
+    return repository.fullName + ': no verified stable published package version';
+  if (valid(repository.packageVersion) === null || valid(published.version) === null) {
+    return repository.fullName + ': invalid stable package version';
+  }
+  return gte(published.version, repository.packageVersion)
+    ? undefined
+    : repository.fullName +
+        ': verified package publication would downgrade ' +
+        repository.packageName;
+}
+
+/*** Build runtime ordering edges and diagnose unavailable selected upstream providers. */
 function createReleaseWaveNode(
   repository: ReleaseWaveRepository,
-  packagesByName: ReadonlyMap<string, ReleaseWaveRepository>,
-  publishedByName: ReadonlyMap<string, PublishedPackage>,
+  selectedProviders: ReadonlyMap<string, ReleaseWaveRepository>,
+  readyProviders: ReadonlyMap<string, ReleaseWaveRepository>,
+  eligibility: ReadonlyMap<string, string | undefined>,
 ): ReleaseWaveNode | readonly string[] {
-  const dependenciesByKind = new Map(Object.entries(repository.dependencies));
-  const orderingDependencies = orderingDependencyKinds.flatMap((kind) =>
-    Object.entries(dependenciesByKind.get(kind) ?? {}).flatMap(([packageName, declaration]) => {
-      const provider = packagesByName.get(packageName);
-      if (provider === undefined) return [];
-      const published = publishedByName.get(packageName);
-      if (published === undefined || !isCompatibleVersion(declaration, published.version)) {
-        return [
-          repository.fullName + ': incompatible ' + kind + ' ' + packageName + '@' + declaration,
-        ];
-      }
-      return [provider.fullName];
-    }),
+  const results = [
+    ...readRuntimeDependencies(
+      repository,
+      'dependencies',
+      repository.dependencies.dependencies,
+      selectedProviders,
+      readyProviders,
+      eligibility,
+    ),
+    ...readRuntimeDependencies(
+      repository,
+      'optionalDependencies',
+      repository.dependencies.optionalDependencies,
+      selectedProviders,
+      readyProviders,
+      eligibility,
+    ),
+  ];
+  const peerProblems = Object.entries(repository.dependencies.peerDependencies).flatMap(
+    ([packageName, declaration]) =>
+      isValidUpdateRange(declaration)
+        ? []
+        : [repository.fullName + ': invalid peerDependencies ' + packageName + '@' + declaration],
   );
-  const peerProblems = findPeerProblems(repository, publishedByName);
-  if (
-    peerProblems.length > 0 ||
-    orderingDependencies.some((dependency) => dependency.includes(': incompatible '))
-  ) {
-    return [
-      ...peerProblems,
-      ...orderingDependencies.filter((dependency) => dependency.includes(': incompatible ')),
-    ];
-  }
+  const problems = [...peerProblems, ...results.filter(isProblem)].sort();
+  if (problems.length > 0) return problems;
   if (repository.packageName === undefined) return [repository.fullName + ': missing package name'];
   return {
-    dependencies: orderingDependencies
-      .filter((dependency) => !dependency.includes(': incompatible '))
-      .sort(),
+    dependencies: results.filter(isDependency).sort(),
     packageName: repository.packageName,
     repository: repository.fullName,
   };
 }
 
-/*** Return diagnostics for peer ranges that do not support their verified stable package release. */
-function findPeerProblems(
+/*** Read one runtime dependency section without promoting build tooling to a release prerequisite. */
+function readRuntimeDependencies(
   repository: ReleaseWaveRepository,
-  publishedByName: ReadonlyMap<string, PublishedPackage>,
+  kind: DependencyKind,
+  dependencies: Readonly<Record<string, string>>,
+  selectedProviders: ReadonlyMap<string, ReleaseWaveRepository>,
+  readyProviders: ReadonlyMap<string, ReleaseWaveRepository>,
+  eligibility: ReadonlyMap<string, string | undefined>,
 ): readonly string[] {
-  return Object.entries(repository.dependencies.peerDependencies).flatMap(
-    ([packageName, declaration]) => {
-      const published = publishedByName.get(packageName);
-      return published === undefined || !isCompatibleVersion(declaration, published.version)
-        ? [
-            repository.fullName +
-              ': incompatible peerDependencies ' +
-              packageName +
-              '@' +
-              declaration,
-          ]
-        : [];
-    },
+  return Object.entries(dependencies).map(([packageName, declaration]) =>
+    readRuntimeDependency(
+      repository,
+      kind,
+      packageName,
+      declaration,
+      selectedProviders,
+      readyProviders,
+      eligibility,
+    ),
   );
 }
 
-/*** Create waves only after every upstream node has settled in an earlier wave. */
+/*** Validate an update declaration while preserving the existing range as a starting point, not a ceiling. */
+function readRuntimeDependency(
+  repository: ReleaseWaveRepository,
+  kind: DependencyKind,
+  packageName: string,
+  declaration: string,
+  selectedProviders: ReadonlyMap<string, ReleaseWaveRepository>,
+  readyProviders: ReadonlyMap<string, ReleaseWaveRepository>,
+  eligibility: ReadonlyMap<string, string | undefined>,
+): string {
+  if (!isValidUpdateRange(declaration)) {
+    return repository.fullName + ': invalid ' + kind + ' ' + packageName + '@' + declaration;
+  }
+  if (!packageName.startsWith('@ankhorage/')) return '';
+  const selected = selectedProviders.get(packageName);
+  if (selected === undefined)
+    return repository.fullName + ': missing selected provider ' + packageName;
+  const provider = readyProviders.get(packageName);
+  if (provider === undefined) {
+    const reason = eligibility.get(selected.fullName) ?? profileReason(selected);
+    return repository.fullName + ': blocked provider ' + packageName + ' (' + reason + ')';
+  }
+  return provider.fullName;
+}
+
+/*** Keep semver parsing authoritative for compound ranges while rejecting tags and non-semver declarations. */
+function isValidUpdateRange(declaration: string): boolean {
+  return validRange(declaration) !== null;
+}
+
+/*** Render an unavailable provider profile in a deterministic diagnostic. */
+function profileReason(repository: ReleaseWaveRepository): string {
+  if (!repository.bootstrapReady) return 'pending-bootstrap';
+  return classifyIntentionalExclusion(repository)[0] ?? 'unavailable';
+}
+
+/*** Create waves only after every runtime upstream node settled in an earlier wave. */
 function createWaves(nodes: readonly ReleaseWaveNode[]): readonly (readonly string[])[] {
   const remaining = new Map(nodes.map((node) => [node.repository, new Set(node.dependencies)]));
   const waves: string[][] = [];
@@ -206,7 +253,7 @@ function createWaves(nodes: readonly ReleaseWaveNode[]): readonly (readonly stri
   return waves;
 }
 
-/*** Surface a deterministic diagnostic when ordering dependencies form a real release cycle. */
+/*** Surface a deterministic diagnostic when runtime release prerequisites form a cycle. */
 function findCycleProblems(nodes: readonly ReleaseWaveNode[]): readonly string[] {
   return createWaves(nodes).length === 0 && nodes.length > 0
     ? [
@@ -219,47 +266,17 @@ function findCycleProblems(nodes: readonly ReleaseWaveNode[]): readonly string[]
     : [];
 }
 
-/*** Narrow a release-wave result to its explicit diagnostics. */
+/*** Narrow graph results to diagnostics. */
 function isProblemList(result: ReleaseWaveNode | readonly string[]): result is readonly string[] {
   return Array.isArray(result);
 }
 
-/*** Verify the supported stable declaration forms without accepting a downgrade or prerelease as a settled release. */
-function isCompatibleVersion(declaration: string, version: string): boolean {
-  const selected = parseStableVersion(version);
-  const match = /^(?<operator>\^|~)?(?<declared>\d+\.\d+\.\d+)$/u.exec(declaration);
-  const declared =
-    match?.groups?.declared === undefined ? undefined : parseStableVersion(match.groups.declared);
-  if (selected === undefined || declared === undefined) return false;
-  if (compareVersions(selected, declared) < 0) return false;
-  if (match?.groups?.operator === undefined) return compareVersions(selected, declared) === 0;
-  if (match.groups.operator === '~')
-    return selected[0] === declared[0] && selected[1] === declared[1];
-  return isCaretCompatible(declared, selected);
+/*** Distinguish a diagnostic from a repository dependency edge. */
+function isProblem(value: string): boolean {
+  return value.includes(': ');
 }
 
-/*** Check the compatible-major semantics of a stable caret range. */
-function isCaretCompatible(
-  declared: readonly [number, number, number],
-  selected: readonly [number, number, number],
-): boolean {
-  if (declared[0] !== 0) return selected[0] === declared[0];
-  if (declared[1] !== 0) return selected[0] === 0 && selected[1] === declared[1];
-  return selected[0] === 0 && selected[1] === 0 && selected[2] === declared[2];
-}
-
-/*** Parse an exact stable semantic version. */
-function parseStableVersion(value: string): readonly [number, number, number] | undefined {
-  const match = /^(\d+)\.(\d+)\.(\d+)$/u.exec(value);
-  return match === null ? undefined : [Number(match[1]), Number(match[2]), Number(match[3])];
-}
-
-/*** Compare semantic-version triples. */
-function compareVersions(
-  left: readonly [number, number, number],
-  right: readonly [number, number, number],
-): number {
-  const [leftMajor, leftMinor, leftPatch] = left;
-  const [rightMajor, rightMinor, rightPatch] = right;
-  return leftMajor - rightMajor || leftMinor - rightMinor || leftPatch - rightPatch;
+/*** Exclude empty external dependencies from graph edges. */
+function isDependency(value: string): boolean {
+  return value !== '' && !isProblem(value);
 }

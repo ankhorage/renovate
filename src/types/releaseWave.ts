@@ -26,6 +26,7 @@ export interface ReleaseWaveNode {
 
 export interface ReleaseWavePlan {
   readonly blocked: readonly string[];
+  readonly excluded: readonly string[];
   readonly nodes: readonly ReleaseWaveNode[];
   readonly pendingBootstrap: readonly string[];
   readonly runId: string;
@@ -33,6 +34,18 @@ export interface ReleaseWavePlan {
 }
 
 export interface ReleaseWaveLedger {
-  readonly nodes: Readonly<Record<string, 'blocked' | 'pending-bootstrap' | 'ready' | 'released'>>;
+  readonly nodes: Readonly<
+    Record<
+      string,
+      | 'blocked'
+      | 'pending-bootstrap'
+      | 'ready'
+      | 'updating'
+      | 'awaiting-review'
+      | 'verified'
+      | 'released'
+      | 'failed'
+    >
+  >;
   readonly runId: string;
 }
