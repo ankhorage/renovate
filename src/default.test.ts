@@ -28,22 +28,22 @@ describe('consumer preset', () => {
     ).toMatchObject({
       automerge: true,
       enabled: true,
-      groupName: 'Ankhorage libraries',
-      groupSlug: 'ankhorage-libraries',
+      groupName: 'Ankhorage release wave',
+      groupSlug: 'ankhorage-release-wave',
       labels: ['dependencies', 'renovate:automerge'],
       rangeStrategy: 'bump',
       separateMajorMinor: false,
     });
   });
 
-  test('groups the compatible CLI and provider pair', () => {
+  test('groups the compatible CLI and provider pair with every other Ankhorage dependency', () => {
     for (const packageName of ['@ankhorage/ankh', '@ankhorage/devtools']) {
       expect(resolveRules(consumerPreset.packageRules, dependency(packageName))).toMatchObject({
         automerge: true,
         automergeType: 'pr',
         enabled: true,
-        groupName: 'Ankhorage CLI and Devtools toolchain',
-        groupSlug: 'ankhorage-cli-and-devtools-toolchain',
+        groupName: 'Ankhorage release wave',
+        groupSlug: 'ankhorage-release-wave',
         labels: ['dependencies', 'renovate:automerge'],
         platformAutomerge: true,
         rangeStrategy: 'bump',
@@ -106,19 +106,15 @@ describe('consumer update policy', () => {
 });
 
 describe('consumer policy migration', () => {
-  test('replaces the closed pre-split group with distinct clean branch identities', () => {
-    const closedPreSplitBranch = 'renovate/ankhorage-packages';
-    const replacementBranches = [
+  test('uses one stable branch identity for every direct Ankhorage dependency', () => {
+    const branches = [
       branchName(resolveRules(consumerPreset.packageRules, dependency('@ankhorage/paradox'))),
       branchName(resolveRules(consumerPreset.packageRules, dependency('@ankhorage/devtools'))),
     ];
-
-    expect(replacementBranches).toEqual([
-      'renovate/ankhorage-libraries',
-      'renovate/ankhorage-cli-and-devtools-toolchain',
+    expect(branches).toEqual([
+      'renovate/ankhorage-release-wave',
+      'renovate/ankhorage-release-wave',
     ]);
-    expect(replacementBranches).not.toContain(closedPreSplitBranch);
-    expect(new Set(replacementBranches).size).toBe(replacementBranches.length);
   });
 });
 
@@ -202,7 +198,7 @@ describe('consumer toolchain safeguards', () => {
     ).toMatchObject({
       automerge: true,
       enabled: true,
-      groupName: 'Ankhorage CLI and Devtools toolchain',
+      groupName: 'Ankhorage release wave',
       labels: ['dependencies', 'renovate:automerge'],
       separateMajorMinor: false,
     });

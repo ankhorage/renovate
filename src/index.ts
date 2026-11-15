@@ -5,11 +5,9 @@
  * public API is intentionally reserved for the future `ankh renovate` provider.
  *
  * The `ankhorage-renovate-sync` GitHub App intentionally uses **selected repositories**, not
- * organization-wide access. Before a repository is added to `devtools-consumers.json` or treated
- * as managed-release ready, an organization owner must first add that repository to the existing
- * App installation. The rollout workflow validates the installation's accessible repository set
- * against the registry and fails with the missing repository names when this bootstrap step is
- * incomplete.
+ * organization-wide access. The selected App installation is the sole positive enrollment source.
+ * The coordinator reports selected repositories that still need the immutable workflow bootstrap
+ * instead of silently omitting them.
  *
  * @readme
  */

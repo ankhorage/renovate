@@ -8,35 +8,26 @@ const workflow = readFileSync(
 );
 
 describe('Renovate reconciliation workflow', () => {
-  test('runs on policy changes, targeted dispatches, daily, and manually', () => {
-    expect(workflow).toContain('schedule:');
-    expect(workflow).toContain("cron: '17 3 * * *'");
-    expect(workflow).toContain('repository_dispatch:');
-    expect(workflow).toContain('- renovate-reconcile');
-    expect(workflow).toContain('workflow_dispatch:');
-    expect(workflow).toContain('- .github/workflows/changeset.yml');
-    expect(workflow).toContain('- default.json');
-    expect(workflow).toContain('- release-consumers.json');
+  test('uses the paginated selected App installation as its only positive inventory', () => {
+    expect(workflow).toContain(
+      'github.paginate(github.rest.apps.listReposAccessibleToInstallation',
+    );
+    expect(workflow).toContain("repository.owner?.login === 'ankhorage'");
+    expect(workflow).not.toContain('release-consumers.json');
+    expect(workflow).toContain('release-wave-exclusions.json');
   });
 
-  test('sweeps the registry or one validated targeted repository', () => {
-    expect(workflow).toContain("fs.readFileSync('release-consumers.json', 'utf8')");
-    expect(workflow).toContain("context.eventName === 'repository_dispatch'");
-    expect(workflow).toContain('context.payload.client_payload?.repository');
-    expect(workflow).toContain('!uniqueRepositories.has(requestedRepository)');
-    expect(workflow).toContain('JSON.stringify([requestedRepository])');
-    expect(workflow).toContain('repository: ${{ fromJSON(needs.prepare.outputs.repositories) }}');
+  test('rejects unselected targeted repositories and reports bootstrap/exclusion state', () => {
+    expect(workflow).toContain('not selected in the Renovate Sync App installation');
+    expect(workflow).toContain('pending-bootstrap');
+    expect(workflow).toContain(': archived');
+    expect(workflow).toContain(': excluded: ');
+  });
+
+  test('runs only App-selected, bootstrapped repositories with bounded concurrency', () => {
+    expect(workflow).toContain('max-parallel: 4');
     expect(workflow).toContain('RENOVATE_REPOSITORIES: ${{ matrix.repository }}');
     expect(workflow).toContain("RENOVATE_AUTODISCOVER: 'false'");
     expect(workflow).toContain("RENOVATE_ONBOARDING: 'false'");
-  });
-
-  test('keeps the runner reproducible without throttling Renovate branches', () => {
-    expect(workflow).toContain('bun install --frozen-lockfile --ignore-scripts');
-    expect(workflow).toContain('max-parallel: 4');
-    expect(workflow).toContain(
-      "group: renovate-reconciliation-${{ github.event.client_payload.repository || 'all' }}",
-    );
-    expect(workflow).toContain('cancel-in-progress: true');
   });
 });

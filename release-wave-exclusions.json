@@ -1,0 +1,5 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Explicit negative exceptions for the temporary release-wave coordinator. GitHub App repository selection is the sole positive enrollment source.",
+  "repositories": {}
+}

@@ -14,7 +14,6 @@ USER_ID=137318798
 API_VERSION=2026-03-10
 
 repo_root="$(git rev-parse --show-toplevel)"
-registry="$repo_root/release-consumers.json"
 had_blocker=false
 
 if ! command -v gh >/dev/null 2>&1; then
@@ -27,8 +26,8 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 1
 fi
 
-if [[ ! -f "$registry" ]]; then
-  echo "Missing release-consumers.json at $registry" >&2
+if [[ -z "${GH_TOKEN:-}" ]]; then
+  echo "GH_TOKEN must be an ankhorage-renovate-sync GitHub App installation token." >&2
   exit 1
 fi
 
@@ -215,7 +214,11 @@ while IFS= read -r full_repo; do
       echo "✓ updated"
     fi
   done <<<"$applicable_ruleset_ids"
-done < <(jq -r '.repositories[]' "$registry")
+done < <(
+  gh api --paginate 'installation/repositories?per_page=100' --jq '.repositories[].full_name' |
+    awk '$0 ~ /^ankhorage\/[a-z0-9-]+$/ { print }' |
+    sort -u
+)
 
 if [[ "$MODE" == "dry-run" ]]; then
   echo
