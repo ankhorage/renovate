@@ -155,7 +155,7 @@ async function resumeReleaseWaveVerificationAsync(
   );
 }
 
-/*** Claim ready, failed, or expired work with CAS; active and review states cannot be stolen. */
+/*** Claim ready, failed, or expired work with CAS; no live owner can be stolen during mutation or review. */
 async function claimReleaseWaveRepositoryAsync(
   input: ExecuteReleaseWavesInput,
   repository: string,
@@ -279,11 +279,7 @@ function isClaimableReleaseWaveOperation(
     status !== 'released' &&
     status !== 'verified' &&
     status !== 'blocked' &&
-    !(
-      status === 'updating' &&
-      operation !== undefined &&
-      operation.leaseExpiresAt > now.toISOString()
-    )
+    !(operation !== undefined && operation.leaseExpiresAt > now.toISOString())
   );
 }
 

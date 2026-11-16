@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import type { ReleaseWaveCheckpoint } from '../ports/releaseWaveCheckpoint.js';
 import type { ExecuteReleaseWavesInput } from './executeReleaseWavesAsync.js';
 import { releaseWaveOperationId } from './validateReleaseWaveCheckpoint.js';
@@ -23,7 +25,7 @@ export function claimableReleaseWaveCheckpoint(
       operations: {
         ...checkpoint.ledger.operations,
         [repository]: {
-          fencingToken: input.executorId + ':' + input.now().toISOString(),
+          fencingToken: claimGeneration(input.executorId),
           leaseExpiresAt: new Date(input.now().getTime() + leaseDurationMilliseconds).toISOString(),
           operationId: releaseWaveOperationId(input.plan.runId, repository),
           ownerId: input.executorId,
@@ -31,6 +33,11 @@ export function claimableReleaseWaveCheckpoint(
       },
     },
   };
+}
+
+/*** Generate a fresh opaque fencing generation even when one executor reclaims within one clock tick. */
+function claimGeneration(executorId: string): string {
+  return executorId + ':' + randomUUID();
 }
 
 /*** Remove stale recovery detail once a new lease owns the operation. */
