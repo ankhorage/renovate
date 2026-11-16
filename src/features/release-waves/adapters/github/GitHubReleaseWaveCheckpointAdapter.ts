@@ -3,9 +3,7 @@ import type {
   ReleaseWaveCheckpointPort,
   RevisionedReleaseWaveCheckpoint,
 } from '../../ports/releaseWaveCheckpoint.js';
-import {
-  ReleaseWaveCheckpointConflictError,
-} from '../../ports/releaseWaveCheckpoint.js';
+import { ReleaseWaveCheckpointConflictError } from '../../ports/releaseWaveCheckpoint.js';
 
 interface GitHubFileContentsClient {
   readonly repos: {
