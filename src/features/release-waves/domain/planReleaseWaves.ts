@@ -125,6 +125,11 @@ function classifyEligibility(
   if (valid(repository.packageVersion) === null || valid(published.version) === null) {
     return repository.fullName + ': invalid stable package version';
   }
+  if (
+    repository.plannedPublicationVersion === undefined ||
+    valid(repository.plannedPublicationVersion) === null
+  )
+    return repository.fullName + ': missing authoritative planned publication version';
   return gte(published.version, repository.packageVersion)
     ? undefined
     : repository.fullName +
@@ -169,12 +174,22 @@ function createReleaseWaveNode(
   const problems = [...peerProblems, ...results.filter(isProblem)].sort();
   if (problems.length > 0) return problems;
   if (repository.packageName === undefined) return [repository.fullName + ': missing package name'];
+  const expectedPublication = publicationExpectation(repository);
   return {
     dependencies: results.filter(isDependency).sort(),
+    expectedPublication,
     packageName: repository.packageName,
     requiresNpmPublication: requiresNpmPublication(repository),
     repository: repository.fullName,
   };
+}
+
+/** Keep the plan's publishable-node evidence complete after eligibility has accepted it. */
+function publicationExpectation(repository: ReleaseWaveRepository) {
+  if (!requiresNpmPublication(repository)) return undefined;
+  if (repository.plannedPublicationVersion === undefined)
+    throw new Error('Release-wave publishable node is missing its planned publication version.');
+  return { version: repository.plannedPublicationVersion };
 }
 
 /*** Read one runtime dependency section without promoting build tooling to a release prerequisite. */

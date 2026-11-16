@@ -14,6 +14,10 @@ interface PullRequest {
   readonly number: number;
 }
 
+interface Release {
+  readonly target_commitish: string;
+}
+
 interface Protection {
   readonly required_pull_request_reviews?: {
     readonly require_code_owner_reviews?: boolean;
@@ -56,6 +60,36 @@ async function verificationAsync(
   const pull = await labelledPullAsync(client, node.repository, runId + ':' + node.repository);
   if (pull === undefined || pull.merged_at === null || pull.merge_commit_sha === null)
     return incomplete;
+  const evidence = await githubEvidenceAsync(input, client, node, pull);
+  const releaseRevision = evidence.releaseRun?.head_sha;
+  const releaseWorkflowPassed = releaseRevision !== undefined;
+  const npmVerified =
+    node.requiresNpmPublication && releaseWorkflowPassed
+      ? await npmArtifactAsync(input, node)
+      : false;
+  return {
+    documentationGenerated:
+      releaseWorkflowPassed && (await generatedDocsAsync(client, node.repository, releaseRevision)),
+    exactHeadCiPassed: requiredContextsPassed(
+      evidence.protection,
+      evidence.checks,
+      evidence.statuses,
+    ),
+    lockfileUpdated: hasConsumerReleaseInputs(evidence.files),
+    npmArtifactVerified: node.requiresNpmPublication ? npmVerified : undefined,
+    npmVersionVerified: node.requiresNpmPublication ? npmVerified : undefined,
+    releaseWorkflowPassed,
+    requiredReviewsApproved: requiredReviewsPassed(evidence.protection, evidence.reviews),
+  };
+}
+
+/** Read every bounded GitHub evidence collection against the reconciled candidate. */
+async function githubEvidenceAsync(
+  input: GitHubNpmReleaseWaveExecutionAdapterInput,
+  client: ReturnType<typeof githubReleaseWaveClient>,
+  node: ReleaseWaveNode,
+  pull: PullRequest,
+) {
   const [protection, reviews, checks, statuses, releaseRun, files] = await Promise.all([
     client.jsonAsync<Protection>(
       '/repos/' +
@@ -71,31 +105,26 @@ async function verificationAsync(
       readonly conclusion: string | null;
       readonly name: string;
       readonly status: string;
-    }>('/repos/' + node.repository + '/commits/' + pull.head.sha + '/check-runs'),
+    }>(`/repos/${node.repository}/commits/${pull.head.sha}/check-runs`, 'check_runs'),
     client.pagesAsync<{ readonly context: string; readonly state: string }>(
       '/repos/' + node.repository + '/commits/' + pull.head.sha + '/status',
+      'statuses',
     ),
-    releaseRunAsync(input, node.repository, pull.merge_commit_sha),
+    releaseEvidenceAsync(input, node.repository, node.expectedPublication?.version),
     client.pagesAsync<{ readonly filename: string }>(
       '/repos/' + node.repository + '/pulls/' + pull.number + '/files',
     ),
   ]);
-  const releaseWorkflowPassed = releaseRun !== undefined;
-  const npmVerified =
-    node.requiresNpmPublication && releaseWorkflowPassed
-      ? await npmArtifactAsync(input, node, pull.merge_commit_sha)
-      : false;
-  return {
-    documentationGenerated:
-      releaseWorkflowPassed &&
-      (await generatedDocsAsync(client, node.repository, pull.merge_commit_sha)),
-    exactHeadCiPassed: requiredContextsPassed(protection, checks, statuses),
-    lockfileUpdated: files.some((file) => isLockfile(file.filename)),
-    npmArtifactVerified: node.requiresNpmPublication ? npmVerified : undefined,
-    npmVersionVerified: node.requiresNpmPublication ? npmVerified : undefined,
-    releaseWorkflowPassed,
-    requiredReviewsApproved: requiredReviewsPassed(protection, reviews),
-  };
+  return { checks, files, protection, releaseRun, reviews, statuses };
+}
+
+/** Require the candidate's manifest, lockfile, and Changeset rather than a filename-only lockfile claim. */
+function hasConsumerReleaseInputs(files: readonly { readonly filename: string }[]): boolean {
+  return (
+    files.some((file) => isLockfile(file.filename)) &&
+    files.some((file) => file.filename === 'package.json') &&
+    files.some((file) => file.filename.startsWith('.changeset/'))
+  );
 }
 
 /*** Fetch the durable labelled PR only after reconciliation has established its merged state. */
@@ -173,6 +202,27 @@ async function releaseRunAsync(
   return runs.find((run) => run.head_sha === revision && run.conclusion === 'success');
 }
 
+/** Bind the planned version to a successful release workflow and its immutable release tag commit. */
+async function releaseEvidenceAsync(
+  input: GitHubNpmReleaseWaveExecutionAdapterInput,
+  repository: string,
+  version: string | undefined,
+): Promise<{ readonly head_sha: string } | undefined> {
+  if (version === undefined) return undefined;
+  const client = githubReleaseWaveClient(input);
+  const release = await client.jsonAsync<Release>(
+    '/repos/' + repository + '/releases/tags/' + encodeURIComponent('v' + version),
+  );
+  if (!isCommitSha(release.target_commitish)) return undefined;
+  const run = await releaseRunAsync(input, repository, release.target_commitish);
+  return run?.head_sha === release.target_commitish ? run : undefined;
+}
+
+/** Reject mutable branch names: release evidence must name an immutable Git commit. */
+function isCommitSha(revision: string): boolean {
+  return /^[0-9a-f]{40}$/i.test(revision);
+}
+
 /*** Read release-owned generated output at the release revision rather than candidate PR files. */
 async function generatedDocsAsync(
   client: ReturnType<typeof githubReleaseWaveClient>,
@@ -198,10 +248,9 @@ async function generatedDocsAsync(
 async function npmArtifactAsync(
   input: GitHubNpmReleaseWaveExecutionAdapterInput,
   node: ReleaseWaveNode,
-  revision: string,
 ): Promise<boolean> {
   const expected = node.expectedPublication;
-  if (expected?.releaseRevision !== revision) return false;
+  if (expected === undefined) return false;
   const manifestResponse = await input.requestAsync(
     input.npmRegistryUrl + '/' + encodeURIComponent(node.packageName),
     { headers: { accept: 'application/json' } },
@@ -214,7 +263,7 @@ async function npmArtifactAsync(
   };
   const dist = manifest.versions?.[expected.version]?.dist;
   if (
-    dist?.integrity !== expected.integrity ||
+    dist?.integrity === undefined ||
     dist.tarball === undefined ||
     !trustedTarball(input.npmRegistryUrl, dist.tarball)
   )

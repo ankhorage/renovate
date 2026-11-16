@@ -15,6 +15,7 @@ const plan: ReleaseWavePlan = {
   nodes: [
     {
       dependencies: [],
+      expectedPublication: { version: '1.0.1' },
       packageName: '@ankhorage/base',
       repository: 'ankhorage/base',
       requiresNpmPublication: true,

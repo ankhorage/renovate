@@ -9,6 +9,8 @@ export interface ReleaseWaveRepository {
   readonly fullName: string;
   readonly packageName?: string;
   readonly packageVersion?: string;
+  /** Exact version resolved by the package's Changeset/release planner before this wave starts. */
+  readonly plannedPublicationVersion?: string;
   readonly private: boolean;
   readonly publishable: boolean;
 }
@@ -21,16 +23,14 @@ export interface PublishedPackage {
 export interface ReleaseWaveNode {
   readonly dependencies: readonly string[];
   /** Immutable release evidence decided before an external candidate is created. */
-  readonly expectedPublication?: ReleaseWavePublication;
+  readonly expectedPublication: ReleaseWavePublication | undefined;
   readonly packageName: string;
   readonly requiresNpmPublication: boolean;
   readonly repository: string;
 }
 
-/** Exact identity a publishable wave node must prove before it can settle. */
+/** Exact publication version authorized by the managed Changeset/release planner. */
 interface ReleaseWavePublication {
-  readonly integrity: string;
-  readonly releaseRevision: string;
   readonly version: string;
 }
 

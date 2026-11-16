@@ -6,8 +6,6 @@ import { GitHubNpmReleaseWaveExecutionAdapter } from './GitHubNpmReleaseWaveExec
 const node = {
   dependencies: [],
   expectedPublication: {
-    integrity: 'sha512-exact',
-    releaseRevision: 'merge-sha',
     version: '1.2.4',
   },
   packageName: '@ankhorage/example',
@@ -101,6 +99,38 @@ test('treats rate limits and incomplete paginated GitHub evidence as incomplete 
   });
 });
 
+test('fails closed when a GitHub REST collection omits its documented envelope property', async () => {
+  const verification = await verifyWith((url, method) =>
+    url.includes('/check-runs') ? json({ items: [] }) : responseFor(url, method),
+  );
+  expect(verification).toEqual({
+    documentationGenerated: false,
+    exactHeadCiPassed: false,
+    lockfileUpdated: false,
+    releaseWorkflowPassed: false,
+    requiredReviewsApproved: false,
+  });
+});
+
+test('reads required checks from a later documented GitHub REST page', async () => {
+  const verification = await verifyWith((url, method) => {
+    if (url.includes('/check-runs') && url.endsWith('&page=1'))
+      return json({
+        check_runs: Array.from({ length: 100 }, (_, index) => ({
+          conclusion: 'success',
+          name: 'optional-' + index,
+          status: 'completed',
+        })),
+      });
+    if (url.includes('/check-runs') && url.endsWith('&page=2'))
+      return json({
+        check_runs: [{ conclusion: 'success', name: 'validate', status: 'completed' }],
+      });
+    return responseFor(url, method);
+  });
+  expect(verification).toMatchObject({ exactHeadCiPassed: true });
+});
+
 /*** Exercise one complete verification attempt with a focused provider override. */
 async function verifyWith(
   responder: (url: string, method: string | undefined) => Response,
@@ -128,7 +158,11 @@ function responseFor(url: string, method: string | undefined): Response {
   if (url.includes('/pulls/42/reviews'))
     return json([{ state: 'APPROVED', user: { login: 'reviewer' } }]);
   if (url.includes('/pulls/42/files'))
-    return json([{ filename: 'bun.lock' }, { filename: 'README.md' }]);
+    return json([
+      { filename: 'bun.lock' },
+      { filename: 'package.json' },
+      { filename: '.changeset/example.md' },
+    ]);
   if (url.includes('/pulls/42'))
     return json({
       base: { ref: 'main' },
@@ -139,10 +173,11 @@ function responseFor(url: string, method: string | undefined): Response {
       state: 'closed',
     });
   if (url.includes('/check-runs'))
-    return json([{ conclusion: 'success', name: 'validate', status: 'completed' }]);
-  if (url.includes('/status')) return json([]);
+    return json({ check_runs: [{ conclusion: 'success', name: 'validate', status: 'completed' }] });
+  if (url.includes('/status')) return json({ statuses: [] });
+  if (url.includes('/releases/tags/v1.2.4')) return json({ target_commitish: 'e'.repeat(40) });
   if (url.includes('/actions/workflows/release.yml/runs'))
-    return json({ workflow_runs: [{ conclusion: 'success', head_sha: 'merge-sha' }] });
+    return json({ workflow_runs: [{ conclusion: 'success', head_sha: 'e'.repeat(40) }] });
   if (url.includes('/contents/README.md') || url.includes('/contents/paradox')) return json({});
   if (url === 'https://registry.npm.test/%40ankhorage%2Fexample')
     return json({

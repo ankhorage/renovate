@@ -28,6 +28,9 @@ function repository(
     fullName,
     packageName,
     packageVersion: version,
+    plannedPublicationVersion: version.replace(/(\d+)$/, (_, patch: string) =>
+      String(Number(patch) + 1),
+    ),
     private: false,
     publishable: true,
   };
@@ -155,12 +158,14 @@ test('keeps private and non-publishable applications in coordinated verification
   expect(plan.nodes).toEqual([
     {
       dependencies: [],
+      expectedPublication: undefined,
       packageName: '@ankhorage/docs',
       repository: 'ankhorage/docs',
       requiresNpmPublication: false,
     },
     {
       dependencies: [],
+      expectedPublication: undefined,
       packageName: '@ankhorage/private',
       repository: 'ankhorage/private',
       requiresNpmPublication: false,
@@ -210,6 +215,22 @@ test('accepts a verified external provider without enrolling it for mutation', (
 
   expect(plan.blocked).toEqual([]);
   expect(plan.waves).toEqual([['ankhorage/consumer']]);
+});
+
+test('requires an exact Changeset-planned publication version for every publishable node', () => {
+  const publishable = {
+    ...repository('ankhorage/package', '@ankhorage/package', '1.0.0'),
+    plannedPublicationVersion: undefined,
+  };
+  const plan = planReleaseWaves(
+    [publishable],
+    [{ name: '@ankhorage/package', version: '1.0.0' }],
+    'missing-publication-plan',
+  );
+  expect(plan.blocked).toEqual([
+    'ankhorage/package: missing authoritative planned publication version',
+  ]);
+  expect(plan.nodes).toEqual([]);
 });
 
 test('bounds concurrent work and makes terminal releases idempotent across recovery', () => {
