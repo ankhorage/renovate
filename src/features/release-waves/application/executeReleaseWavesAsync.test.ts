@@ -206,6 +206,7 @@ test('reconciles an expired interrupted mutation before retrying it', async () =
       nodes: { 'ankhorage/base': 'updating' },
       operations: {
         'ankhorage/base': {
+          fencingToken: 'interrupted-executor:2026-11-15T22:55:00.000Z',
           leaseExpiresAt: '2026-11-15T23:00:00.000Z',
           operationId: 'diamond:ankhorage/base',
           ownerId: 'interrupted-executor',

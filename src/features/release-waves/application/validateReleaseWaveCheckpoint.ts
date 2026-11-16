@@ -78,9 +78,11 @@ function isOperation(value: unknown): boolean {
     typeof value === 'object' &&
     value !== null &&
     'leaseExpiresAt' in value &&
+    'fencingToken' in value &&
     'operationId' in value &&
     'ownerId' in value &&
     typeof value.leaseExpiresAt === 'string' &&
+    typeof value.fencingToken === 'string' &&
     typeof value.operationId === 'string' &&
     typeof value.ownerId === 'string'
   );

@@ -9,16 +9,21 @@ export function claimableReleaseWaveCheckpoint(
   input: ExecuteReleaseWavesInput,
   checkpoint: ReleaseWaveCheckpoint,
   repository: string,
+  retainAwaitingReview: boolean,
 ): ReleaseWaveCheckpoint {
   return {
     ...checkpoint,
     failures: withoutKey(checkpoint.failures, repository),
     ledger: {
       ...checkpoint.ledger,
-      nodes: { ...checkpoint.ledger.nodes, [repository]: 'updating' },
+      nodes: {
+        ...checkpoint.ledger.nodes,
+        [repository]: retainAwaitingReview ? 'awaiting-review' : 'updating',
+      },
       operations: {
         ...checkpoint.ledger.operations,
         [repository]: {
+          fencingToken: input.executorId + ':' + input.now().toISOString(),
           leaseExpiresAt: new Date(input.now().getTime() + leaseDurationMilliseconds).toISOString(),
           operationId: releaseWaveOperationId(input.plan.runId, repository),
           ownerId: input.executorId,

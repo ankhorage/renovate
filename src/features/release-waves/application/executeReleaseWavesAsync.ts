@@ -7,14 +7,16 @@ import { partitionReleaseWave } from '../domain/planReleaseWaves.js';
 import type {
   ReleaseWaveCheckpoint,
   ReleaseWaveCheckpointPort,
-  RevisionedReleaseWaveCheckpoint,
 } from '../ports/releaseWaveCheckpoint.js';
 import { isReleaseWaveCheckpointConflict } from '../ports/releaseWaveCheckpoint.js';
-import type {
-  ReleaseWaveExecutionPort,
-  ReleaseWaveVerification,
-} from '../ports/releaseWaveExecution.js';
+import type { ReleaseWaveExecutionPort } from '../ports/releaseWaveExecution.js';
 import { claimableReleaseWaveCheckpoint } from './claimableReleaseWaveCheckpoint.js';
+import { isReleaseWaveVerificationComplete } from './isReleaseWaveVerificationComplete.js';
+import { releaseWaveFailure } from './releaseWaveFailure.js';
+import {
+  requireReleaseWaveCheckpointAsync,
+  updateReleaseWaveCheckpointAsync,
+} from './updateReleaseWaveCheckpointAsync.js';
 import {
   releaseWaveNodeStatus,
   releaseWaveOperation,
@@ -99,16 +101,21 @@ async function executeReleaseWaveRepositoryAsync(
   const node = input.plan.nodes.find((candidate) => candidate.repository === repository);
   if (node === undefined)
     throw new Error('Release-wave plan is missing repository ' + repository + '.');
-  if ((await claimReleaseWaveRepositoryAsync(input, repository)) === 'none') return;
+  const claim = await claimReleaseWaveRepositoryAsync(input, repository);
+  if (claim === undefined) return;
   const operationId = releaseWaveOperationId(input.plan.runId, repository);
   try {
+    if (claim.verificationOnly) {
+      await resumeReleaseWaveVerificationAsync(input, node, claim.operation);
+      return;
+    }
     const reconciliation = await input.executionPort.reconcileReleaseWaveRepositoryAsync({
       node,
       operationId,
       runId: input.plan.runId,
     });
     if (reconciliation === 'released') {
-      await transitionReleaseWaveRepositoryAsync(input, repository, 'released');
+      await transitionReleaseWaveRepositoryAsync(input, repository, 'released', claim.operation);
       return;
     }
     if (reconciliation === 'missing')
@@ -117,40 +124,64 @@ async function executeReleaseWaveRepositoryAsync(
         operationId,
         runId: input.plan.runId,
       });
-    await transitionReleaseWaveRepositoryAsync(input, repository, 'awaiting-review');
-    const verification = await input.executionPort.verifyReleaseWaveRepositoryAsync({
-      node,
-      runId: input.plan.runId,
-    });
-    if (isReleaseWaveVerificationComplete(node.requiresNpmPublication, verification))
-      await transitionReleaseWaveRepositoryAsync(
-        input,
-        repository,
-        node.requiresNpmPublication ? 'released' : 'verified',
-      );
+    await transitionReleaseWaveRepositoryAsync(
+      input,
+      repository,
+      'awaiting-review',
+      claim.operation,
+    );
+    await verifyClaimedReleaseWaveRepositoryAsync(
+      input,
+      repository,
+      node.requiresNpmPublication,
+      claim.operation,
+    );
   } catch (error) {
-    await failReleaseWaveRepositoryAsync(input, repository, error);
+    await failReleaseWaveRepositoryAsync(input, repository, error, claim.operation);
   }
+}
+
+/*** Resume an existing candidate with verification only, never re-running its mutation. */
+async function resumeReleaseWaveVerificationAsync(
+  input: ExecuteReleaseWavesInput,
+  node: ReleaseWavePlan['nodes'][number],
+  claim: ReleaseWaveOperation,
+): Promise<void> {
+  await verifyClaimedReleaseWaveRepositoryAsync(
+    input,
+    node.repository,
+    node.requiresNpmPublication,
+    claim,
+  );
 }
 
 /*** Claim ready, failed, or expired work with CAS; active and review states cannot be stolen. */
 async function claimReleaseWaveRepositoryAsync(
   input: ExecuteReleaseWavesInput,
   repository: string,
-): Promise<'claimed' | 'none'> {
+): Promise<
+  { readonly operation: ReleaseWaveOperation; readonly verificationOnly: boolean } | undefined
+> {
   for (let attempt = 0; attempt < input.maximumCheckpointRetries; attempt += 1) {
     const current = await requireReleaseWaveCheckpointAsync(input);
     const status = releaseWaveNodeStatus(current.checkpoint.ledger, repository);
     const operation = releaseWaveOperation(current.checkpoint.ledger, repository);
-    if (!isClaimableReleaseWaveOperation(status, operation, input.now())) return 'none';
-    const checkpoint = claimableReleaseWaveCheckpoint(input, current.checkpoint, repository);
+    if (!isClaimableReleaseWaveOperation(status, operation, input.now())) return undefined;
+    const checkpoint = claimableReleaseWaveCheckpoint(
+      input,
+      current.checkpoint,
+      repository,
+      status === 'awaiting-review',
+    );
     try {
-      await input.checkpointPort.saveReleaseWaveCheckpointAsync(
+      const saved = await input.checkpointPort.saveReleaseWaveCheckpointAsync(
         input.plan.runId,
         checkpoint,
         current.revision,
       );
-      return 'claimed';
+      const claim = releaseWaveOperation(saved.checkpoint.ledger, repository);
+      if (claim === undefined) throw new Error('Release-wave claim was not persisted.');
+      return { operation: claim, verificationOnly: status === 'awaiting-review' };
     } catch (error) {
       if (!isReleaseWaveCheckpointConflict(error) || attempt + 1 === input.maximumCheckpointRetries)
         throw error;
@@ -164,16 +195,25 @@ async function transitionReleaseWaveRepositoryAsync(
   input: ExecuteReleaseWavesInput,
   repository: string,
   status: ReleaseWaveLedger['nodes'][string],
+  claim: ReleaseWaveOperation,
 ): Promise<void> {
-  await updateCheckpointAsync(input, repository, (checkpoint, current) => {
-    if (current === status || current === 'released' || current === 'verified') return checkpoint;
-    if (!isAllowedTransition(current, status))
-      throw new Error('Release-wave transition is invalid: ' + current + ' to ' + status + '.');
-    return {
-      ...checkpoint,
-      ledger: { ...checkpoint.ledger, nodes: { ...checkpoint.ledger.nodes, [repository]: status } },
-    };
-  });
+  await updateReleaseWaveCheckpointAsync(
+    input,
+    repository,
+    (checkpoint, current) => {
+      if (current === status || current === 'released' || current === 'verified') return checkpoint;
+      if (!isAllowedTransition(current, status))
+        throw new Error('Release-wave transition is invalid: ' + current + ' to ' + status + '.');
+      return {
+        ...checkpoint,
+        ledger: {
+          ...checkpoint.ledger,
+          nodes: { ...checkpoint.ledger.nodes, [repository]: status },
+        },
+      };
+    },
+    claim,
+  );
 }
 
 /*** Record an actionable, recoverable failure while retaining the deterministic operation identity. */
@@ -181,65 +221,27 @@ async function failReleaseWaveRepositoryAsync(
   input: ExecuteReleaseWavesInput,
   repository: string,
   error: unknown,
+  claim: ReleaseWaveOperation,
 ): Promise<void> {
-  await updateCheckpointAsync(input, repository, (checkpoint, current) => ({
-    ...checkpoint,
-    failures: {
-      ...checkpoint.failures,
-      [repository]: { message: errorMessage(error), recoverable: true },
-    },
-    ledger: {
-      ...checkpoint.ledger,
-      nodes: {
-        ...checkpoint.ledger.nodes,
-        [repository]: current === 'released' ? current : 'failed',
+  await updateReleaseWaveCheckpointAsync(
+    input,
+    repository,
+    (checkpoint, current) => ({
+      ...checkpoint,
+      failures: {
+        ...checkpoint.failures,
+        [repository]: releaseWaveFailure(error),
       },
-    },
-  }));
-}
-
-/*** Apply a validated checkpoint update with bounded GitHub Contents compare-and-swap retries. */
-async function updateCheckpointAsync(
-  input: ExecuteReleaseWavesInput,
-  repository: string,
-  update: (
-    checkpoint: ReleaseWaveCheckpoint,
-    current: ReleaseWaveLedger['nodes'][string],
-  ) => ReleaseWaveCheckpoint,
-): Promise<void> {
-  for (let attempt = 0; attempt < input.maximumCheckpointRetries; attempt += 1) {
-    const current = await requireReleaseWaveCheckpointAsync(input);
-    const status = releaseWaveNodeStatus(current.checkpoint.ledger, repository);
-    if (status === undefined)
-      throw new Error('Release-wave checkpoint is missing repository ' + repository + '.');
-    const next = update(current.checkpoint, status);
-    if (next === current.checkpoint) return;
-    try {
-      await input.checkpointPort.saveReleaseWaveCheckpointAsync(
-        input.plan.runId,
-        next,
-        current.revision,
-      );
-      return;
-    } catch (error) {
-      if (!isReleaseWaveCheckpointConflict(error) || attempt + 1 === input.maximumCheckpointRetries)
-        throw error;
-    }
-  }
-  throw new Error('Release-wave checkpoint retry budget is invalid.');
-}
-
-/*** Require and validate durable state before every side effect. */
-async function requireReleaseWaveCheckpointAsync(
-  input: ExecuteReleaseWavesInput,
-): Promise<RevisionedReleaseWaveCheckpoint> {
-  const checkpoint = await input.checkpointPort.loadReleaseWaveCheckpointAsync(input.plan.runId);
-  if (checkpoint === undefined)
-    throw new Error('Release-wave checkpoint disappeared during execution.');
-  return {
-    ...checkpoint,
-    checkpoint: validateReleaseWaveCheckpoint(input.plan, checkpoint.checkpoint),
-  };
+      ledger: {
+        ...checkpoint.ledger,
+        nodes: {
+          ...checkpoint.ledger.nodes,
+          [repository]: current === 'released' || current === 'verified' ? current : 'failed',
+        },
+      },
+    }),
+    claim,
+  );
 }
 
 /*** Check complete wave settlement before any dependent observes an intermediate upstream result. */
@@ -251,22 +253,6 @@ function isReleaseWaveComplete(
     const status = releaseWaveNodeStatus(checkpoint.ledger, repository);
     return status === 'released' || status === 'verified';
   });
-}
-
-/*** Check the complete protected-release evidence set for publishable and nonpublishable profiles. */
-function isReleaseWaveVerificationComplete(
-  requiresNpmPublication: boolean,
-  verification: ReleaseWaveVerification,
-): boolean {
-  return (
-    verification.documentationGenerated &&
-    verification.exactHeadCiPassed &&
-    verification.lockfileUpdated &&
-    verification.releaseWorkflowPassed &&
-    verification.requiredReviewsApproved &&
-    (!requiresNpmPublication ||
-      (verification.npmArtifactVerified === true && verification.npmVersionVerified === true))
-  );
 }
 
 /*** Keep status movement monotonic except an explicit recoverable failure retry. */
@@ -282,7 +268,7 @@ function isAllowedTransition(
   );
 }
 
-/*** Reject settled, review-owned, and currently leased work before an executor attempts a claim. */
+/*** Reject settled or currently leased work before an executor attempts a claim. */
 function isClaimableReleaseWaveOperation(
   status: ReleaseWaveLedger['nodes'][string] | undefined,
   operation: ReleaseWaveOperation | undefined,
@@ -292,7 +278,6 @@ function isClaimableReleaseWaveOperation(
     status !== undefined &&
     status !== 'released' &&
     status !== 'verified' &&
-    status !== 'awaiting-review' &&
     status !== 'blocked' &&
     !(
       status === 'updating' &&
@@ -302,9 +287,27 @@ function isClaimableReleaseWaveOperation(
   );
 }
 
-/*** Render unknown infrastructure failures without losing their recovery value. */
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+/*** Verify an owned candidate without replaying its mutation after review or CI is delayed. */
+async function verifyClaimedReleaseWaveRepositoryAsync(
+  input: ExecuteReleaseWavesInput,
+  repository: string,
+  requiresNpmPublication: boolean,
+  claim: ReleaseWaveOperation,
+): Promise<void> {
+  const node = input.plan.nodes.find((candidate) => candidate.repository === repository);
+  if (node === undefined)
+    throw new Error('Release-wave plan is missing repository ' + repository + '.');
+  const verification = await input.executionPort.verifyReleaseWaveRepositoryAsync({
+    node,
+    runId: input.plan.runId,
+  });
+  if (isReleaseWaveVerificationComplete(requiresNpmPublication, verification))
+    await transitionReleaseWaveRepositoryAsync(
+      input,
+      repository,
+      requiresNpmPublication ? 'released' : 'verified',
+      claim,
+    );
 }
 
 /*** Reject invalid execution configuration before state or provider access. */

@@ -54,6 +54,7 @@ export interface ReleaseWaveLedger {
 }
 
 export interface ReleaseWaveOperation {
+  readonly fencingToken: string;
   readonly leaseExpiresAt: string;
   readonly operationId: string;
   readonly ownerId: string;
@@ -61,6 +62,11 @@ export interface ReleaseWaveOperation {
 
 /** Actionable failure retained with the checkpoint so a later executor can safely recover. */
 export interface ReleaseWaveFailure {
-  readonly message: string;
+  readonly code: ReleaseWaveFailureCode;
+  readonly diagnostic: string;
   readonly recoverable: boolean;
 }
+
+/** Stable, non-sensitive classes retained in a readable GitHub checkpoint. */
+export type ReleaseWaveFailureCode =
+  'checkpoint-conflict' | 'execution-failed' | 'verification-failed';
