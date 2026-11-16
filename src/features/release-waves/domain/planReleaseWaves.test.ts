@@ -122,7 +122,7 @@ test('reports runtime cycles without treating toolchain edges as release prerequ
   expect(plan.waves).toEqual([['ankhorage/provider'], ['ankhorage/consumer']]);
 });
 
-test('keeps private, non-publishable, excluded, archived, and pending-bootstrap inventory entries visible', () => {
+test('keeps private and non-publishable applications in coordinated verification waves', () => {
   const pending = {
     ...repository('ankhorage/pending', '@ankhorage/pending', '1.0.0'),
     bootstrapReady: false,
@@ -149,10 +149,22 @@ test('keeps private, non-publishable, excluded, archived, and pending-bootstrap 
   expect(plan.pendingBootstrap).toEqual(['ankhorage/pending']);
   expect(plan.blocked).toEqual([]);
   expect(plan.excluded).toEqual([
-    'ankhorage/docs: non-publishable',
     'ankhorage/exception: excluded: security boundary',
     'ankhorage/old: archived',
-    'ankhorage/private: private',
+  ]);
+  expect(plan.nodes).toEqual([
+    {
+      dependencies: [],
+      packageName: '@ankhorage/docs',
+      repository: 'ankhorage/docs',
+      requiresNpmPublication: false,
+    },
+    {
+      dependencies: [],
+      packageName: '@ankhorage/private',
+      repository: 'ankhorage/private',
+      requiresNpmPublication: false,
+    },
   ]);
 });
 
@@ -178,7 +190,26 @@ test('blocks a selected dependent when its selected provider is pending or absen
       [{ name: '@ankhorage/consumer', version: '1.0.0' }],
       'missing-provider',
     ).blocked,
-  ).toEqual(['ankhorage/consumer: missing selected provider @ankhorage/provider']);
+  ).toEqual(['ankhorage/consumer: unresolved external provider @ankhorage/provider']);
+});
+
+test('accepts a verified external provider without enrolling it for mutation', () => {
+  const consumer = repository('ankhorage/consumer', '@ankhorage/consumer', '1.0.0', {
+    ...emptyDependencies,
+    dependencies: { '@ankhorage/external': '^1.0.0' },
+  });
+
+  const plan = planReleaseWaves(
+    [consumer],
+    [
+      { name: '@ankhorage/consumer', version: '1.0.0' },
+      { name: '@ankhorage/external', version: '1.2.0' },
+    ],
+    'external-provider',
+  );
+
+  expect(plan.blocked).toEqual([]);
+  expect(plan.waves).toEqual([['ankhorage/consumer']]);
 });
 
 test('bounds concurrent work and makes terminal releases idempotent across recovery', () => {

@@ -21,6 +21,7 @@ export interface PublishedPackage {
 export interface ReleaseWaveNode {
   readonly dependencies: readonly string[];
   readonly packageName: string;
+  readonly requiresNpmPublication: boolean;
   readonly repository: string;
 }
 

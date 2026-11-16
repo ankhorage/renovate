@@ -77,8 +77,12 @@ async function executeReleaseWaveRepositoryAsync(
     node,
     runId: input.plan.runId,
   });
-  if (isReleaseWaveVerificationComplete(verification)) {
-    await transitionReleaseWaveRepositoryAsync(input, repository, 'released');
+  if (isReleaseWaveVerificationComplete(node.requiresNpmPublication, verification)) {
+    await transitionReleaseWaveRepositoryAsync(
+      input,
+      repository,
+      node.requiresNpmPublication ? 'released' : 'verified',
+    );
   }
 }
 
@@ -173,15 +177,18 @@ function isReleaseWaveComplete(
 }
 
 /*** Check every required release proof before allowing the next dependency wave to progress. */
-function isReleaseWaveVerificationComplete(verification: ReleaseWaveVerification): boolean {
+function isReleaseWaveVerificationComplete(
+  requiresNpmPublication: boolean,
+  verification: ReleaseWaveVerification,
+): boolean {
   return (
     verification.documentationGenerated &&
     verification.exactHeadCiPassed &&
     verification.lockfileUpdated &&
     verification.releaseWorkflowPassed &&
     verification.requiredReviewsApproved &&
-    verification.npmArtifactVerified === true &&
-    verification.npmVersionVerified === true
+    (!requiresNpmPublication ||
+      (verification.npmArtifactVerified === true && verification.npmVersionVerified === true))
   );
 }
 

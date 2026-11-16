@@ -38,7 +38,7 @@ export function planReleaseWaves(
     ),
   );
   const nodeResults = eligible.map((item) =>
-    createReleaseWaveNode(item, selectedProviders, readyProviders, eligibility),
+    createReleaseWaveNode(item, selectedProviders, readyProviders, publishedByName, eligibility),
   );
   const nodes = nodeResults.filter((result): result is ReleaseWaveNode => !Array.isArray(result));
   const graphProblems = nodeResults.filter(isProblemList).flat();
@@ -89,14 +89,12 @@ function isPendingBootstrap(repository: ReleaseWaveRepository): boolean {
   );
 }
 
-/*** Accept only active, bootstrapped public packages with a complete identity into a release wave. */
+/*** Accept active, bootstrapped packages and applications with a complete update identity into a wave. */
 function isEligible(repository: ReleaseWaveRepository): boolean {
   return (
     !repository.archived &&
     repository.excludedReason === undefined &&
     repository.bootstrapReady &&
-    repository.publishable &&
-    !repository.private &&
     repository.packageName !== undefined &&
     repository.packageVersion !== undefined
   );
@@ -107,8 +105,6 @@ function classifyIntentionalExclusion(repository: ReleaseWaveRepository): readon
   if (repository.archived) return [repository.fullName + ': archived'];
   if (repository.excludedReason !== undefined)
     return [repository.fullName + ': excluded: ' + repository.excludedReason];
-  if (repository.private) return [repository.fullName + ': private'];
-  if (!repository.publishable) return [repository.fullName + ': non-publishable'];
   return [];
 }
 
@@ -122,6 +118,7 @@ function classifyEligibility(
   if (repository.packageName === undefined || repository.packageVersion === undefined) {
     return repository.fullName + ': missing publishable package identity';
   }
+  if (!requiresNpmPublication(repository)) return undefined;
   const published = publishedByName.get(repository.packageName);
   if (published === undefined)
     return repository.fullName + ': no verified stable published package version';
@@ -140,6 +137,7 @@ function createReleaseWaveNode(
   repository: ReleaseWaveRepository,
   selectedProviders: ReadonlyMap<string, ReleaseWaveRepository>,
   readyProviders: ReadonlyMap<string, ReleaseWaveRepository>,
+  publishedByName: ReadonlyMap<string, PublishedPackage>,
   eligibility: ReadonlyMap<string, string | undefined>,
 ): ReleaseWaveNode | readonly string[] {
   const results = [
@@ -149,6 +147,7 @@ function createReleaseWaveNode(
       repository.dependencies.dependencies,
       selectedProviders,
       readyProviders,
+      publishedByName,
       eligibility,
     ),
     ...readRuntimeDependencies(
@@ -157,6 +156,7 @@ function createReleaseWaveNode(
       repository.dependencies.optionalDependencies,
       selectedProviders,
       readyProviders,
+      publishedByName,
       eligibility,
     ),
   ];
@@ -172,6 +172,7 @@ function createReleaseWaveNode(
   return {
     dependencies: results.filter(isDependency).sort(),
     packageName: repository.packageName,
+    requiresNpmPublication: requiresNpmPublication(repository),
     repository: repository.fullName,
   };
 }
@@ -183,6 +184,7 @@ function readRuntimeDependencies(
   dependencies: Readonly<Record<string, string>>,
   selectedProviders: ReadonlyMap<string, ReleaseWaveRepository>,
   readyProviders: ReadonlyMap<string, ReleaseWaveRepository>,
+  publishedByName: ReadonlyMap<string, PublishedPackage>,
   eligibility: ReadonlyMap<string, string | undefined>,
 ): readonly string[] {
   return Object.entries(dependencies).map(([packageName, declaration]) =>
@@ -193,6 +195,7 @@ function readRuntimeDependencies(
       declaration,
       selectedProviders,
       readyProviders,
+      publishedByName,
       eligibility,
     ),
   );
@@ -206,6 +209,7 @@ function readRuntimeDependency(
   declaration: string,
   selectedProviders: ReadonlyMap<string, ReleaseWaveRepository>,
   readyProviders: ReadonlyMap<string, ReleaseWaveRepository>,
+  publishedByName: ReadonlyMap<string, PublishedPackage>,
   eligibility: ReadonlyMap<string, string | undefined>,
 ): string {
   if (!isValidUpdateRange(declaration)) {
@@ -213,14 +217,22 @@ function readRuntimeDependency(
   }
   if (!packageName.startsWith('@ankhorage/')) return '';
   const selected = selectedProviders.get(packageName);
-  if (selected === undefined)
-    return repository.fullName + ': missing selected provider ' + packageName;
+  if (selected === undefined) {
+    return publishedByName.has(packageName)
+      ? ''
+      : repository.fullName + ': unresolved external provider ' + packageName;
+  }
   const provider = readyProviders.get(packageName);
   if (provider === undefined) {
     const reason = eligibility.get(selected.fullName) ?? profileReason(selected);
     return repository.fullName + ': blocked provider ' + packageName + ' (' + reason + ')';
   }
   return provider.fullName;
+}
+
+/*** Keep nonpublished applications in coordinated verification while excluding only npm publication. */
+function requiresNpmPublication(repository: ReleaseWaveRepository): boolean {
+  return repository.publishable && !repository.private;
 }
 
 /*** Keep semver parsing authoritative for compound ranges while rejecting tags and non-semver declarations. */

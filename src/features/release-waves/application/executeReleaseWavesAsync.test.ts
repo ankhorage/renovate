@@ -13,21 +13,29 @@ const plan: ReleaseWavePlan = {
   blocked: [],
   excluded: [],
   nodes: [
-    { dependencies: [], packageName: '@ankhorage/base', repository: 'ankhorage/base' },
+    {
+      dependencies: [],
+      packageName: '@ankhorage/base',
+      repository: 'ankhorage/base',
+      requiresNpmPublication: true,
+    },
     {
       dependencies: ['ankhorage/base'],
       packageName: '@ankhorage/left',
       repository: 'ankhorage/left',
+      requiresNpmPublication: true,
     },
     {
       dependencies: ['ankhorage/base'],
       packageName: '@ankhorage/right',
       repository: 'ankhorage/right',
+      requiresNpmPublication: true,
     },
     {
       dependencies: ['ankhorage/left', 'ankhorage/right'],
       packageName: '@ankhorage/consumer',
       repository: 'ankhorage/consumer',
+      requiresNpmPublication: true,
     },
   ],
   pendingBootstrap: [],
