@@ -14,8 +14,12 @@ interface PullRequest {
   readonly number: number;
 }
 
-interface Release {
-  readonly target_commitish: string;
+interface GitReference {
+  readonly object: { readonly sha: string; readonly type: 'commit' | 'tag' };
+}
+
+interface GitTag {
+  readonly object: { readonly sha: string; readonly type: 'commit' | 'tag' };
 }
 
 interface Protection {
@@ -60,7 +64,7 @@ async function verificationAsync(
   const pull = await labelledPullAsync(client, node.repository, runId + ':' + node.repository);
   if (pull === undefined || pull.merged_at === null || pull.merge_commit_sha === null)
     return incomplete;
-  const evidence = await githubEvidenceAsync(input, client, node, pull);
+  const evidence = await githubEvidenceAsync(input, client, node, pull, pull.merge_commit_sha);
   const releaseRevision = evidence.releaseRun?.head_sha;
   const releaseWorkflowPassed = releaseRevision !== undefined;
   const npmVerified =
@@ -89,6 +93,7 @@ async function githubEvidenceAsync(
   client: ReturnType<typeof githubReleaseWaveClient>,
   node: ReleaseWaveNode,
   pull: PullRequest,
+  candidateRevision: string,
 ) {
   const [protection, reviews, checks, statuses, releaseRun, files] = await Promise.all([
     client.jsonAsync<Protection>(
@@ -110,7 +115,12 @@ async function githubEvidenceAsync(
       '/repos/' + node.repository + '/commits/' + pull.head.sha + '/status',
       'statuses',
     ),
-    releaseEvidenceAsync(input, node.repository, node.expectedPublication?.version),
+    releaseEvidenceAsync(
+      input,
+      node.repository,
+      node.expectedPublication?.version,
+      candidateRevision,
+    ),
     client.pagesAsync<{ readonly filename: string }>(
       '/repos/' + node.repository + '/pulls/' + pull.number + '/files',
     ),
@@ -202,25 +212,42 @@ async function releaseRunAsync(
   return runs.find((run) => run.head_sha === revision && run.conclusion === 'success');
 }
 
-/** Bind the planned version to a successful release workflow and its immutable release tag commit. */
+/** Bind a planned version to its peeled immutable tag, descendant release commit, and successful run. */
 async function releaseEvidenceAsync(
   input: GitHubNpmReleaseWaveExecutionAdapterInput,
   repository: string,
   version: string | undefined,
+  candidateRevision: string,
 ): Promise<{ readonly head_sha: string } | undefined> {
   if (version === undefined) return undefined;
   const client = githubReleaseWaveClient(input);
-  const release = await client.jsonAsync<Release>(
-    '/repos/' + repository + '/releases/tags/' + encodeURIComponent('v' + version),
+  const tagRevision = await resolveTagRevisionAsync(client, repository, 'v' + version);
+  if (tagRevision === undefined) return undefined;
+  const comparison = await client.jsonAsync<{ readonly status: string }>(
+    `/repos/${repository}/compare/${candidateRevision}...${tagRevision}`,
   );
-  if (!isCommitSha(release.target_commitish)) return undefined;
-  const run = await releaseRunAsync(input, repository, release.target_commitish);
-  return run?.head_sha === release.target_commitish ? run : undefined;
+  if (!['ahead', 'identical'].includes(comparison.status)) return undefined;
+  const run = await releaseRunAsync(input, repository, tagRevision);
+  return run?.head_sha === tagRevision ? run : undefined;
 }
 
-/** Reject mutable branch names: release evidence must name an immutable Git commit. */
-function isCommitSha(revision: string): boolean {
-  return /^[0-9a-f]{40}$/i.test(revision);
+/** Resolve lightweight and annotated tags to the immutable commit GitHub actually references. */
+async function resolveTagRevisionAsync(
+  client: ReturnType<typeof githubReleaseWaveClient>,
+  repository: string,
+  tag: string,
+): Promise<string | undefined> {
+  let reference = await client.jsonAsync<GitReference>(
+    '/repos/' + repository + '/git/ref/tags/' + encodeURIComponent(tag),
+  );
+  for (let depth = 0; depth < 10; depth += 1) {
+    if (reference.object.type === 'commit') return reference.object.sha;
+    const annotated = await client.jsonAsync<GitTag>(
+      '/repos/' + repository + '/git/tags/' + encodeURIComponent(reference.object.sha),
+    );
+    reference = { object: annotated.object };
+  }
+  return undefined;
 }
 
 /*** Read release-owned generated output at the release revision rather than candidate PR files. */
@@ -244,7 +271,7 @@ async function generatedDocsAsync(
   }
 }
 
-/*** Bind planned version, release revision and integrity before contacting a registry-owned tarball. */
+/*** Download the exact planned artifact and compare its SHA-512 SRI with registry evidence. */
 async function npmArtifactAsync(
   input: GitHubNpmReleaseWaveExecutionAdapterInput,
   node: ReleaseWaveNode,
@@ -268,7 +295,14 @@ async function npmArtifactAsync(
     !trustedTarball(input.npmRegistryUrl, dist.tarball)
   )
     return false;
-  return (await input.requestAsync(dist.tarball, { method: 'HEAD' })).ok;
+  const artifact = await input.requestAsync(dist.tarball);
+  if (!artifact.ok) return false;
+  const integrity =
+    'sha512-' +
+    createHash('sha512')
+      .update(Buffer.from(await artifact.arrayBuffer()))
+      .digest('base64');
+  return integrity === dist.integrity;
 }
 
 /*** Permit registry artifacts only from the configured registry origin. */

@@ -9,8 +9,8 @@ export interface ReleaseWaveRepository {
   readonly fullName: string;
   readonly packageName?: string;
   readonly packageVersion?: string;
-  /** Exact version resolved by the package's Changeset/release planner before this wave starts. */
-  readonly plannedPublicationVersion?: string;
+  /** Canonical Changesets release-plan entry captured before this wave starts. */
+  readonly plannedPublication?: ChangesetReleasePlan;
   readonly private: boolean;
   readonly publishable: boolean;
 }
@@ -18,6 +18,19 @@ export interface ReleaseWaveRepository {
 export interface PublishedPackage {
   readonly name: string;
   readonly version: string;
+}
+
+/** A package-version decision emitted by the managed Changesets release planner. */
+interface ChangesetReleasePlan {
+  readonly packageName: string;
+  readonly releases: readonly ChangesetRelease[];
+  readonly version: string;
+}
+
+/** One source Changeset that contributes to a planned package publication. */
+interface ChangesetRelease {
+  readonly packageName: string;
+  readonly type: 'major' | 'minor' | 'patch';
 }
 
 export interface ReleaseWaveNode {

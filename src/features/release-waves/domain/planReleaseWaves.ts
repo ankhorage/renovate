@@ -125,11 +125,8 @@ function classifyEligibility(
   if (valid(repository.packageVersion) === null || valid(published.version) === null) {
     return repository.fullName + ': invalid stable package version';
   }
-  if (
-    repository.plannedPublicationVersion === undefined ||
-    valid(repository.plannedPublicationVersion) === null
-  )
-    return repository.fullName + ': missing authoritative planned publication version';
+  if (!hasCanonicalPublicationPlan(repository))
+    return repository.fullName + ': missing canonical Changesets publication plan';
   return gte(published.version, repository.packageVersion)
     ? undefined
     : repository.fullName +
@@ -187,9 +184,25 @@ function createReleaseWaveNode(
 /** Keep the plan's publishable-node evidence complete after eligibility has accepted it. */
 function publicationExpectation(repository: ReleaseWaveRepository) {
   if (!requiresNpmPublication(repository)) return undefined;
-  if (repository.plannedPublicationVersion === undefined)
-    throw new Error('Release-wave publishable node is missing its planned publication version.');
-  return { version: repository.plannedPublicationVersion };
+  if (!hasCanonicalPublicationPlan(repository))
+    throw new Error('Release-wave publishable node is missing its canonical Changesets plan.');
+  const plan = repository.plannedPublication;
+  if (plan === undefined) throw new Error('Release-wave publication plan disappeared.');
+  return { version: plan.version };
+}
+
+/** Reject inventory-supplied versions unless a patch Changeset plan authorizes that exact package. */
+function hasCanonicalPublicationPlan(repository: ReleaseWaveRepository): boolean {
+  const plan = repository.plannedPublication;
+  return (
+    plan !== undefined &&
+    repository.packageName !== undefined &&
+    valid(plan.version) !== null &&
+    plan.packageName === repository.packageName &&
+    plan.releases.some(
+      (release) => release.packageName === repository.packageName && release.type === 'patch',
+    )
+  );
 }
 
 /*** Read one runtime dependency section without promoting build tooling to a release prerequisite. */

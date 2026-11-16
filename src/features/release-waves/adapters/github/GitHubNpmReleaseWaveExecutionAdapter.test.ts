@@ -1,7 +1,12 @@
+import { createHash } from 'node:crypto';
+
 import { expect, test } from 'bun:test';
 
 import type { ReleaseWaveVerification } from '../../ports/releaseWaveExecution.js';
 import { GitHubNpmReleaseWaveExecutionAdapter } from './GitHubNpmReleaseWaveExecutionAdapter.js';
+
+const artifact = 'published package artifact';
+const artifactIntegrity = 'sha512-' + createHash('sha512').update(artifact).digest('base64');
 
 const node = {
   dependencies: [],
@@ -56,6 +61,15 @@ test('does not let a merged candidate settle when npm publication is absent or f
   );
   expect(verification.npmArtifactVerified).toBe(false);
   expect(verification.npmVersionVerified).toBe(false);
+});
+
+test('rejects a downloadable exact-version artifact when its bytes do not match registry integrity', async () => {
+  const verification = await verifyWith((url, method) =>
+    url === 'https://registry.npm.test/example.tgz'
+      ? new Response('tampered artifact', { status: 200 })
+      : responseFor(url, method),
+  );
+  expect(verification.npmArtifactVerified).toBe(false);
 });
 
 test('fails closed for missing required CI, stale approval, wrong release revision, lockfile, and release-owned docs', async () => {
@@ -148,7 +162,7 @@ async function verifyWith(
 }
 
 /*** Produce deterministic GitHub/npm provider fixtures without a live mutation target. */
-function responseFor(url: string, method: string | undefined): Response {
+function responseFor(url: string, _method: string | undefined): Response {
   if (url.includes('/issues?')) return json([{ number: 42 }]);
   if (url.includes('/branches/main/protection'))
     return json({
@@ -175,7 +189,8 @@ function responseFor(url: string, method: string | undefined): Response {
   if (url.includes('/check-runs'))
     return json({ check_runs: [{ conclusion: 'success', name: 'validate', status: 'completed' }] });
   if (url.includes('/status')) return json({ statuses: [] });
-  if (url.includes('/releases/tags/v1.2.4')) return json({ target_commitish: 'e'.repeat(40) });
+  const releaseEvidence = releaseEvidenceResponse(url);
+  if (releaseEvidence !== undefined) return releaseEvidence;
   if (url.includes('/actions/workflows/release.yml/runs'))
     return json({ workflow_runs: [{ conclusion: 'success', head_sha: 'e'.repeat(40) }] });
   if (url.includes('/contents/README.md') || url.includes('/contents/paradox')) return json({});
@@ -184,13 +199,23 @@ function responseFor(url: string, method: string | undefined): Response {
       'dist-tags': { latest: '1.2.3' },
       versions: {
         '1.2.4': {
-          dist: { integrity: 'sha512-exact', tarball: 'https://registry.npm.test/example.tgz' },
+          dist: { integrity: artifactIntegrity, tarball: 'https://registry.npm.test/example.tgz' },
         },
       },
     });
-  if (url === 'https://registry.npm.test/example.tgz' && method === 'HEAD')
-    return new Response(null, { status: 200 });
+  if (url === 'https://registry.npm.test/example.tgz')
+    return new Response(artifact, { status: 200 });
   return new Response(null, { status: 404 });
+}
+
+/*** Represent immutable tag and ancestry evidence without coupling it to the generic fixture router. */
+function releaseEvidenceResponse(url: string): Response | undefined {
+  if (url.includes('/git/ref/tags/v1.2.4'))
+    return json({ object: { sha: 'tag-object', type: 'tag' } });
+  if (url.includes('/git/tags/tag-object'))
+    return json({ object: { sha: 'e'.repeat(40), type: 'commit' } });
+  if (url.includes('/compare/merge-sha...')) return json({ status: 'ahead' });
+  return undefined;
 }
 
 /*** Serialize one fixture response as GitHub/npm JSON. */

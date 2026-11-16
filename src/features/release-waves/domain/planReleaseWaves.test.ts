@@ -28,9 +28,11 @@ function repository(
     fullName,
     packageName,
     packageVersion: version,
-    plannedPublicationVersion: version.replace(/(\d+)$/, (_, patch: string) =>
-      String(Number(patch) + 1),
-    ),
+    plannedPublication: {
+      packageName,
+      releases: [{ packageName, type: 'patch' }],
+      version: version.replace(/(\d+)$/, (_, patch: string) => String(Number(patch) + 1)),
+    },
     private: false,
     publishable: true,
   };
@@ -217,10 +219,10 @@ test('accepts a verified external provider without enrolling it for mutation', (
   expect(plan.waves).toEqual([['ankhorage/consumer']]);
 });
 
-test('requires an exact Changeset-planned publication version for every publishable node', () => {
+test('requires a canonical Changesets release plan for every publishable node', () => {
   const publishable = {
     ...repository('ankhorage/package', '@ankhorage/package', '1.0.0'),
-    plannedPublicationVersion: undefined,
+    plannedPublication: undefined,
   };
   const plan = planReleaseWaves(
     [publishable],
@@ -228,9 +230,24 @@ test('requires an exact Changeset-planned publication version for every publisha
     'missing-publication-plan',
   );
   expect(plan.blocked).toEqual([
-    'ankhorage/package: missing authoritative planned publication version',
+    'ankhorage/package: missing canonical Changesets publication plan',
   ]);
   expect(plan.nodes).toEqual([]);
+});
+
+test('rejects an arbitrary inventory version without a matching patch Changeset plan', () => {
+  const publishable = {
+    ...repository('ankhorage/package', '@ankhorage/package', '1.0.0'),
+    plannedPublication: {
+      packageName: '@ankhorage/other',
+      releases: [{ packageName: '@ankhorage/other', type: 'patch' as const }],
+      version: '9.9.9',
+    },
+  };
+  expect(
+    planReleaseWaves([publishable], [{ name: '@ankhorage/package', version: '1.0.0' }], 'bad-plan')
+      .blocked,
+  ).toEqual(['ankhorage/package: missing canonical Changesets publication plan']);
 });
 
 test('bounds concurrent work and makes terminal releases idempotent across recovery', () => {
