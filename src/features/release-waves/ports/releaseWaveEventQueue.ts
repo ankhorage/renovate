@@ -1,6 +1,9 @@
 /** A received package-release dispatch, normalized before durable storage. */
 export interface ReleaseWaveEvent {
+  readonly npmArtifactIntegrity: string;
   readonly packageName: string;
+  readonly releaseId: string;
+  readonly releaseTag: string;
   readonly sourceRepository: string;
   readonly version: string;
 }
@@ -13,6 +16,8 @@ export interface DurableReleaseWaveEvent extends ReleaseWaveEvent {
 
 /** The queue document is deliberately revisioned so duplicate dispatches cannot lose publications. */
 export interface ReleaseWaveEventQueue {
+  /** Exact settled identities retained after event-body compaction so retries cannot resurrect work. */
+  readonly acknowledgedEvents?: Readonly<Record<string, string>>;
   readonly events: readonly DurableReleaseWaveEvent[];
 }
 

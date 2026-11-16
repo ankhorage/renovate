@@ -1,3 +1,4 @@
+import { releaseWaveEventIdentity } from '../../domain/releaseWaveEventIdentity.js';
 import type {
   ReleaseWaveEventQueue,
   ReleaseWaveEventQueuePort,
@@ -117,23 +118,93 @@ function parseQueue(source: string): ReleaseWaveEventQueue {
     throw new Error('Release-wave event queue has an invalid envelope.');
   if (value.events.some((event) => !isEvent(event)))
     throw new Error('Release-wave event queue contains an invalid event.');
-  return value as ReleaseWaveEventQueue;
+  const envelope = value as { readonly acknowledgedEvents?: unknown; readonly events: unknown[] };
+  const events = envelope.events as ReleaseWaveEventQueue['events'];
+  const ids = new Set(events.map((event) => event.eventId));
+  if (ids.size !== events.length)
+    throw new Error('Release-wave event queue contains duplicate event identities.');
+  if (!isAcknowledgedEvents(envelope))
+    throw new Error('Release-wave event queue acknowledgement ledger is invalid.');
+  if (
+    events.some(
+      (event) =>
+        envelope.acknowledgedEvents?.[event.eventId] !== undefined ||
+        event.acknowledgedRunId !== undefined,
+    )
+  )
+    throw new Error('Release-wave event queue contains an invalid acknowledgement state.');
+  return { acknowledgedEvents: envelope.acknowledgedEvents, events };
 }
 
 /** Validate only persisted data needed to reconstruct deterministic identities. */
 function isEvent(value: unknown): boolean {
+  return isEventShape(value) && hasCanonicalEventIdentity(value);
+}
+
+/** Validate the persisted scalar fields before reconstructing the canonical identity. */
+function isEventShape(value: unknown): value is {
+  readonly eventId: string;
+  readonly npmArtifactIntegrity: string;
+  readonly packageName: string;
+  readonly releaseId: string;
+  readonly releaseTag: string;
+  readonly sourceRepository: string;
+  readonly version: string;
+} {
   return (
     typeof value === 'object' &&
     value !== null &&
-    'eventId' in value &&
-    'packageName' in value &&
-    'sourceRepository' in value &&
-    'version' in value &&
-    typeof value.eventId === 'string' &&
-    typeof value.packageName === 'string' &&
-    typeof value.sourceRepository === 'string' &&
-    typeof value.version === 'string' &&
-    (!('acknowledgedRunId' in value) || typeof value.acknowledgedRunId === 'string')
+    isEventAcknowledgementShape(value) &&
+    hasStringProperties(value, [
+      'eventId',
+      'npmArtifactIntegrity',
+      'packageName',
+      'releaseId',
+      'releaseTag',
+      'sourceRepository',
+      'version',
+    ])
+  );
+}
+
+/** Require scalar event fields without trusting provider-decoded JSON as a typed record. */
+function hasStringProperties(value: object, keys: readonly string[]): boolean {
+  const record = value as Readonly<Record<string, unknown>>;
+  return keys.every(
+    (key) => typeof Object.getOwnPropertyDescriptor(record, key)?.value === 'string',
+  );
+}
+
+/** Accept only an omitted or string acknowledgement marker before the queue transition validates it. */
+function isEventAcknowledgementShape(value: object): boolean {
+  return !('acknowledgedRunId' in value) || typeof value.acknowledgedRunId === 'string';
+}
+
+/** Reject an event whose stored id cannot be regenerated from immutable content. */
+function hasCanonicalEventIdentity(event: {
+  readonly eventId: string;
+  readonly npmArtifactIntegrity: string;
+  readonly packageName: string;
+  readonly releaseId: string;
+  readonly releaseTag: string;
+  readonly sourceRepository: string;
+  readonly version: string;
+}): boolean {
+  return event.eventId === releaseWaveEventIdentity(event);
+}
+
+/** Validate compacted acknowledgement records before they can suppress a replay. */
+function isAcknowledgedEvents(value: {
+  readonly acknowledgedEvents?: unknown;
+}): value is { readonly acknowledgedEvents?: Readonly<Record<string, string>> } {
+  return (
+    value.acknowledgedEvents === undefined ||
+    (typeof value.acknowledgedEvents === 'object' &&
+      value.acknowledgedEvents !== null &&
+      Object.entries(value.acknowledgedEvents).every(
+        ([eventId, runId]) =>
+          /^[a-f0-9]{64}$/.test(eventId) && typeof runId === 'string' && runId.length > 0,
+      ))
   );
 }
 

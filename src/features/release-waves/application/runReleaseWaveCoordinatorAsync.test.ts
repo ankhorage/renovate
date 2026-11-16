@@ -11,41 +11,33 @@ import type { ReleaseWaveExecutionPort } from '../ports/releaseWaveExecution.js'
 import { ingestReleaseWaveEventAsync } from './ingestReleaseWaveEventAsync.js';
 import { runReleaseWaveCoordinatorAsync } from './runReleaseWaveCoordinatorAsync.js';
 
-test('coalesces reordered duplicates into one settled downstream update and replays interruption safely', async () => {
+test('waits for complete settlement when base arrives first, then creates exactly one consumer release', async () => {
   const queue = eventQueue();
-  await Promise.all([
-    ingestReleaseWaveEventAsync({
-      event: event('base', '1.1.0'),
-      maximumRetries: 3,
-      queuePort: queue,
-    }),
-    ingestReleaseWaveEventAsync({
-      event: event('left', '1.1.0'),
-      maximumRetries: 3,
-      queuePort: queue,
-    }),
-    ingestReleaseWaveEventAsync({
-      event: event('base', '1.1.0'),
-      maximumRetries: 3,
-      queuePort: queue,
-    }),
-  ]);
   const calls: string[] = [];
   const input = coordinatorInput(queue, calls);
+  await ingestReleaseWaveEventAsync({
+    event: event('base', '1.1.0'),
+    maximumRetries: 3,
+    queuePort: queue,
+  });
+  expect(await runReleaseWaveCoordinatorAsync(input)).toBeUndefined();
+  await ingestReleaseWaveEventAsync({
+    event: event('left', '1.1.0'),
+    maximumRetries: 3,
+    queuePort: queue,
+  });
   const first = await runReleaseWaveCoordinatorAsync(input);
   const second = await runReleaseWaveCoordinatorAsync(input);
-  expect(first?.waves).toEqual([['ankhorage/base', 'ankhorage/left'], ['ankhorage/consumer']]);
+  expect(first?.waves).toEqual([['ankhorage/consumer']]);
   expect(second).toBeUndefined();
   expect(calls.filter((call) => call === 'ensure:ankhorage/consumer')).toHaveLength(1);
-  expect((await queue.loadReleaseWaveEventQueueAsync())?.queue.events).toHaveLength(2);
+  expect((await queue.loadReleaseWaveEventQueueAsync())?.queue.events).toHaveLength(0);
   expect(
-    (await queue.loadReleaseWaveEventQueueAsync())?.queue.events.every(
-      (event) => event.acknowledgedRunId !== undefined,
-    ),
-  ).toBe(true);
+    Object.keys((await queue.loadReleaseWaveEventQueueAsync())?.queue.acknowledgedEvents ?? {}),
+  ).toHaveLength(2);
 });
 
-test('does not acknowledge an event while a required upstream publication is missing, then resumes it', async () => {
+test('does not acknowledge wrong or superseded publication evidence', async () => {
   const queue = eventQueue();
   await ingestReleaseWaveEventAsync({
     event: event('base', '1.1.0'),
@@ -53,13 +45,18 @@ test('does not acknowledge an event while a required upstream publication is mis
     queuePort: queue,
   });
   const calls: string[] = [];
-  const blocked = await runReleaseWaveCoordinatorAsync(coordinatorInput(queue, calls, []));
-  expect(blocked?.blocked).toContain(
-    'ankhorage/base: no verified stable published package version',
+  const blocked = await runReleaseWaveCoordinatorAsync(
+    coordinatorInput(queue, calls, [{ ...event('base', '1.2.0'), name: '@ankhorage/base' }]),
   );
+  expect(blocked).toBeUndefined();
   expect(
     (await queue.loadReleaseWaveEventQueueAsync())?.queue.events[0]?.acknowledgedRunId,
   ).toBeUndefined();
+  await ingestReleaseWaveEventAsync({
+    event: event('left', '1.1.0'),
+    maximumRetries: 2,
+    queuePort: queue,
+  });
   const resumed = await runReleaseWaveCoordinatorAsync(coordinatorInput(queue, calls));
   expect(resumed?.blocked).toEqual([]);
   expect(calls.filter((call) => call === 'ensure:ankhorage/consumer')).toHaveLength(1);
@@ -79,7 +76,7 @@ function coordinatorInput(
     maximumConcurrency: 1,
     maximumQueueRetries: 3,
     now: () => new Date('2026-11-16T00:00:00.000Z'),
-    publishedPackages: published,
+    publishedPackages: [...publications(), { name: '@ankhorage/consumer', version: '1.1.0' }],
     queuePort,
     repositories: [
       repository('base'),
@@ -94,18 +91,23 @@ function coordinatorInput(
         },
       },
     ],
+    settledPublications: published,
   };
 }
 
 function event(name: string, version: string) {
-  return { packageName: '@ankhorage/' + name, sourceRepository: 'ankhorage/' + name, version };
+  return {
+    npmArtifactIntegrity: 'sha512-' + Buffer.from(name).toString('base64'),
+    packageName: '@ankhorage/' + name,
+    releaseId: name + '-' + version,
+    releaseTag: 'v' + version,
+    sourceRepository: 'ankhorage/' + name,
+    version,
+  };
 }
 
 function publications() {
-  return ['base', 'left', 'consumer'].map((name) => ({
-    name: '@ankhorage/' + name,
-    version: '1.1.0',
-  }));
+  return ['base', 'left'].map((name) => ({ ...event(name, '1.1.0'), name: '@ankhorage/' + name }));
 }
 
 function repository(name: string) {
@@ -131,7 +133,10 @@ function eventQueue(): ReleaseWaveEventQueuePort {
     | {
         readonly events: readonly {
           readonly eventId: string;
+          readonly npmArtifactIntegrity: string;
           readonly packageName: string;
+          readonly releaseId: string;
+          readonly releaseTag: string;
           readonly sourceRepository: string;
           readonly version: string;
           readonly acknowledgedRunId?: string;

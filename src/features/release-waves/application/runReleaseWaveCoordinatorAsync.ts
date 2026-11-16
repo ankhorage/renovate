@@ -6,6 +6,7 @@ import type {
   ReleaseWaveRepository,
 } from '../../../types/releaseWave.js';
 import { planReleaseWaves } from '../domain/planReleaseWaves.js';
+import { releaseWaveEventIdentity } from '../domain/releaseWaveEventIdentity.js';
 import type { ReleaseWaveCheckpointPort } from '../ports/releaseWaveCheckpoint.js';
 import type {
   DurableReleaseWaveEvent,
@@ -16,7 +17,14 @@ import { isReleaseWaveEventQueueConflict } from '../ports/releaseWaveEventQueue.
 import type { ReleaseWaveExecutionPort } from '../ports/releaseWaveExecution.js';
 import { executeReleaseWavesAsync } from './executeReleaseWavesAsync.js';
 
-/** Compose queue replay, actual-graph planning, durable checkpoints, and execution without provider imports. */
+type SettledPublication = PublishedPackage & {
+  readonly npmArtifactIntegrity: string;
+  readonly releaseId: string;
+  readonly releaseTag: string;
+  readonly sourceRepository: string;
+};
+
+/*** Compose an explicitly settled publication cohort into one replay-safe consumer release wave. */
 export async function runReleaseWaveCoordinatorAsync(input: {
   readonly checkpointPort: ReleaseWaveCheckpointPort;
   readonly executionPort: ReleaseWaveExecutionPort;
@@ -25,44 +33,88 @@ export async function runReleaseWaveCoordinatorAsync(input: {
   readonly maximumConcurrency: number;
   readonly maximumQueueRetries: number;
   readonly now: () => Date;
+  /** Current verified inventory used only to validate consumer candidates, never to acknowledge an event. */
   readonly publishedPackages: readonly PublishedPackage[];
   readonly queuePort: ReleaseWaveEventQueuePort;
   readonly repositories: readonly ReleaseWaveRepository[];
+  /** Authoritative, complete upstream evidence; queue timing is never settlement proof. */
+  readonly settledPublications: readonly SettledPublication[];
 }): Promise<ReleaseWavePlan | undefined> {
+  const publications = validateSettledPublications(input.settledPublications);
   const current = await input.queuePort.loadReleaseWaveEventQueueAsync();
-  const pending = (current?.queue.events ?? []).filter(
-    (event) => event.acknowledgedRunId === undefined,
+  const events = completeCohortEvents(current?.queue, publications);
+  if (events === undefined) return undefined;
+  const plan = planReleaseWaves(
+    affectedConsumers(input.repositories, publications),
+    input.publishedPackages,
+    logicalWaveId(publications),
   );
-  if (pending.length === 0) return undefined;
-  const plan = planReleaseWaves(input.repositories, input.publishedPackages, runId(pending));
-  if (plan.blocked.length > 0 || plan.waves.length === 0) return plan;
-  const checkpoint = await executeReleaseWavesAsync({
-    checkpointPort: input.checkpointPort,
-    executionPort: input.executionPort,
-    executorId: input.executorId,
-    maximumCheckpointRetries: input.maximumCheckpointRetries,
-    maximumConcurrency: input.maximumConcurrency,
-    now: input.now,
-    plan,
-  });
+  if (plan.waves.length > 0)
+    await executeReleaseWavesAsync({
+      checkpointPort: input.checkpointPort,
+      executionPort: input.executionPort,
+      executorId: input.executorId,
+      maximumCheckpointRetries: input.maximumCheckpointRetries,
+      maximumConcurrency: input.maximumConcurrency,
+      now: input.now,
+      plan,
+    });
+  if (plan.blocked.length > 0) return plan;
+  const checkpoint =
+    plan.nodes.length === 0
+      ? undefined
+      : await input.checkpointPort.loadReleaseWaveCheckpointAsync(plan.runId);
   if (
+    checkpoint !== undefined &&
     !plan.nodes.every((node) =>
-      ['released', 'verified'].includes(checkpoint.ledger.nodes[node.repository] ?? ''),
+      ['released', 'verified'].includes(checkpoint.checkpoint.ledger.nodes[node.repository] ?? ''),
     )
   )
     return plan;
-  await acknowledgeEventsAsync(input.queuePort, pending, plan.runId, input.maximumQueueRetries);
+  await acknowledgeEventsAsync(input.queuePort, events, plan.runId, input.maximumQueueRetries);
   return plan;
 }
 
-/** Derive one deterministic run for all unacknowledged releases, never from dispatch arrival order. */
-function runId(events: readonly DurableReleaseWaveEvent[]): string {
+/*** Require a complete exact cohort before any consumer can observe a partial update. */
+function completeCohortEvents(
+  queue: ReleaseWaveEventQueue | undefined,
+  publications: readonly SettledPublication[],
+): readonly DurableReleaseWaveEvent[] | undefined {
+  const expected = new Map(
+    publications.map((publication) => [
+      releaseWaveEventIdentity(publicationEvent(publication)),
+      publication,
+    ]),
+  );
+  const matching = (queue?.events ?? []).filter((event) => expected.has(event.eventId));
+  if (
+    matching.length === 0 &&
+    publications.every(
+      (publication) =>
+        queue?.acknowledgedEvents?.[releaseWaveEventIdentity(publicationEvent(publication))] !==
+        undefined,
+    )
+  )
+    return undefined;
+  if (matching.length !== expected.size) return undefined;
+  for (const event of matching) {
+    const publication = expected.get(event.eventId);
+    if (publication === undefined || !samePublication(event, publication))
+      throw new Error('Release-wave queue event does not match its verified publication evidence.');
+    if (event.acknowledgedRunId !== undefined)
+      throw new Error('Release-wave cohort mixes acknowledged and pending events.');
+  }
+  return matching;
+}
+
+/*** Use the immutable complete cohort, rather than a transient queue snapshot, as checkpoint identity. */
+function logicalWaveId(publications: readonly SettledPublication[]): string {
   return (
-    'events-' +
+    'wave-' +
     createHash('sha256')
       .update(
-        events
-          .map((event) => event.eventId)
+        publications
+          .map((publication) => releaseWaveEventIdentity(publicationEvent(publication)))
           .sort()
           .join('\n'),
       )
@@ -71,24 +123,95 @@ function runId(events: readonly DurableReleaseWaveEvent[]): string {
   );
 }
 
-/** Acknowledge only a fully settled plan; CAS retries preserve events appended during execution. */
+/*** Restrict mutation to consumers reachable from settled upstream packages in the selected inventory. */
+function affectedConsumers(
+  repositories: readonly ReleaseWaveRepository[],
+  publications: readonly SettledPublication[],
+): readonly ReleaseWaveRepository[] {
+  const affectedPackages = new Set(publications.map((publication) => publication.name));
+  const selected: ReleaseWaveRepository[] = [];
+  for (;;) {
+    const next = repositories.filter(
+      (repository) =>
+        !selected.includes(repository) &&
+        runtimeDependencies(repository).some((dependency) => affectedPackages.has(dependency)),
+    );
+    if (next.length === 0) return selected;
+    selected.push(...next);
+    for (const repository of next)
+      if (repository.packageName !== undefined) affectedPackages.add(repository.packageName);
+  }
+}
+
+/*** Read only runtime release edges; development and peer declarations do not trigger mutations. */
+function runtimeDependencies(repository: ReleaseWaveRepository): readonly string[] {
+  return [
+    ...Object.keys(repository.dependencies.dependencies),
+    ...Object.keys(repository.dependencies.optionalDependencies),
+  ];
+}
+
+/*** Reject ambiguous, malformed, or duplicate publication evidence before it can name a wave. */
+function validateSettledPublications(
+  publications: readonly SettledPublication[],
+): readonly SettledPublication[] {
+  if (publications.length === 0) throw new Error('Release-wave settlement evidence is empty.');
+  const ids = publications.map((publication) =>
+    releaseWaveEventIdentity(publicationEvent(publication)),
+  );
+  if (new Set(ids).size !== ids.length)
+    throw new Error('Release-wave settlement evidence contains duplicate publication identities.');
+  return [...publications].sort((left, right) =>
+    releaseWaveEventIdentity(publicationEvent(left)).localeCompare(
+      releaseWaveEventIdentity(publicationEvent(right)),
+    ),
+  );
+}
+
+/*** Compare every release and npm proof field; a package name alone is never acknowledgement evidence. */
+function samePublication(event: DurableReleaseWaveEvent, publication: SettledPublication): boolean {
+  return (
+    event.packageName === publication.name &&
+    event.version === publication.version &&
+    event.sourceRepository === publication.sourceRepository &&
+    event.npmArtifactIntegrity === publication.npmArtifactIntegrity &&
+    event.releaseId === publication.releaseId &&
+    event.releaseTag === publication.releaseTag
+  );
+}
+
+/*** Present verified package evidence in the event identity shape without inventing a second hash contract. */
+function publicationEvent(publication: SettledPublication): DurableReleaseWaveEvent {
+  return {
+    eventId: '',
+    npmArtifactIntegrity: publication.npmArtifactIntegrity,
+    packageName: publication.name,
+    releaseId: publication.releaseId,
+    releaseTag: publication.releaseTag,
+    sourceRepository: publication.sourceRepository,
+    version: publication.version,
+  };
+}
+
+/*** Acknowledge a fully settled cohort and compact bodies while retaining replay-safe audit identities. */
 async function acknowledgeEventsAsync(
   queuePort: ReleaseWaveEventQueuePort,
   events: readonly DurableReleaseWaveEvent[],
   acknowledgedRunId: string,
   maximumRetries: number,
 ): Promise<void> {
+  if (events.length === 0) return;
   const ids = new Set(events.map((event) => event.eventId));
   for (let attempt = 0; attempt < maximumRetries; attempt += 1) {
     const current = await queuePort.loadReleaseWaveEventQueueAsync();
     if (current === undefined)
       throw new Error('Release-wave event queue disappeared during acknowledgement.');
     const queue: ReleaseWaveEventQueue = {
-      events: current.queue.events.map((event) =>
-        ids.has(event.eventId) && event.acknowledgedRunId === undefined
-          ? { ...event, acknowledgedRunId }
-          : event,
-      ),
+      acknowledgedEvents: {
+        ...current.queue.acknowledgedEvents,
+        ...Object.fromEntries([...ids].map((eventId) => [eventId, acknowledgedRunId])),
+      },
+      events: current.queue.events.filter((event) => !ids.has(event.eventId)),
     };
     try {
       await queuePort.saveReleaseWaveEventQueueAsync(queue, current.revision);
