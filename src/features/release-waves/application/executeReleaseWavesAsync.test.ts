@@ -143,6 +143,39 @@ test('holds later waves when an exact-head CI gate is incomplete', async () => {
   ]);
 });
 
+test('adopts a concurrently advanced initializer instead of overwriting its release evidence', async () => {
+  const calls: string[] = [];
+  const winner: ReleaseWaveCheckpoint = {
+    ledger: {
+      nodes: Object.fromEntries(plan.nodes.map((node) => [node.repository, 'released'] as const)),
+      runId: plan.runId,
+    },
+    plan,
+  };
+  let checkpoint: ReleaseWaveCheckpoint | undefined;
+  const store: ReleaseWaveCheckpointPort = {
+    loadReleaseWaveCheckpointAsync: () =>
+      Promise.resolve(
+        checkpoint === undefined ? undefined : { checkpoint, revision: 'concurrent-winner' },
+      ),
+    saveReleaseWaveCheckpointAsync: () => {
+      checkpoint = winner;
+      throw new ReleaseWaveCheckpointConflictError(plan.runId);
+    },
+  };
+  const result = await executeReleaseWavesAsync({
+    checkpointPort: store,
+    executionPort: executionPort(calls),
+    executorId: 'losing-initializer',
+    maximumCheckpointRetries: 2,
+    maximumConcurrency: 2,
+    now: () => new Date('2026-11-16T00:00:00.000Z'),
+    plan,
+  });
+  expect(result).toEqual(winner);
+  expect(calls).toEqual([]);
+});
+
 test('two simultaneous executors lease one repository operation and create one candidate', async () => {
   const calls: string[] = [];
   const store = checkpointPort();
