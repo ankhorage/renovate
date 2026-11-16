@@ -23,7 +23,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: package-release-rollout-${{ github.event.client_payload.package_name || inputs.package_name }}
+  # Serialize every settled publisher event through the one release-wave lane. Renovate reuses the
+  # stable branch below, so delayed/reordered events amend one consumer PR instead of fanning out.
+  group: coordinated-release-wave
   cancel-in-progress: false
 
 jobs:
@@ -379,12 +381,12 @@ jobs:
           permission-pull-requests: write
           permission-workflows: write
 
-      - name: Run Renovate immediately for the released package
+      - name: Update the coordinated Ankhorage release-wave pull request
         env:
           RENOVATE_AUTODISCOVER: 'false'
           RENOVATE_ONBOARDING: 'false'
           RENOVATE_PACKAGE_RULES: >-
-            [{"matchDatasources":["npm"],"matchPackageNames":["*"],"enabled":false},{"matchDatasources":["npm"],"matchPackageNames":["${{ needs.validate.outputs.package_name }}"],"enabled":true,"rangeStrategy":"bump","allowedVersions":"${{ needs.validate.outputs.version }}","recreateWhen":"always"}]
+            [{"matchDatasources":["npm"],"matchPackageNames":["*"],"enabled":false},{"matchDatasources":["npm"],"matchPackageNames":["@ankhorage/**"],"enabled":true,"rangeStrategy":"bump","groupName":"Ankhorage release wave","groupSlug":"ankhorage-release-wave","automerge":false,"platformAutomerge":false,"recreateWhen":"always"}]
           RENOVATE_PLATFORM: github
           RENOVATE_PR_HOURLY_LIMIT: '0'
           RENOVATE_REPOSITORIES: ${{ matrix.repository }}
@@ -393,5 +395,5 @@ jobs:
           ROLLOUT_PACKAGE_NAME: ${{ needs.validate.outputs.package_name }}
           ROLLOUT_VERSION: ${{ needs.validate.outputs.version }}
         run: |
-          echo "Rolling out exactly $ROLLOUT_PACKAGE_NAME@$ROLLOUT_VERSION to $RENOVATE_REPOSITORIES"
+          echo "Reconciling the coordinated release-wave PR after $ROLLOUT_PACKAGE_NAME@$ROLLOUT_VERSION for $RENOVATE_REPOSITORIES"
           bun x renovate

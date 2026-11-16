@@ -16,7 +16,7 @@ describe('package release rollout', () => {
     expect(workflow).toContain('package_name:');
     expect(workflow).toContain('version:');
     expect(workflow).toContain('source_repository:');
-    expect(workflow).toContain('Run Renovate immediately for the released package');
+    expect(workflow).toContain('Update the coordinated Ankhorage release-wave pull request');
   });
 
   test('uses only the paginated App installation as positive enrollment', () => {
@@ -30,6 +30,14 @@ describe('package release rollout', () => {
   test('verifies exact published npm identities before starting a rollout', () => {
     expect(workflow).toContain('https://registry.npmjs.org/');
     expect(workflow).toContain('The npm release manifest does not match');
+  });
+
+  test('serializes release events into one non-automerge Ankhorage consumer branch', () => {
+    expect(workflow).toContain('group: coordinated-release-wave');
+    expect(workflow).toContain('"matchPackageNames":["@ankhorage/**"]');
+    expect(workflow).toContain('"groupSlug":"ankhorage-release-wave"');
+    expect(workflow).toContain('"automerge":false');
+    expect(workflow).toContain('"platformAutomerge":false');
   });
 });
 
