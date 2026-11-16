@@ -143,6 +143,34 @@ test('holds later waves when an exact-head CI gate is incomplete', async () => {
   ]);
 });
 
+test('keeps a reconciled merged candidate non-terminal until npm publication evidence is complete', async () => {
+  const [base] = plan.nodes;
+  if (base === undefined) throw new Error('Base node fixture is missing.');
+  const result = await executeReleaseWavesAsync({
+    checkpointPort: checkpointPort(),
+    executionPort: {
+      ensureReleaseWaveRepositoryAsync: () => Promise.resolve(),
+      reconcileReleaseWaveRepositoryAsync: () => Promise.resolve('released'),
+      verifyReleaseWaveRepositoryAsync: () =>
+        Promise.resolve({
+          documentationGenerated: true,
+          exactHeadCiPassed: true,
+          lockfileUpdated: true,
+          npmArtifactVerified: false,
+          npmVersionVerified: false,
+          releaseWorkflowPassed: true,
+          requiredReviewsApproved: true,
+        }),
+    },
+    executorId: 'executor-1',
+    maximumCheckpointRetries: 2,
+    maximumConcurrency: 1,
+    now: () => new Date('2026-11-16T00:00:00.000Z'),
+    plan: { ...plan, nodes: [base], waves: [['ankhorage/base']] },
+  });
+  expect(result.ledger.nodes['ankhorage/base']).toBe('awaiting-review');
+});
+
 test('adopts a concurrently advanced initializer instead of overwriting its release evidence', async () => {
   const calls: string[] = [];
   const winner: ReleaseWaveCheckpoint = {

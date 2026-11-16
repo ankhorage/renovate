@@ -114,10 +114,13 @@ async function executeReleaseWaveRepositoryAsync(
       operationId,
       runId: input.plan.runId,
     });
-    if (reconciliation === 'released') {
-      await transitionReleaseWaveRepositoryAsync(input, repository, 'released', claim.operation);
-      return;
-    }
+    if (reconciliation === 'released')
+      await transitionReleaseWaveRepositoryAsync(
+        input,
+        repository,
+        'awaiting-review',
+        claim.operation,
+      );
     if (reconciliation === 'missing')
       await input.executionPort.ensureReleaseWaveRepositoryAsync({
         node,

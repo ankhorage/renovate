@@ -20,9 +20,18 @@ export interface PublishedPackage {
 
 export interface ReleaseWaveNode {
   readonly dependencies: readonly string[];
+  /** Immutable release evidence decided before an external candidate is created. */
+  readonly expectedPublication?: ReleaseWavePublication;
   readonly packageName: string;
   readonly requiresNpmPublication: boolean;
   readonly repository: string;
+}
+
+/** Exact identity a publishable wave node must prove before it can settle. */
+interface ReleaseWavePublication {
+  readonly integrity: string;
+  readonly releaseRevision: string;
+  readonly version: string;
 }
 
 export interface ReleaseWavePlan {
