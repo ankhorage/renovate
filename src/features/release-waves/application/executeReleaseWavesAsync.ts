@@ -1,4 +1,8 @@
-import type { ReleaseWaveLedger, ReleaseWavePlan } from '../../../types/releaseWave.js';
+import type {
+  ReleaseWaveLedger,
+  ReleaseWaveOperation,
+  ReleaseWavePlan,
+} from '../../../types/releaseWave.js';
 import { partitionReleaseWave } from '../domain/planReleaseWaves.js';
 import type {
   ReleaseWaveCheckpoint,
@@ -10,58 +14,84 @@ import type {
   ReleaseWaveExecutionPort,
   ReleaseWaveVerification,
 } from '../ports/releaseWaveExecution.js';
+import { claimableReleaseWaveCheckpoint } from './claimableReleaseWaveCheckpoint.js';
+import {
+  releaseWaveNodeStatus,
+  releaseWaveOperation,
+  releaseWaveOperationId,
+  validateReleaseWaveCheckpoint,
+} from './validateReleaseWaveCheckpoint.js';
 
 export interface ExecuteReleaseWavesInput {
   readonly checkpointPort: ReleaseWaveCheckpointPort;
   readonly executionPort: ReleaseWaveExecutionPort;
-  readonly maximumConcurrency: number;
+  readonly executorId: string;
   readonly maximumCheckpointRetries: number;
+  readonly maximumConcurrency: number;
+  readonly now: () => Date;
   readonly plan: ReleaseWavePlan;
 }
 
-/*** Resume a release plan with checkpoint-before-side-effect and wave-order preservation. */
+/*** Resume a validated release plan with durable claims before each external side effect. */
 export async function executeReleaseWavesAsync(
   input: ExecuteReleaseWavesInput,
 ): Promise<ReleaseWaveCheckpoint> {
+  validateExecutionInput(input);
   const checkpoint = await loadOrCreateReleaseWaveCheckpointAsync(input);
   for (const [waveIndex, wave] of checkpoint.plan.waves.entries()) {
     const prerequisites = checkpoint.plan.waves.slice(0, waveIndex).flat();
-    const current = await requireReleaseWaveCheckpointAsync(input);
-    if (!isReleaseWaveComplete(current.checkpoint, prerequisites)) return current.checkpoint;
-    for (const batch of partitionReleaseWave(wave, input.maximumConcurrency)) {
+    if (
+      !isReleaseWaveComplete(
+        (await requireReleaseWaveCheckpointAsync(input)).checkpoint,
+        prerequisites,
+      )
+    )
+      return (await requireReleaseWaveCheckpointAsync(input)).checkpoint;
+    for (const batch of partitionReleaseWave(wave, input.maximumConcurrency))
       await Promise.all(
         batch.map((repository) => executeReleaseWaveRepositoryAsync(input, repository)),
       );
-    }
-    const settled = await requireReleaseWaveCheckpointAsync(input);
-    if (!isReleaseWaveComplete(settled.checkpoint, wave)) return settled.checkpoint;
+    if (!isReleaseWaveComplete((await requireReleaseWaveCheckpointAsync(input)).checkpoint, wave))
+      return (await requireReleaseWaveCheckpointAsync(input)).checkpoint;
   }
   return (await requireReleaseWaveCheckpointAsync(input)).checkpoint;
 }
 
-/*** Load existing durable state or atomically establish the initial plan ledger. */
+/*** Load durable state or atomically create it, adopting—not overwriting—a competing initializer. */
 async function loadOrCreateReleaseWaveCheckpointAsync(
   input: ExecuteReleaseWavesInput,
 ): Promise<ReleaseWaveCheckpoint> {
   const existing = await input.checkpointPort.loadReleaseWaveCheckpointAsync(input.plan.runId);
-  if (existing !== undefined) return existing.checkpoint;
+  if (existing !== undefined) return validateReleaseWaveCheckpoint(input.plan, existing.checkpoint);
   const checkpoint: ReleaseWaveCheckpoint = {
     ledger: {
-      nodes: Object.fromEntries([
-        ...input.plan.nodes.map((node) => [node.repository, 'ready'] as const),
-        ...input.plan.pendingBootstrap.map(
-          (repository) => [repository, 'pending-bootstrap'] as const,
-        ),
-        ...input.plan.blocked.map((entry) => [readRepository(entry), 'blocked'] as const),
-      ]),
+      nodes: Object.fromEntries(
+        input.plan.nodes.map((node) => [node.repository, 'ready'] as const),
+      ),
       runId: input.plan.runId,
     },
     plan: input.plan,
   };
-  return saveWithRetryAsync(input, checkpoint, undefined).then((result) => result.checkpoint);
+  for (let attempt = 0; attempt < input.maximumCheckpointRetries; attempt += 1) {
+    try {
+      return (
+        await input.checkpointPort.saveReleaseWaveCheckpointAsync(
+          input.plan.runId,
+          checkpoint,
+          undefined,
+        )
+      ).checkpoint;
+    } catch (error) {
+      if (!isReleaseWaveCheckpointConflict(error)) throw error;
+      const winner = await input.checkpointPort.loadReleaseWaveCheckpointAsync(input.plan.runId);
+      if (winner !== undefined) return validateReleaseWaveCheckpoint(input.plan, winner.checkpoint);
+      if (attempt + 1 === input.maximumCheckpointRetries) throw error;
+    }
+  }
+  throw new Error('Release-wave checkpoint retry budget is invalid.');
 }
 
-/*** Execute one repository only after durable state records that its operation is resumable. */
+/*** Execute an exclusively claimed operation, reconciling a reclaimed operation before mutation. */
 async function executeReleaseWaveRepositoryAsync(
   input: ExecuteReleaseWavesInput,
   repository: string,
@@ -69,114 +99,161 @@ async function executeReleaseWaveRepositoryAsync(
   const node = input.plan.nodes.find((candidate) => candidate.repository === repository);
   if (node === undefined)
     throw new Error('Release-wave plan is missing repository ' + repository + '.');
-  const claimed = await transitionReleaseWaveRepositoryAsync(input, repository, 'updating');
-  if (!claimed) return;
-  await input.executionPort.ensureReleaseWaveRepositoryAsync({ node, runId: input.plan.runId });
-  await transitionReleaseWaveRepositoryAsync(input, repository, 'awaiting-review');
-  const verification = await input.executionPort.verifyReleaseWaveRepositoryAsync({
-    node,
-    runId: input.plan.runId,
-  });
-  if (isReleaseWaveVerificationComplete(node.requiresNpmPublication, verification)) {
-    await transitionReleaseWaveRepositoryAsync(
-      input,
-      repository,
-      node.requiresNpmPublication ? 'released' : 'verified',
-    );
+  if ((await claimReleaseWaveRepositoryAsync(input, repository)) === 'none') return;
+  const operationId = releaseWaveOperationId(input.plan.runId, repository);
+  try {
+    const reconciliation = await input.executionPort.reconcileReleaseWaveRepositoryAsync({
+      node,
+      operationId,
+      runId: input.plan.runId,
+    });
+    if (reconciliation === 'released') {
+      await transitionReleaseWaveRepositoryAsync(input, repository, 'released');
+      return;
+    }
+    if (reconciliation === 'missing')
+      await input.executionPort.ensureReleaseWaveRepositoryAsync({
+        node,
+        operationId,
+        runId: input.plan.runId,
+      });
+    await transitionReleaseWaveRepositoryAsync(input, repository, 'awaiting-review');
+    const verification = await input.executionPort.verifyReleaseWaveRepositoryAsync({
+      node,
+      runId: input.plan.runId,
+    });
+    if (isReleaseWaveVerificationComplete(node.requiresNpmPublication, verification))
+      await transitionReleaseWaveRepositoryAsync(
+        input,
+        repository,
+        node.requiresNpmPublication ? 'released' : 'verified',
+      );
+  } catch (error) {
+    await failReleaseWaveRepositoryAsync(input, repository, error);
   }
 }
 
-/*** Save a node transition with revisioned retries so concurrent workers cannot overwrite progress. */
-async function transitionReleaseWaveRepositoryAsync(
+/*** Claim ready, failed, or expired work with CAS; active and review states cannot be stolen. */
+async function claimReleaseWaveRepositoryAsync(
   input: ExecuteReleaseWavesInput,
   repository: string,
-  status: ReleaseWaveLedger['nodes'][string],
-): Promise<boolean> {
+): Promise<'claimed' | 'none'> {
   for (let attempt = 0; attempt < input.maximumCheckpointRetries; attempt += 1) {
     const current = await requireReleaseWaveCheckpointAsync(input);
-    const nodes = new Map(Object.entries(current.checkpoint.ledger.nodes));
-    const currentStatus = nodes.get(repository);
-    if (
-      currentStatus === 'released' ||
-      currentStatus === 'verified' ||
-      currentStatus === 'blocked'
-    ) {
-      return false;
-    }
-    nodes.set(repository, status);
-    const checkpoint: ReleaseWaveCheckpoint = {
-      ...current.checkpoint,
-      ledger: { ...current.checkpoint.ledger, nodes: Object.fromEntries(nodes) },
-    };
+    const status = releaseWaveNodeStatus(current.checkpoint.ledger, repository);
+    const operation = releaseWaveOperation(current.checkpoint.ledger, repository);
+    if (!isClaimableReleaseWaveOperation(status, operation, input.now())) return 'none';
+    const checkpoint = claimableReleaseWaveCheckpoint(input, current.checkpoint, repository);
     try {
       await input.checkpointPort.saveReleaseWaveCheckpointAsync(
         input.plan.runId,
         checkpoint,
         current.revision,
       );
-      return true;
+      return 'claimed';
     } catch (error) {
-      if (
-        !isReleaseWaveCheckpointConflict(error) ||
-        attempt + 1 === input.maximumCheckpointRetries
-      ) {
+      if (!isReleaseWaveCheckpointConflict(error) || attempt + 1 === input.maximumCheckpointRetries)
         throw error;
-      }
     }
   }
   throw new Error('Release-wave checkpoint retry budget is invalid.');
 }
 
-/*** Retry a durable compare-and-swap only for explicitly detected concurrent writers. */
-async function saveWithRetryAsync(
+/*** Persist a state transition only when it is valid for the authoritative checkpoint. */
+async function transitionReleaseWaveRepositoryAsync(
   input: ExecuteReleaseWavesInput,
-  checkpoint: ReleaseWaveCheckpoint,
-  initialRevision: string | undefined,
-): Promise<RevisionedReleaseWaveCheckpoint> {
-  let revision = initialRevision;
+  repository: string,
+  status: ReleaseWaveLedger['nodes'][string],
+): Promise<void> {
+  await updateCheckpointAsync(input, repository, (checkpoint, current) => {
+    if (current === status || current === 'released' || current === 'verified') return checkpoint;
+    if (!isAllowedTransition(current, status))
+      throw new Error('Release-wave transition is invalid: ' + current + ' to ' + status + '.');
+    return {
+      ...checkpoint,
+      ledger: { ...checkpoint.ledger, nodes: { ...checkpoint.ledger.nodes, [repository]: status } },
+    };
+  });
+}
+
+/*** Record an actionable, recoverable failure while retaining the deterministic operation identity. */
+async function failReleaseWaveRepositoryAsync(
+  input: ExecuteReleaseWavesInput,
+  repository: string,
+  error: unknown,
+): Promise<void> {
+  await updateCheckpointAsync(input, repository, (checkpoint, current) => ({
+    ...checkpoint,
+    failures: {
+      ...checkpoint.failures,
+      [repository]: { message: errorMessage(error), recoverable: true },
+    },
+    ledger: {
+      ...checkpoint.ledger,
+      nodes: {
+        ...checkpoint.ledger.nodes,
+        [repository]: current === 'released' ? current : 'failed',
+      },
+    },
+  }));
+}
+
+/*** Apply a validated checkpoint update with bounded GitHub Contents compare-and-swap retries. */
+async function updateCheckpointAsync(
+  input: ExecuteReleaseWavesInput,
+  repository: string,
+  update: (
+    checkpoint: ReleaseWaveCheckpoint,
+    current: ReleaseWaveLedger['nodes'][string],
+  ) => ReleaseWaveCheckpoint,
+): Promise<void> {
   for (let attempt = 0; attempt < input.maximumCheckpointRetries; attempt += 1) {
+    const current = await requireReleaseWaveCheckpointAsync(input);
+    const status = releaseWaveNodeStatus(current.checkpoint.ledger, repository);
+    if (status === undefined)
+      throw new Error('Release-wave checkpoint is missing repository ' + repository + '.');
+    const next = update(current.checkpoint, status);
+    if (next === current.checkpoint) return;
     try {
-      return await input.checkpointPort.saveReleaseWaveCheckpointAsync(
+      await input.checkpointPort.saveReleaseWaveCheckpointAsync(
         input.plan.runId,
-        checkpoint,
-        revision,
+        next,
+        current.revision,
       );
+      return;
     } catch (error) {
-      if (
-        !isReleaseWaveCheckpointConflict(error) ||
-        attempt + 1 === input.maximumCheckpointRetries
-      ) {
+      if (!isReleaseWaveCheckpointConflict(error) || attempt + 1 === input.maximumCheckpointRetries)
         throw error;
-      }
-      const latest = await input.checkpointPort.loadReleaseWaveCheckpointAsync(input.plan.runId);
-      revision = latest?.revision;
     }
   }
   throw new Error('Release-wave checkpoint retry budget is invalid.');
 }
 
-/*** Require checkpoint presence after initialization so recovery cannot silently lose state. */
+/*** Require and validate durable state before every side effect. */
 async function requireReleaseWaveCheckpointAsync(
   input: ExecuteReleaseWavesInput,
 ): Promise<RevisionedReleaseWaveCheckpoint> {
   const checkpoint = await input.checkpointPort.loadReleaseWaveCheckpointAsync(input.plan.runId);
   if (checkpoint === undefined)
     throw new Error('Release-wave checkpoint disappeared during execution.');
-  return checkpoint;
+  return {
+    ...checkpoint,
+    checkpoint: validateReleaseWaveCheckpoint(input.plan, checkpoint.checkpoint),
+  };
 }
 
-/*** Prevent a downstream wave from starting until every prerequisite has passed all release gates. */
+/*** Check complete wave settlement before any dependent observes an intermediate upstream result. */
 function isReleaseWaveComplete(
   checkpoint: ReleaseWaveCheckpoint,
   repositories: readonly string[],
 ): boolean {
   return repositories.every((repository) => {
-    const status = new Map(Object.entries(checkpoint.ledger.nodes)).get(repository);
+    const status = releaseWaveNodeStatus(checkpoint.ledger, repository);
     return status === 'released' || status === 'verified';
   });
 }
 
-/*** Check every required release proof before allowing the next dependency wave to progress. */
+/*** Check the complete protected-release evidence set for publishable and nonpublishable profiles. */
 function isReleaseWaveVerificationComplete(
   requiresNpmPublication: boolean,
   verification: ReleaseWaveVerification,
@@ -192,10 +269,49 @@ function isReleaseWaveVerificationComplete(
   );
 }
 
-/*** Extract a repository identity from the planner's deterministic diagnostic format. */
-function readRepository(entry: string): string {
-  const [repository] = entry.split(':', 1);
-  if (repository === undefined)
-    throw new Error('Release-wave diagnostic is missing its repository.');
-  return repository;
+/*** Keep status movement monotonic except an explicit recoverable failure retry. */
+function isAllowedTransition(
+  current: ReleaseWaveLedger['nodes'][string],
+  next: ReleaseWaveLedger['nodes'][string],
+): boolean {
+  return (
+    (current === 'updating' && (next === 'awaiting-review' || next === 'released')) ||
+    (current === 'awaiting-review' && (next === 'verified' || next === 'released')) ||
+    (current === 'verified' && next === 'released') ||
+    (current === 'failed' && next === 'updating')
+  );
+}
+
+/*** Reject settled, review-owned, and currently leased work before an executor attempts a claim. */
+function isClaimableReleaseWaveOperation(
+  status: ReleaseWaveLedger['nodes'][string] | undefined,
+  operation: ReleaseWaveOperation | undefined,
+  now: Date,
+): boolean {
+  return (
+    status !== undefined &&
+    status !== 'released' &&
+    status !== 'verified' &&
+    status !== 'awaiting-review' &&
+    status !== 'blocked' &&
+    !(
+      status === 'updating' &&
+      operation !== undefined &&
+      operation.leaseExpiresAt > now.toISOString()
+    )
+  );
+}
+
+/*** Render unknown infrastructure failures without losing their recovery value. */
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/*** Reject invalid execution configuration before state or provider access. */
+function validateExecutionInput(input: ExecuteReleaseWavesInput): void {
+  if (!Number.isInteger(input.maximumCheckpointRetries) || input.maximumCheckpointRetries < 1)
+    throw new Error('Release-wave checkpoint retry budget must be a positive integer.');
+  if (!Number.isInteger(input.maximumConcurrency) || input.maximumConcurrency < 1)
+    throw new Error('Release-wave concurrency must be a positive integer.');
+  if (input.executorId.length === 0) throw new Error('Release-wave executor identity is required.');
 }

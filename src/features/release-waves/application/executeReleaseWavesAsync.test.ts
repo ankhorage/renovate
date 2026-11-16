@@ -72,6 +72,10 @@ function checkpointPort(conflicts = 0): ReleaseWaveCheckpointPort {
 function executionPort(calls: string[], blocked = false): ReleaseWaveExecutionPort {
   const pullRequests = new Set<string>();
   return {
+    reconcileReleaseWaveRepositoryAsync: ({ node }) => {
+      calls.push('reconcile:' + node.repository);
+      return Promise.resolve(pullRequests.has(node.repository) ? 'awaiting-review' : 'missing');
+    },
     ensureReleaseWaveRepositoryAsync: ({ node }) => {
       pullRequests.add(node.repository);
       calls.push('update:' + node.repository);
@@ -97,8 +101,10 @@ test('settles a diamond once and creates exactly one coordinated consumer releas
   const input = {
     checkpointPort: checkpointPort(1),
     executionPort: executionPort(calls),
+    executorId: 'executor-1',
     maximumCheckpointRetries: 3,
     maximumConcurrency: 2,
+    now: () => new Date('2026-11-16T00:00:00.000Z'),
     plan,
   };
 
@@ -122,11 +128,110 @@ test('holds later waves when an exact-head CI gate is incomplete', async () => {
   const result = await executeReleaseWavesAsync({
     checkpointPort: checkpointPort(),
     executionPort: executionPort(calls, true),
+    executorId: 'executor-1',
     maximumCheckpointRetries: 2,
     maximumConcurrency: 2,
+    now: () => new Date('2026-11-16T00:00:00.000Z'),
     plan,
   });
 
   expect(result.ledger.nodes['ankhorage/base']).toBe('awaiting-review');
-  expect(calls).toEqual(['update:ankhorage/base', 'verify:ankhorage/base']);
+  expect(calls).toEqual([
+    'reconcile:ankhorage/base',
+    'update:ankhorage/base',
+    'verify:ankhorage/base',
+  ]);
 });
+
+test('two simultaneous executors lease one repository operation and create one candidate', async () => {
+  const calls: string[] = [];
+  const store = checkpointPort();
+  const port = executionPort(calls);
+  await Promise.all(
+    ['executor-1', 'executor-2'].map((executorId) =>
+      executeReleaseWavesAsync({
+        checkpointPort: store,
+        executionPort: port,
+        executorId,
+        maximumCheckpointRetries: 4,
+        maximumConcurrency: 2,
+        now: () => new Date('2026-11-16T00:00:00.000Z'),
+        plan,
+      }),
+    ),
+  );
+  expect(calls.filter((call) => call === 'update:ankhorage/consumer')).toHaveLength(1);
+  expect(calls.filter((call) => call === 'update:ankhorage/base')).toHaveLength(1);
+});
+
+test('reconciles an expired interrupted mutation before retrying it', async () => {
+  const calls: string[] = [];
+  const [baseNode] = plan.nodes;
+  if (baseNode === undefined) throw new Error('Base node fixture is missing.');
+  const interrupted: ReleaseWaveCheckpoint = {
+    ledger: {
+      nodes: { 'ankhorage/base': 'updating' },
+      operations: {
+        'ankhorage/base': {
+          leaseExpiresAt: '2026-11-15T23:00:00.000Z',
+          operationId: 'diamond:ankhorage/base',
+          ownerId: 'interrupted-executor',
+        },
+      },
+      runId: 'diamond',
+    },
+    plan: { ...plan, nodes: [baseNode], waves: [['ankhorage/base']] },
+  };
+  const store = checkpointPortWith(interrupted);
+  const port: ReleaseWaveExecutionPort = {
+    ensureReleaseWaveRepositoryAsync: () => {
+      calls.push('update');
+      return Promise.resolve();
+    },
+    reconcileReleaseWaveRepositoryAsync: () => Promise.resolve('awaiting-review'),
+    verifyReleaseWaveRepositoryAsync: () => {
+      calls.push('verify');
+      return Promise.resolve(completeVerification);
+    },
+  };
+  const result = await executeReleaseWavesAsync({
+    checkpointPort: store,
+    executionPort: port,
+    executorId: 'recovery-executor',
+    maximumCheckpointRetries: 2,
+    maximumConcurrency: 1,
+    now: () => new Date('2026-11-16T00:00:00.000Z'),
+    plan: interrupted.plan,
+  });
+  expect(result.ledger.nodes['ankhorage/base']).toBe('released');
+  expect(calls).toEqual(['verify']);
+});
+
+const completeVerification = {
+  documentationGenerated: true,
+  exactHeadCiPassed: true,
+  lockfileUpdated: true,
+  npmArtifactVerified: true,
+  npmVersionVerified: true,
+  releaseWorkflowPassed: true,
+  requiredReviewsApproved: true,
+};
+
+/** Create a revisioned checkpoint store from pre-existing durable state. */
+function checkpointPortWith(initial: ReleaseWaveCheckpoint): ReleaseWaveCheckpointPort {
+  let checkpoint: ReleaseWaveCheckpoint | undefined = initial;
+  let revision = 0;
+  return {
+    loadReleaseWaveCheckpointAsync: () =>
+      Promise.resolve(
+        checkpoint === undefined ? undefined : { checkpoint, revision: String(revision) },
+      ),
+    saveReleaseWaveCheckpointAsync: (_runId, next, expectedRevision) => {
+      if (checkpoint !== undefined && expectedRevision !== String(revision))
+        throw new ReleaseWaveCheckpointConflictError('diamond');
+      checkpoint = next;
+      revision += 1;
+      return Promise.resolve({ checkpoint, revision: String(revision) });
+    },
+  };
+}

@@ -48,5 +48,19 @@ export interface ReleaseWaveLedger {
       | 'failed'
     >
   >;
+  /** Durable ownership and recovery metadata for in-flight repository operations. */
+  readonly operations?: Readonly<Record<string, ReleaseWaveOperation>>;
   readonly runId: string;
+}
+
+export interface ReleaseWaveOperation {
+  readonly leaseExpiresAt: string;
+  readonly operationId: string;
+  readonly ownerId: string;
+}
+
+/** Actionable failure retained with the checkpoint so a later executor can safely recover. */
+export interface ReleaseWaveFailure {
+  readonly message: string;
+  readonly recoverable: boolean;
 }

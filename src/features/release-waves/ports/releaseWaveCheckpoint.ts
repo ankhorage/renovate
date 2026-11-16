@@ -1,6 +1,11 @@
-import type { ReleaseWaveLedger, ReleaseWavePlan } from '../../../types/releaseWave.js';
+import type {
+  ReleaseWaveFailure,
+  ReleaseWaveLedger,
+  ReleaseWavePlan,
+} from '../../../types/releaseWave.js';
 
 export interface ReleaseWaveCheckpoint {
+  readonly failures?: Readonly<Record<string, ReleaseWaveFailure>>;
   readonly ledger: ReleaseWaveLedger;
   readonly plan: ReleaseWavePlan;
 }

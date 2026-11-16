@@ -11,8 +11,15 @@ export interface ReleaseWaveVerification {
 }
 
 export interface ReleaseWaveExecutionPort {
+  /** Reconcile the durable operation identity before a reclaimed lease may create a candidate. */
+  reconcileReleaseWaveRepositoryAsync(input: {
+    readonly node: ReleaseWaveNode;
+    readonly operationId: string;
+    readonly runId: string;
+  }): Promise<'awaiting-review' | 'released' | 'missing'>;
   ensureReleaseWaveRepositoryAsync(input: {
     readonly node: ReleaseWaveNode;
+    readonly operationId: string;
     readonly runId: string;
   }): Promise<void>;
   verifyReleaseWaveRepositoryAsync(input: {
