@@ -8,6 +8,7 @@ import { ReleaseWaveCheckpointConflictError } from '../ports/releaseWaveCheckpoi
 import type { ReleaseWaveEventQueuePort } from '../ports/releaseWaveEventQueue.js';
 import { ReleaseWaveEventQueueConflictError } from '../ports/releaseWaveEventQueue.js';
 import type { ReleaseWaveExecutionPort } from '../ports/releaseWaveExecution.js';
+import { ingestPackageReleaseEventAsync } from './ingestPackageReleaseEventAsync.js';
 import { ingestReleaseWaveEventAsync } from './ingestReleaseWaveEventAsync.js';
 import { runReleaseWaveCoordinatorAsync } from './runReleaseWaveCoordinatorAsync.js';
 
@@ -60,6 +61,114 @@ test('does not acknowledge wrong or superseded publication evidence', async () =
   const resumed = await runReleaseWaveCoordinatorAsync(coordinatorInput(queue, calls));
   expect(resumed?.blocked).toEqual([]);
   expect(calls.filter((call) => call === 'ensure:ankhorage/consumer')).toHaveLength(1);
+});
+
+test('retains compacted replay protection across later events, restart, and ingestion CAS contention', async () => {
+  const queue = eventQueue();
+  const calls: string[] = [];
+  const input = coordinatorInput(queue, calls);
+  await ingestReleaseWaveEventAsync({
+    event: event('base', '1.1.0'),
+    maximumRetries: 3,
+    queuePort: queue,
+  });
+  await ingestReleaseWaveEventAsync({
+    event: event('left', '1.1.0'),
+    maximumRetries: 3,
+    queuePort: queue,
+  });
+  await runReleaseWaveCoordinatorAsync(input);
+  await ingestReleaseWaveEventAsync({
+    event: event('other', '1.1.0'),
+    maximumRetries: 3,
+    queuePort: queue,
+  });
+  await ingestReleaseWaveEventAsync({
+    event: event('base', '1.1.0'),
+    maximumRetries: 3,
+    queuePort: queue,
+  });
+  expect(
+    (await queue.loadReleaseWaveEventQueueAsync())?.queue.events.map((item) => item.packageName),
+  ).toEqual(['@ankhorage/other']);
+  expect(calls.filter((call) => call === 'ensure:ankhorage/consumer')).toHaveLength(1);
+});
+
+test('includes dev-only consumers without adding dev edges to runtime wave ordering', async () => {
+  const queue = eventQueue();
+  const calls: string[] = [];
+  await ingestReleaseWaveEventAsync({
+    event: event('base', '1.1.0'),
+    maximumRetries: 3,
+    queuePort: queue,
+  });
+  await ingestReleaseWaveEventAsync({
+    event: event('left', '1.1.0'),
+    maximumRetries: 3,
+    queuePort: queue,
+  });
+  const result = await runReleaseWaveCoordinatorAsync({
+    ...coordinatorInput(queue, calls),
+    repositories: [
+      repository('base'),
+      repository('left'),
+      {
+        ...repository('consumer'),
+        dependencies: {
+          dependencies: {},
+          devDependencies: { '@ankhorage/base': '^1.0.0' },
+          optionalDependencies: {},
+          peerDependencies: {},
+        },
+      },
+    ],
+  });
+  expect(result?.waves).toEqual([['ankhorage/consumer']]);
+});
+
+test('retries CAS conflicts during both ingestion and acknowledgement without losing the ledger', async () => {
+  const queue = eventQueue([1, 4]);
+  const calls: string[] = [];
+  await ingestReleaseWaveEventAsync({
+    event: event('base', '1.1.0'),
+    maximumRetries: 3,
+    queuePort: queue,
+  });
+  await ingestReleaseWaveEventAsync({
+    event: event('left', '1.1.0'),
+    maximumRetries: 3,
+    queuePort: queue,
+  });
+  await runReleaseWaveCoordinatorAsync(coordinatorInput(queue, calls));
+  expect((await queue.loadReleaseWaveEventQueueAsync())?.queue.events).toEqual([]);
+  expect(
+    Object.keys((await queue.loadReleaseWaveEventQueueAsync())?.queue.acknowledgedEvents ?? {}),
+  ).toHaveLength(2);
+});
+
+test('preserves the publisher dispatch contract while admitting only enriched event evidence', async () => {
+  const queue = eventQueue();
+  await ingestPackageReleaseEventAsync({
+    maximumRetries: 2,
+    publicationEvidencePort: {
+      enrichPackageReleaseAsync: (dispatch) =>
+        Promise.resolve({
+          ...event('base', '1.1.0'),
+          packageName: dispatch.package_name,
+          sourceRepository: dispatch.source_repository,
+          version: dispatch.version,
+        }),
+    },
+    queuePort: queue,
+    packageName: '@ankhorage/base',
+    sourceRepository: 'ankhorage/base',
+    version: '1.1.0',
+  });
+  expect((await queue.loadReleaseWaveEventQueueAsync())?.queue.events[0]).toMatchObject({
+    packageName: '@ankhorage/base',
+    sourceRepository: 'ankhorage/base',
+    version: '1.1.0',
+  });
 });
 
 /** Build a deterministic, real-graph fixture with two upstream publishers and one consumer. */
@@ -128,7 +237,7 @@ function repository(name: string) {
   };
 }
 
-function eventQueue(): ReleaseWaveEventQueuePort {
+function eventQueue(conflictingSaveAttempts: readonly number[] = []): ReleaseWaveEventQueuePort {
   let queue:
     | {
         readonly events: readonly {
@@ -144,10 +253,14 @@ function eventQueue(): ReleaseWaveEventQueuePort {
       }
     | undefined;
   let revision = 0;
+  let saveAttempts = 0;
   return {
     loadReleaseWaveEventQueueAsync: () =>
       Promise.resolve(queue === undefined ? undefined : { queue, revision: String(revision) }),
     saveReleaseWaveEventQueueAsync: (next, expected) => {
+      saveAttempts += 1;
+      if (conflictingSaveAttempts.includes(saveAttempts))
+        throw new ReleaseWaveEventQueueConflictError();
       if (queue !== undefined && expected !== String(revision))
         throw new ReleaseWaveEventQueueConflictError();
       queue = next;

@@ -24,6 +24,7 @@ export async function ingestReleaseWaveEventAsync(input: {
     if (existing !== undefined) return existing;
     if (current?.queue.acknowledgedEvents?.[event.eventId] !== undefined) return event;
     const queue: ReleaseWaveEventQueue = {
+      acknowledgedEvents: current?.queue.acknowledgedEvents,
       events: [...(current?.queue.events ?? []), event].sort(compareEvents),
     };
     try {

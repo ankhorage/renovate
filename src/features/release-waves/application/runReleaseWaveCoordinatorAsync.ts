@@ -44,12 +44,14 @@ export async function runReleaseWaveCoordinatorAsync(input: {
   const current = await input.queuePort.loadReleaseWaveEventQueueAsync();
   const events = completeCohortEvents(current?.queue, publications);
   if (events === undefined) return undefined;
-  const plan = planReleaseWaves(
-    affectedConsumers(input.repositories, publications),
+  const runId = logicalWaveId(publications);
+  const { closurePlan, plan } = plansForCohort(
+    input.repositories,
+    publications,
     input.publishedPackages,
-    logicalWaveId(publications),
+    runId,
   );
-  if (plan.waves.length > 0)
+  if (closurePlan.waves.length > 0)
     await executeReleaseWavesAsync({
       checkpointPort: input.checkpointPort,
       executionPort: input.executionPort,
@@ -59,7 +61,7 @@ export async function runReleaseWaveCoordinatorAsync(input: {
       now: input.now,
       plan,
     });
-  if (plan.blocked.length > 0) return plan;
+  if (closurePlan.blocked.length > 0) return plan;
   const checkpoint =
     plan.nodes.length === 0
       ? undefined
@@ -73,6 +75,30 @@ export async function runReleaseWaveCoordinatorAsync(input: {
     return plan;
   await acknowledgeEventsAsync(input.queuePort, events, plan.runId, input.maximumQueueRetries);
   return plan;
+}
+
+/*** Retain full selected-inventory audit while confining candidate mutations to the affected closure. */
+function plansForCohort(
+  repositories: readonly ReleaseWaveRepository[],
+  publications: readonly SettledPublication[],
+  publishedPackages: readonly PublishedPackage[],
+  runId: string,
+): { readonly closurePlan: ReleaseWavePlan; readonly plan: ReleaseWavePlan } {
+  const closurePlan = planReleaseWaves(
+    affectedConsumers(repositories, publications),
+    publishedPackages,
+    runId,
+  );
+  const inventoryPlan = planReleaseWaves(repositories, publishedPackages, runId);
+  return {
+    closurePlan,
+    plan: {
+      ...closurePlan,
+      blocked: inventoryPlan.blocked,
+      excluded: inventoryPlan.excluded,
+      pendingBootstrap: inventoryPlan.pendingBootstrap,
+    },
+  };
 }
 
 /*** Require a complete exact cohort before any consumer can observe a partial update. */
@@ -134,7 +160,7 @@ function affectedConsumers(
     const next = repositories.filter(
       (repository) =>
         !selected.includes(repository) &&
-        runtimeDependencies(repository).some((dependency) => affectedPackages.has(dependency)),
+        updateDependencies(repository).some((dependency) => affectedPackages.has(dependency)),
     );
     if (next.length === 0) return selected;
     selected.push(...next);
@@ -143,10 +169,11 @@ function affectedConsumers(
   }
 }
 
-/*** Read only runtime release edges; development and peer declarations do not trigger mutations. */
-function runtimeDependencies(repository: ReleaseWaveRepository): readonly string[] {
+/*** Follow every dependency declaration for update closure while preserving runtime-only wave edges. */
+function updateDependencies(repository: ReleaseWaveRepository): readonly string[] {
   return [
     ...Object.keys(repository.dependencies.dependencies),
+    ...Object.keys(repository.dependencies.devDependencies),
     ...Object.keys(repository.dependencies.optionalDependencies),
   ];
 }
