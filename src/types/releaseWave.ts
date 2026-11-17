@@ -35,11 +35,19 @@ interface ChangesetRelease {
 
 export interface ReleaseWaveNode {
   readonly dependencies: readonly string[];
+  /** Exact upstream publications a grouped candidate must adopt before it can settle. */
+  readonly expectedDependencies: readonly ReleaseWaveDependency[];
   /** Immutable release evidence decided before an external candidate is created. */
   readonly expectedPublication: ReleaseWavePublication | undefined;
   readonly packageName: string;
   readonly requiresNpmPublication: boolean;
   readonly repository: string;
+}
+
+/** One direct Ankhorage dependency and the immutable publication version planned for it. */
+export interface ReleaseWaveDependency {
+  readonly packageName: string;
+  readonly version: string;
 }
 
 /** Exact publication version authorized by the managed Changeset/release planner. */

@@ -5,13 +5,17 @@ import type { ReleaseWaveVerification } from '../../ports/releaseWaveExecution.j
 import type { GitHubNpmReleaseWaveExecutionAdapterInput } from './GitHubNpmReleaseWaveExecutionAdapter.js';
 import { githubReleaseWaveCandidate } from './githubReleaseWaveCandidate.js';
 import { githubReleaseWaveClient } from './githubReleaseWaveClient.js';
+import { githubReleaseWaveConsumerEvidenceAsync } from './githubReleaseWaveConsumerEvidence.js';
 
 interface PullRequest {
-  readonly base: { readonly ref: string };
+  readonly base: { readonly ref: string; readonly sha: string };
   readonly head: { readonly sha: string };
+  readonly mergeable: boolean | null;
   readonly merge_commit_sha: string | null;
+  readonly mergeable_state: string;
   readonly merged_at: string | null;
   readonly number: number;
+  readonly user: { readonly login: string; readonly type: string };
 }
 
 interface GitReference {
@@ -79,11 +83,16 @@ async function verificationAsync(
       evidence.checks,
       evidence.statuses,
     ),
-    lockfileUpdated: hasConsumerReleaseInputs(evidence.files),
+    lockfileUpdated: await githubReleaseWaveConsumerEvidenceAsync(
+      client,
+      node,
+      pull,
+      evidence.files,
+    ),
     npmArtifactVerified: node.requiresNpmPublication ? npmVerified : undefined,
     npmVersionVerified: node.requiresNpmPublication ? npmVerified : undefined,
     releaseWorkflowPassed,
-    requiredReviewsApproved: requiredReviewsPassed(evidence.protection, evidence.reviews),
+    requiredReviewsApproved: requiredReviewsPassed(evidence.protection, evidence.reviews, pull),
   };
 }
 
@@ -103,9 +112,7 @@ async function githubEvidenceAsync(
         encodeURIComponent(pull.base.ref) +
         '/protection',
     ),
-    client.pagesAsync<{ readonly state: string; readonly user: { readonly login: string } }>(
-      '/repos/' + node.repository + '/pulls/' + pull.number + '/reviews',
-    ),
+    client.pagesAsync<Review>('/repos/' + node.repository + '/pulls/' + pull.number + '/reviews'),
     client.pagesAsync<{
       readonly conclusion: string | null;
       readonly name: string;
@@ -126,15 +133,6 @@ async function githubEvidenceAsync(
     ),
   ]);
   return { checks, files, protection, releaseRun, reviews, statuses };
-}
-
-/** Require the candidate's manifest, lockfile, and Changeset rather than a filename-only lockfile claim. */
-function hasConsumerReleaseInputs(files: readonly { readonly filename: string }[]): boolean {
-  return (
-    files.some((file) => isLockfile(file.filename)) &&
-    files.some((file) => file.filename === 'package.json') &&
-    files.some((file) => file.filename.startsWith('.changeset/'))
-  );
 }
 
 /*** Fetch the durable labelled PR only after reconciliation has established its merged state. */
@@ -181,16 +179,26 @@ function requiredContextsPassed(
 /*** Count each reviewer's latest effective approval; inaccessible code-owner evidence blocks. */
 function requiredReviewsPassed(
   protection: Protection,
-  reviews: readonly { readonly state: string; readonly user: { readonly login: string } }[],
+  reviews: readonly Review[],
+  pull: PullRequest,
 ): boolean {
   const policy = protection.required_pull_request_reviews;
-  if (policy === undefined || policy.require_code_owner_reviews === true) return false;
-  const current = new Map<string, string>();
-  for (const review of reviews) current.set(review.user.login, review.state);
+  if (policy === undefined || pull.mergeable !== true || pull.mergeable_state !== 'clean')
+    return false;
+  const current = new Map<string, Review>();
+  for (const review of reviews) {
+    if (review.user.type !== 'User' || review.user.login === pull.user.login) continue;
+    current.set(review.user.login, review);
+  }
   return (
-    [...current.values()].filter((state) => state === 'APPROVED').length >=
+    [...current.values()].filter((review) => review.state === 'APPROVED').length >=
     (policy.required_approving_review_count ?? 0)
   );
+}
+
+interface Review {
+  readonly state: string;
+  readonly user: { readonly login: string; readonly type: string };
 }
 
 /*** Use the named release workflow's exact successful run, never a mutable latest-release pointer. */
@@ -312,11 +320,6 @@ function trustedTarball(registry: string, tarball: string): boolean {
   } catch {
     return false;
   }
-}
-
-/*** Keep supported lockfile formats explicit. */
-function isLockfile(path: string): boolean {
-  return ['bun.lock', 'package-lock.json', 'pnpm-lock.yaml', 'yarn.lock'].includes(path);
 }
 
 /*** Derive the candidate marker without exposing the durable operation identity. */

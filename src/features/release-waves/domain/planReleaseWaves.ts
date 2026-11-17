@@ -8,6 +8,7 @@ import type {
   ReleaseWavePlan,
   ReleaseWaveRepository,
 } from '../../../types/releaseWave.js';
+import { expectedReleaseWaveDependencies } from './expectedReleaseWaveDependencies.js';
 
 /*** Build a deterministic, fail-closed release plan from the selected App installation inventory. */
 export function planReleaseWaves(
@@ -174,6 +175,11 @@ function createReleaseWaveNode(
   const expectedPublication = publicationExpectation(repository);
   return {
     dependencies: results.filter(isDependency).sort(),
+    expectedDependencies: expectedReleaseWaveDependencies(
+      repository,
+      readyProviders,
+      publishedByName,
+    ),
     expectedPublication,
     packageName: repository.packageName,
     requiresNpmPublication: requiresNpmPublication(repository),

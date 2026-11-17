@@ -10,6 +10,7 @@ const artifactIntegrity = 'sha512-' + createHash('sha512').update(artifact).dige
 
 const node = {
   dependencies: [],
+  expectedDependencies: [],
   expectedPublication: {
     version: '1.2.4',
   },
@@ -81,8 +82,8 @@ test('fails closed for missing required CI, stale approval, wrong release revisi
       });
     if (url.includes('/pulls/42/reviews'))
       return json([
-        { state: 'APPROVED', user: { login: 'reviewer' } },
-        { state: 'DISMISSED', user: { login: 'reviewer' } },
+        { state: 'APPROVED', user: { login: 'reviewer', type: 'User' } },
+        { state: 'DISMISSED', user: { login: 'reviewer', type: 'User' } },
       ]);
     if (url.includes('/pulls/42/files')) return json([]);
     if (url.includes('/actions/workflows/release.yml/runs'))
@@ -145,6 +146,49 @@ test('reads required checks from a later documented GitHub REST page', async () 
   expect(verification).toMatchObject({ exactHeadCiPassed: true });
 });
 
+test('accepts a CODEOWNER-protected candidate only when GitHub reports its current policy as clean', async () => {
+  const verification = await verifyWith((url, method) =>
+    url.includes('/branches/main/protection')
+      ? json({
+          required_pull_request_reviews: {
+            require_code_owner_reviews: true,
+            required_approving_review_count: 1,
+          },
+          required_status_checks: { contexts: ['validate'] },
+        })
+      : responseFor(url, method),
+  );
+  expect(verification.requiredReviewsApproved).toBe(true);
+});
+
+test('rejects a grouped candidate unless its actual manifest and lockfile adopt every planned version', async () => {
+  const expectedNode = {
+    ...node,
+    expectedDependencies: [{ packageName: '@ankhorage/provider', version: '2.0.0' }],
+  };
+  const adapter = GitHubNpmReleaseWaveExecutionAdapter({
+    apiBaseUrl: 'https://api.github.test',
+    npmRegistryUrl: 'https://registry.npm.test',
+    owner: 'ankhorage',
+    releaseWorkflowFile: 'release.yml',
+    renovateAsync: () => Promise.resolve(),
+    requestAsync: (url, init) =>
+      Promise.resolve(
+        String(url).includes('/contents/package.json?ref=base-sha')
+          ? content({ dependencies: { '@ankhorage/provider': '^1.0.0' } })
+          : String(url).includes('/contents/package.json?ref=candidate-sha')
+            ? content({ dependencies: { '@ankhorage/provider': '^2.0.0' } })
+            : String(url).includes('/contents/bun.lock?ref=candidate-sha')
+              ? content('@ankhorage/provider@2.0.0')
+              : responseFor(String(url), init?.method),
+      ),
+    token: 'test-token',
+  });
+  expect(
+    await adapter.verifyReleaseWaveRepositoryAsync({ node: expectedNode, runId: 'wave' }),
+  ).toMatchObject({ lockfileUpdated: true });
+});
+
 /*** Exercise one complete verification attempt with a focused provider override. */
 async function verifyWith(
   responder: (url: string, method: string | undefined) => Response,
@@ -170,21 +214,26 @@ function responseFor(url: string, _method: string | undefined): Response {
       required_status_checks: { contexts: ['validate'] },
     });
   if (url.includes('/pulls/42/reviews'))
-    return json([{ state: 'APPROVED', user: { login: 'reviewer' } }]);
+    return json([{ state: 'APPROVED', user: { login: 'reviewer', type: 'User' } }]);
   if (url.includes('/pulls/42/files'))
     return json([
       { filename: 'bun.lock' },
       { filename: 'package.json' },
       { filename: '.changeset/example.md' },
     ]);
+  const candidateContent = candidateContentResponse(url);
+  if (candidateContent !== undefined) return candidateContent;
   if (url.includes('/pulls/42'))
     return json({
-      base: { ref: 'main' },
+      base: { ref: 'main', sha: 'base-sha' },
       head: { ref: 'renovate/ankhorage-release-wave', sha: 'candidate-sha' },
+      mergeable: true,
       merge_commit_sha: 'merge-sha',
+      mergeable_state: 'clean',
       merged_at: '2026-11-16T00:00:00Z',
       number: 42,
       state: 'closed',
+      user: { login: 'author', type: 'User' },
     });
   if (url.includes('/check-runs'))
     return json({ check_runs: [{ conclusion: 'success', name: 'validate', status: 'completed' }] });
@@ -208,6 +257,16 @@ function responseFor(url: string, _method: string | undefined): Response {
   return new Response(null, { status: 404 });
 }
 
+/** Serve immutable base and candidate content exactly as the GitHub Contents API encodes it. */
+function candidateContentResponse(url: string): Response | undefined {
+  if (url.includes('/contents/package.json?ref=base-sha')) return content({});
+  if (url.includes('/contents/package.json?ref=candidate-sha')) return content({});
+  if (url.includes('/contents/.changeset/example.md?ref=candidate-sha'))
+    return content("---\n'@ankhorage/example': patch\n---\n\nRelease wave.\n");
+  if (url.includes('/contents/bun.lock?ref=candidate-sha')) return content('lockfile');
+  return undefined;
+}
+
 /*** Represent immutable tag and ancestry evidence without coupling it to the generic fixture router. */
 function releaseEvidenceResponse(url: string): Response | undefined {
   if (url.includes('/git/ref/tags/v1.2.4'))
@@ -221,4 +280,14 @@ function releaseEvidenceResponse(url: string): Response | undefined {
 /*** Serialize one fixture response as GitHub/npm JSON. */
 function json(value: unknown): Response {
   return new Response(JSON.stringify(value), { status: 200 });
+}
+
+/** Encode a file response in GitHub's documented base64 Contents envelope. */
+function content(value: unknown): Response {
+  return json({
+    content: Buffer.from(typeof value === 'string' ? value : JSON.stringify(value)).toString(
+      'base64',
+    ),
+    encoding: 'base64',
+  });
 }

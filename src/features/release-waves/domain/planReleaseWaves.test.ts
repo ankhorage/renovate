@@ -160,6 +160,7 @@ test('keeps private and non-publishable applications in coordinated verification
   expect(plan.nodes).toEqual([
     {
       dependencies: [],
+      expectedDependencies: [],
       expectedPublication: undefined,
       packageName: '@ankhorage/docs',
       repository: 'ankhorage/docs',
@@ -167,12 +168,34 @@ test('keeps private and non-publishable applications in coordinated verification
     },
     {
       dependencies: [],
+      expectedDependencies: [],
       expectedPublication: undefined,
       packageName: '@ankhorage/private',
       repository: 'ankhorage/private',
       requiresNpmPublication: false,
     },
   ]);
+});
+
+test('binds each direct selected Ankhorage dependency to its planned publication version', () => {
+  const provider = repository('ankhorage/provider', '@ankhorage/provider', '1.0.0');
+  const consumer = repository('ankhorage/consumer', '@ankhorage/consumer', '1.0.0', {
+    ...emptyDependencies,
+    dependencies: { '@ankhorage/provider': '^1.0.0' },
+  });
+
+  const plan = planReleaseWaves(
+    [consumer, provider],
+    [
+      { name: '@ankhorage/consumer', version: '1.0.0' },
+      { name: '@ankhorage/provider', version: '1.0.0' },
+    ],
+    'exact-direct-inputs',
+  );
+
+  expect(plan.nodes.find((node) => node.repository === 'ankhorage/consumer')).toMatchObject({
+    expectedDependencies: [{ packageName: '@ankhorage/provider', version: '1.0.1' }],
+  });
 });
 
 test('blocks a selected dependent when its selected provider is pending or absent', () => {

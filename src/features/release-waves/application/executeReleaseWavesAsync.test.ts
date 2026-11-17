@@ -15,6 +15,7 @@ const plan: ReleaseWavePlan = {
   nodes: [
     {
       dependencies: [],
+      expectedDependencies: [],
       expectedPublication: { version: '1.0.1' },
       packageName: '@ankhorage/base',
       repository: 'ankhorage/base',
@@ -22,6 +23,7 @@ const plan: ReleaseWavePlan = {
     },
     {
       dependencies: ['ankhorage/base'],
+      expectedDependencies: [],
       expectedPublication: { version: '1.0.1' },
       packageName: '@ankhorage/left',
       repository: 'ankhorage/left',
@@ -29,6 +31,7 @@ const plan: ReleaseWavePlan = {
     },
     {
       dependencies: ['ankhorage/base'],
+      expectedDependencies: [],
       expectedPublication: { version: '1.0.1' },
       packageName: '@ankhorage/right',
       repository: 'ankhorage/right',
@@ -36,6 +39,7 @@ const plan: ReleaseWavePlan = {
     },
     {
       dependencies: ['ankhorage/left', 'ankhorage/right'],
+      expectedDependencies: [],
       expectedPublication: { version: '1.0.1' },
       packageName: '@ankhorage/consumer',
       repository: 'ankhorage/consumer',
