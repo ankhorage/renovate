@@ -31,7 +31,7 @@ export async function changesetCheckoutFixtureAsync(): Promise<{
     join(path, '.changeset', 'example.md'),
     "---\n'@ankhorage/example': patch\n---\n\nRelease.\n",
   );
-  await commandAsync(['git', 'init'], path);
+  await commandAsync(['git', 'init', '--initial-branch=main'], path);
   await commandAsync(['git', 'add', '.'], path);
   await commandAsync(
     [
