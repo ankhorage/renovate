@@ -26,6 +26,9 @@ test('fails closed for malformed provenance, missing integrity, and missing or w
     { npm: { dist: {} }, release: {} },
     { npm: {}, release: { ok: false } },
     { npm: {}, release: { tag_name: 'v1.2.0' } },
+    { npm: { gitHead: 'other' } },
+    { release: { target_commitish: 'other' } },
+    { workflows: { workflow_runs: [] } },
   ]) {
     const failure = await evidenceAdapter(response)
       .enrichPackageReleaseAsync({
@@ -45,21 +48,31 @@ function evidenceAdapter(
   overrides: {
     readonly npm?: Record<string, unknown>;
     readonly release?: Record<string, unknown>;
+    readonly workflows?: Record<string, unknown>;
   } = {},
 ) {
   return GitHubNpmReleaseWavePublicationEvidenceAdapter({
     apiBaseUrl: 'https://api.github.test',
     npmRegistryUrl: 'https://registry.npmjs.test',
     requestAsync: (url) => {
-      const release = String(url).includes('/releases/tags/')
-        ? { id: 42, tag_name: 'v1.1.0', ...overrides.release }
-        : {
-            dist: { integrity: 'sha512-YmFzZQ==' },
-            name: '@ankhorage/base',
-            repository: { url: 'https://github.com/ankhorage/base.git' },
-            version: '1.1.0',
-            ...overrides.npm,
-          };
+      const path = String(url);
+      const release = path.includes('/releases/tags/')
+        ? { id: 42, tag_name: 'v1.1.0', target_commitish: 'commit', ...overrides.release }
+        : path.includes('/git/ref/tags/')
+          ? { object: { sha: 'commit', type: 'commit' } }
+          : path.includes('/actions/runs')
+            ? {
+                workflow_runs: [{ conclusion: 'success', head_sha: 'commit' }],
+                ...overrides.workflows,
+              }
+            : {
+                dist: { integrity: 'sha512-YmFzZQ==' },
+                gitHead: 'commit',
+                name: '@ankhorage/base',
+                repository: { url: 'https://github.com/ankhorage/base.git' },
+                version: '1.1.0',
+                ...overrides.npm,
+              };
       return Promise.resolve(
         new Response(JSON.stringify(release), {
           status: overrides.release?.ok === false ? 404 : 200,
