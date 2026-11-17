@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import type { ReleaseWaveRepository } from '../../../types/releaseWave.js';
+import type { ChangesetReleasePlan, ReleaseWaveRepository } from '../../../types/releaseWave.js';
 import {
   mergeReleaseWaveLedger,
   partitionReleaseWave,
@@ -20,7 +20,11 @@ function repository(
   packageName: string,
   version: string,
   dependencies: ReleaseWaveRepository['dependencies'] = emptyDependencies,
-): ReleaseWaveRepository & { readonly packageName: string; readonly packageVersion: string } {
+): ReleaseWaveRepository & {
+  readonly packageName: string;
+  readonly packageVersion: string;
+  readonly plannedPublication: ChangesetReleasePlan;
+} {
   return {
     archived: false,
     bootstrapReady: true,
@@ -36,6 +40,25 @@ function repository(
     private: false,
     publishable: true,
   };
+}
+
+/** Collect fixture Changesets output separately from the inventory under test. */
+function fixturePlan(
+  repositories: readonly ReleaseWaveRepository[],
+  published: Parameters<typeof planReleaseWaves>[1],
+  runId: string,
+) {
+  const plans = new Map(
+    repositories.flatMap((item) => {
+      const planned = (
+        item as ReleaseWaveRepository & {
+          readonly plannedPublication?: ChangesetReleasePlan;
+        }
+      ).plannedPublication;
+      return planned === undefined ? [] : [[item.fullName, planned] as const];
+    }),
+  );
+  return planReleaseWaves(repositories, published, runId, plans);
 }
 
 test('settles a dependency diamond before one consolidated consumer release', () => {
@@ -59,7 +82,7 @@ test('settles a dependency diamond before one consolidated consumer release', ()
     version: packageVersion,
   }));
 
-  const plan = planReleaseWaves(repositories, published, 'wave-1');
+  const plan = fixturePlan(repositories, published, 'wave-1');
 
   expect(plan.blocked).toEqual([]);
   expect(plan.waves).toEqual([
@@ -82,12 +105,12 @@ test('is deterministic across delayed and duplicate release input ordering', () 
     { name: '@ankhorage/a', version: '1.0.0' },
   ];
 
-  expect(planReleaseWaves(repositories, published, 'wave').waves).toEqual([
+  expect(fixturePlan(repositories, published, 'wave').waves).toEqual([
     ['ankhorage/a', 'ankhorage/b'],
   ]);
-  expect(
-    planReleaseWaves([...repositories].reverse(), [...published].reverse(), 'wave').waves,
-  ).toEqual([['ankhorage/a', 'ankhorage/b']]);
+  expect(fixturePlan([...repositories].reverse(), [...published].reverse(), 'wave').waves).toEqual([
+    ['ankhorage/a', 'ankhorage/b'],
+  ]);
 });
 
 test('reports runtime cycles without treating toolchain edges as release prerequisites', () => {
@@ -102,7 +125,7 @@ test('reports runtime cycles without treating toolchain edges as release prerequ
     }),
   ];
   expect(
-    planReleaseWaves(
+    fixturePlan(
       cycle,
       cycle.map((item) => ({ name: item.packageName, version: '1.0.0' })),
       'cycle',
@@ -115,7 +138,7 @@ test('reports runtime cycles without treating toolchain edges as release prerequ
     peerDependencies: { '@ankhorage/peer': '^24.1.2 || ^25.0.0' },
   });
   const provider = repository('ankhorage/provider', '@ankhorage/provider', '25.0.0');
-  const plan = planReleaseWaves(
+  const plan = fixturePlan(
     [upgrade, provider],
     [
       { name: '@ankhorage/consumer', version: '1.0.0' },
@@ -145,7 +168,7 @@ test('keeps private and non-publishable applications in coordinated verification
     ...repository('ankhorage/exception', '@ankhorage/exception', '1.0.0'),
     excludedReason: 'security boundary',
   };
-  const plan = planReleaseWaves(
+  const plan = fixturePlan(
     [pending, privateRepository, nonPublishable, archived, excluded],
     [],
     'inventory',
@@ -184,7 +207,7 @@ test('binds each direct selected Ankhorage dependency to its planned publication
     dependencies: { '@ankhorage/provider': '^1.0.0' },
   });
 
-  const plan = planReleaseWaves(
+  const plan = fixturePlan(
     [consumer, provider],
     [
       { name: '@ankhorage/consumer', version: '1.0.0' },
@@ -194,6 +217,29 @@ test('binds each direct selected Ankhorage dependency to its planned publication
   );
 
   expect(plan.nodes.find((node) => node.repository === 'ankhorage/consumer')).toMatchObject({
+    expectedDependencies: [{ packageName: '@ankhorage/provider', version: '1.0.1' }],
+  });
+});
+
+test('includes direct development updates in evidence without creating release-order edges', () => {
+  const provider = repository('ankhorage/provider', '@ankhorage/provider', '1.0.0');
+  const consumer = repository('ankhorage/consumer', '@ankhorage/consumer', '1.0.0', {
+    ...emptyDependencies,
+    devDependencies: { '@ankhorage/provider': '^1.0.0' },
+  });
+
+  const plan = fixturePlan(
+    [consumer, provider],
+    [
+      { name: '@ankhorage/consumer', version: '1.0.0' },
+      { name: '@ankhorage/provider', version: '1.0.0' },
+    ],
+    'development-evidence',
+  );
+
+  expect(plan.waves).toEqual([['ankhorage/consumer', 'ankhorage/provider']]);
+  expect(plan.nodes.find((node) => node.repository === 'ankhorage/consumer')).toMatchObject({
+    dependencies: [],
     expectedDependencies: [{ packageName: '@ankhorage/provider', version: '1.0.1' }],
   });
 });
@@ -208,18 +254,15 @@ test('blocks a selected dependent when its selected provider is pending or absen
     bootstrapReady: false,
   };
   expect(
-    planReleaseWaves(
+    fixturePlan(
       [consumer, pending],
       [{ name: '@ankhorage/consumer', version: '1.0.0' }],
       'blocked-provider',
     ).blocked,
   ).toEqual(['ankhorage/consumer: blocked provider @ankhorage/provider (pending-bootstrap)']);
   expect(
-    planReleaseWaves(
-      [consumer],
-      [{ name: '@ankhorage/consumer', version: '1.0.0' }],
-      'missing-provider',
-    ).blocked,
+    fixturePlan([consumer], [{ name: '@ankhorage/consumer', version: '1.0.0' }], 'missing-provider')
+      .blocked,
   ).toEqual(['ankhorage/consumer: unresolved external provider @ankhorage/provider']);
 });
 
@@ -229,7 +272,7 @@ test('accepts a verified external provider without enrolling it for mutation', (
     dependencies: { '@ankhorage/external': '^1.0.0' },
   });
 
-  const plan = planReleaseWaves(
+  const plan = fixturePlan(
     [consumer],
     [
       { name: '@ankhorage/consumer', version: '1.0.0' },
@@ -247,7 +290,7 @@ test('requires a canonical Changesets release plan for every publishable node', 
     ...repository('ankhorage/package', '@ankhorage/package', '1.0.0'),
     plannedPublication: undefined,
   };
-  const plan = planReleaseWaves(
+  const plan = fixturePlan(
     [publishable],
     [{ name: '@ankhorage/package', version: '1.0.0' }],
     'missing-publication-plan',
@@ -268,7 +311,7 @@ test('rejects an arbitrary inventory version without a matching patch Changeset 
     },
   };
   expect(
-    planReleaseWaves([publishable], [{ name: '@ankhorage/package', version: '1.0.0' }], 'bad-plan')
+    fixturePlan([publishable], [{ name: '@ankhorage/package', version: '1.0.0' }], 'bad-plan')
       .blocked,
   ).toEqual(['ankhorage/package: missing canonical Changesets publication plan']);
 });

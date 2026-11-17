@@ -1,6 +1,7 @@
-import { gte, valid, validRange } from 'semver';
+import { valid, validRange } from 'semver';
 
 import type {
+  ChangesetReleasePlan,
   DependencyKind,
   PublishedPackage,
   ReleaseWaveLedger,
@@ -9,25 +10,22 @@ import type {
   ReleaseWaveRepository,
 } from '../../../types/releaseWave.js';
 import { expectedReleaseWaveDependencies } from './expectedReleaseWaveDependencies.js';
+import { releaseWavePlanningContext } from './releaseWavePlanningContext.js';
 
 /*** Build a deterministic, fail-closed release plan from the selected App installation inventory. */
 export function planReleaseWaves(
   repositories: readonly ReleaseWaveRepository[],
   publishedPackages: readonly PublishedPackage[],
   runId: string,
+  publicationPlans: ReadonlyMap<string, ChangesetReleasePlan> = new Map(),
 ): ReleaseWavePlan {
-  const publishedByName = new Map(publishedPackages.map((item) => [item.name, item]));
-  const classified = [...repositories].sort((left, right) =>
-    left.fullName.localeCompare(right.fullName),
+  const { classified, eligibility, eligible, publishedByName } = releaseWavePlanningContext(
+    repositories,
+    publishedPackages,
+    publicationPlans,
   );
   const pendingBootstrap = classified.filter(isPendingBootstrap).map((item) => item.fullName);
   const excluded = classified.flatMap(classifyIntentionalExclusion);
-  const eligibility = new Map(
-    classified.map((item) => [item.fullName, classifyEligibility(item, publishedByName)]),
-  );
-  const eligible = classified.filter(
-    (item) => isEligible(item) && eligibility.get(item.fullName) === undefined,
-  );
   const selectedProviders = new Map(
     classified.flatMap((item) =>
       item.packageName === undefined ? [] : [[item.packageName, item] as const],
@@ -39,7 +37,14 @@ export function planReleaseWaves(
     ),
   );
   const nodeResults = eligible.map((item) =>
-    createReleaseWaveNode(item, selectedProviders, readyProviders, publishedByName, eligibility),
+    createReleaseWaveNode(
+      item,
+      selectedProviders,
+      readyProviders,
+      publishedByName,
+      eligibility,
+      publicationPlans,
+    ),
   );
   const nodes = nodeResults.filter((result): result is ReleaseWaveNode => !Array.isArray(result));
   const graphProblems = nodeResults.filter(isProblemList).flat();
@@ -90,49 +95,12 @@ function isPendingBootstrap(repository: ReleaseWaveRepository): boolean {
   );
 }
 
-/*** Accept active, bootstrapped packages and applications with a complete update identity into a wave. */
-function isEligible(repository: ReleaseWaveRepository): boolean {
-  return (
-    !repository.archived &&
-    repository.excludedReason === undefined &&
-    repository.bootstrapReady &&
-    repository.packageName !== undefined &&
-    repository.packageVersion !== undefined
-  );
-}
-
 /*** Keep intentional inventory profiles visible without allowing them to block unrelated components. */
 function classifyIntentionalExclusion(repository: ReleaseWaveRepository): readonly string[] {
   if (repository.archived) return [repository.fullName + ': archived'];
   if (repository.excludedReason !== undefined)
     return [repository.fullName + ': excluded: ' + repository.excludedReason];
   return [];
-}
-
-/*** Report only accidental release blockers; profile exclusions remain separate. */
-function classifyEligibility(
-  repository: ReleaseWaveRepository,
-  publishedByName: ReadonlyMap<string, PublishedPackage>,
-): string | undefined {
-  if (classifyIntentionalExclusion(repository).length > 0 || !repository.bootstrapReady)
-    return undefined;
-  if (repository.packageName === undefined || repository.packageVersion === undefined) {
-    return repository.fullName + ': missing publishable package identity';
-  }
-  if (!requiresNpmPublication(repository)) return undefined;
-  const published = publishedByName.get(repository.packageName);
-  if (published === undefined)
-    return repository.fullName + ': no verified stable published package version';
-  if (valid(repository.packageVersion) === null || valid(published.version) === null) {
-    return repository.fullName + ': invalid stable package version';
-  }
-  if (!hasCanonicalPublicationPlan(repository))
-    return repository.fullName + ': missing canonical Changesets publication plan';
-  return gte(published.version, repository.packageVersion)
-    ? undefined
-    : repository.fullName +
-        ': verified package publication would downgrade ' +
-        repository.packageName;
 }
 
 /*** Build runtime ordering edges and diagnose unavailable selected upstream providers. */
@@ -142,27 +110,15 @@ function createReleaseWaveNode(
   readyProviders: ReadonlyMap<string, ReleaseWaveRepository>,
   publishedByName: ReadonlyMap<string, PublishedPackage>,
   eligibility: ReadonlyMap<string, string | undefined>,
+  publicationPlans: ReadonlyMap<string, ChangesetReleasePlan>,
 ): ReleaseWaveNode | readonly string[] {
-  const results = [
-    ...readRuntimeDependencies(
-      repository,
-      'dependencies',
-      repository.dependencies.dependencies,
-      selectedProviders,
-      readyProviders,
-      publishedByName,
-      eligibility,
-    ),
-    ...readRuntimeDependencies(
-      repository,
-      'optionalDependencies',
-      repository.dependencies.optionalDependencies,
-      selectedProviders,
-      readyProviders,
-      publishedByName,
-      eligibility,
-    ),
-  ];
+  const results = runtimeDependencyResults(
+    repository,
+    selectedProviders,
+    readyProviders,
+    publishedByName,
+    eligibility,
+  );
   const peerProblems = Object.entries(repository.dependencies.peerDependencies).flatMap(
     ([packageName, declaration]) =>
       isValidUpdateRange(declaration)
@@ -172,13 +128,14 @@ function createReleaseWaveNode(
   const problems = [...peerProblems, ...results.filter(isProblem)].sort();
   if (problems.length > 0) return problems;
   if (repository.packageName === undefined) return [repository.fullName + ': missing package name'];
-  const expectedPublication = publicationExpectation(repository);
+  const expectedPublication = publicationExpectation(repository, publicationPlans);
   return {
     dependencies: results.filter(isDependency).sort(),
     expectedDependencies: expectedReleaseWaveDependencies(
       repository,
       readyProviders,
       publishedByName,
+      publicationPlans,
     ),
     expectedPublication,
     packageName: repository.packageName,
@@ -187,19 +144,56 @@ function createReleaseWaveNode(
   };
 }
 
+/*** Collect only runtime ordering diagnostics; development evidence never becomes a graph edge. */
+function runtimeDependencyResults(
+  repository: ReleaseWaveRepository,
+  selectedProviders: ReadonlyMap<string, ReleaseWaveRepository>,
+  readyProviders: ReadonlyMap<string, ReleaseWaveRepository>,
+  publishedByName: ReadonlyMap<string, PublishedPackage>,
+  eligibility: ReadonlyMap<string, string | undefined>,
+): readonly string[] {
+  return runtimeDependencySections(repository).flatMap(([kind, dependencies]) =>
+    readRuntimeDependencies(
+      repository,
+      kind,
+      dependencies,
+      selectedProviders,
+      readyProviders,
+      publishedByName,
+      eligibility,
+    ),
+  );
+}
+
+/*** Enumerate runtime dependency records explicitly to avoid untrusted dynamic property access. */
+function runtimeDependencySections(
+  repository: ReleaseWaveRepository,
+): readonly (readonly [DependencyKind, Readonly<Record<string, string>>])[] {
+  return [
+    ['dependencies', repository.dependencies.dependencies],
+    ['optionalDependencies', repository.dependencies.optionalDependencies],
+  ];
+}
+
 /** Keep the plan's publishable-node evidence complete after eligibility has accepted it. */
-function publicationExpectation(repository: ReleaseWaveRepository) {
+function publicationExpectation(
+  repository: ReleaseWaveRepository,
+  publicationPlans: ReadonlyMap<string, ChangesetReleasePlan>,
+) {
   if (!requiresNpmPublication(repository)) return undefined;
-  if (!hasCanonicalPublicationPlan(repository))
+  if (!hasCanonicalPublicationPlan(repository, publicationPlans))
     throw new Error('Release-wave publishable node is missing its canonical Changesets plan.');
-  const plan = repository.plannedPublication;
+  const plan = publicationPlans.get(repository.fullName);
   if (plan === undefined) throw new Error('Release-wave publication plan disappeared.');
   return { version: plan.version };
 }
 
 /** Reject inventory-supplied versions unless a patch Changeset plan authorizes that exact package. */
-function hasCanonicalPublicationPlan(repository: ReleaseWaveRepository): boolean {
-  const plan = repository.plannedPublication;
+function hasCanonicalPublicationPlan(
+  repository: ReleaseWaveRepository,
+  publicationPlans: ReadonlyMap<string, ChangesetReleasePlan>,
+): boolean {
+  const plan = publicationPlans.get(repository.fullName);
   return (
     plan !== undefined &&
     repository.packageName !== undefined &&

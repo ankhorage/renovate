@@ -6,6 +6,7 @@ import type { GitHubNpmReleaseWaveExecutionAdapterInput } from './GitHubNpmRelea
 import { githubReleaseWaveCandidate } from './githubReleaseWaveCandidate.js';
 import { githubReleaseWaveClient } from './githubReleaseWaveClient.js';
 import { githubReleaseWaveConsumerEvidenceAsync } from './githubReleaseWaveConsumerEvidence.js';
+import { githubReleaseWaveNpmArtifactAsync } from './githubReleaseWaveNpmArtifact.js';
 
 interface PullRequest {
   readonly base: { readonly ref: string; readonly sha: string };
@@ -14,6 +15,7 @@ interface PullRequest {
   readonly merge_commit_sha: string | null;
   readonly mergeable_state: string;
   readonly merged_at: string | null;
+  readonly merged: boolean;
   readonly number: number;
   readonly user: { readonly login: string; readonly type: string };
 }
@@ -32,6 +34,10 @@ interface Protection {
     readonly required_approving_review_count?: number;
   };
   readonly required_status_checks?: { readonly contexts?: readonly string[] };
+}
+
+interface Commit {
+  readonly parents: readonly { readonly sha: string }[];
 }
 
 const incomplete: ReleaseWaveVerification = {
@@ -73,7 +79,7 @@ async function verificationAsync(
   const releaseWorkflowPassed = releaseRevision !== undefined;
   const npmVerified =
     node.requiresNpmPublication && releaseWorkflowPassed
-      ? await npmArtifactAsync(input, node)
+      ? await githubReleaseWaveNpmArtifactAsync(input, node)
       : false;
   return {
     documentationGenerated:
@@ -92,7 +98,12 @@ async function verificationAsync(
     npmArtifactVerified: node.requiresNpmPublication ? npmVerified : undefined,
     npmVersionVerified: node.requiresNpmPublication ? npmVerified : undefined,
     releaseWorkflowPassed,
-    requiredReviewsApproved: requiredReviewsPassed(evidence.protection, evidence.reviews, pull),
+    requiredReviewsApproved: requiredReviewsPassed(
+      evidence.protection,
+      evidence.reviews,
+      pull,
+      evidence.mergeCommit,
+    ),
   };
 }
 
@@ -104,35 +115,38 @@ async function githubEvidenceAsync(
   pull: PullRequest,
   candidateRevision: string,
 ) {
-  const [protection, reviews, checks, statuses, releaseRun, files] = await Promise.all([
-    client.jsonAsync<Protection>(
-      '/repos/' +
-        node.repository +
-        '/branches/' +
-        encodeURIComponent(pull.base.ref) +
-        '/protection',
-    ),
-    client.pagesAsync<Review>('/repos/' + node.repository + '/pulls/' + pull.number + '/reviews'),
-    client.pagesAsync<{
-      readonly conclusion: string | null;
-      readonly name: string;
-      readonly status: string;
-    }>(`/repos/${node.repository}/commits/${pull.head.sha}/check-runs`, 'check_runs'),
-    client.pagesAsync<{ readonly context: string; readonly state: string }>(
-      '/repos/' + node.repository + '/commits/' + pull.head.sha + '/status',
-      'statuses',
-    ),
-    releaseEvidenceAsync(
-      input,
-      node.repository,
-      node.expectedPublication?.version,
-      candidateRevision,
-    ),
-    client.pagesAsync<{ readonly filename: string }>(
-      '/repos/' + node.repository + '/pulls/' + pull.number + '/files',
-    ),
-  ]);
-  return { checks, files, protection, releaseRun, reviews, statuses };
+  const [protection, reviews, checks, statuses, releaseRun, files, mergeCommit] = await Promise.all(
+    [
+      client.jsonAsync<Protection>(
+        '/repos/' +
+          node.repository +
+          '/branches/' +
+          encodeURIComponent(pull.base.ref) +
+          '/protection',
+      ),
+      client.pagesAsync<Review>('/repos/' + node.repository + '/pulls/' + pull.number + '/reviews'),
+      client.pagesAsync<{
+        readonly conclusion: string | null;
+        readonly name: string;
+        readonly status: string;
+      }>(`/repos/${node.repository}/commits/${pull.head.sha}/check-runs`, 'check_runs'),
+      client.pagesAsync<{ readonly context: string; readonly state: string }>(
+        '/repos/' + node.repository + '/commits/' + pull.head.sha + '/status',
+        'statuses',
+      ),
+      releaseEvidenceAsync(
+        input,
+        node.repository,
+        node.expectedPublication?.version,
+        candidateRevision,
+      ),
+      client.pagesAsync<{ readonly filename: string }>(
+        '/repos/' + node.repository + '/pulls/' + pull.number + '/files',
+      ),
+      client.jsonAsync<Commit>('/repos/' + node.repository + '/commits/' + candidateRevision),
+    ],
+  );
+  return { checks, files, mergeCommit, protection, releaseRun, reviews, statuses };
 }
 
 /*** Fetch the durable labelled PR only after reconciliation has established its merged state. */
@@ -181,13 +195,24 @@ function requiredReviewsPassed(
   protection: Protection,
   reviews: readonly Review[],
   pull: PullRequest,
+  mergeCommit: Commit,
 ): boolean {
   const policy = protection.required_pull_request_reviews;
-  if (policy === undefined || pull.mergeable !== true || pull.mergeable_state !== 'clean')
+  if (
+    policy === undefined ||
+    !pull.merged ||
+    pull.merge_commit_sha === null ||
+    !mergeCommit.parents.some((parent) => parent.sha === pull.head.sha)
+  )
     return false;
   const current = new Map<string, Review>();
   for (const review of reviews) {
-    if (review.user.type !== 'User' || review.user.login === pull.user.login) continue;
+    if (
+      review.user.type !== 'User' ||
+      review.user.login === pull.user.login ||
+      review.commit_id !== pull.head.sha
+    )
+      continue;
     current.set(review.user.login, review);
   }
   return (
@@ -197,6 +222,7 @@ function requiredReviewsPassed(
 }
 
 interface Review {
+  readonly commit_id: string;
   readonly state: string;
   readonly user: { readonly login: string; readonly type: string };
 }
@@ -274,49 +300,6 @@ async function generatedDocsAsync(
       ),
     ]);
     return true;
-  } catch {
-    return false;
-  }
-}
-
-/*** Download the exact planned artifact and compare its SHA-512 SRI with registry evidence. */
-async function npmArtifactAsync(
-  input: GitHubNpmReleaseWaveExecutionAdapterInput,
-  node: ReleaseWaveNode,
-): Promise<boolean> {
-  const expected = node.expectedPublication;
-  if (expected === undefined) return false;
-  const manifestResponse = await input.requestAsync(
-    input.npmRegistryUrl + '/' + encodeURIComponent(node.packageName),
-    { headers: { accept: 'application/json' } },
-  );
-  if (!manifestResponse.ok) return false;
-  const manifest = (await manifestResponse.json()) as {
-    readonly versions?: Readonly<
-      Record<string, { readonly dist?: { readonly integrity?: string; readonly tarball?: string } }>
-    >;
-  };
-  const dist = manifest.versions?.[expected.version]?.dist;
-  if (
-    dist?.integrity === undefined ||
-    dist.tarball === undefined ||
-    !trustedTarball(input.npmRegistryUrl, dist.tarball)
-  )
-    return false;
-  const artifact = await input.requestAsync(dist.tarball);
-  if (!artifact.ok) return false;
-  const integrity =
-    'sha512-' +
-    createHash('sha512')
-      .update(Buffer.from(await artifact.arrayBuffer()))
-      .digest('base64');
-  return integrity === dist.integrity;
-}
-
-/*** Permit registry artifacts only from the configured registry origin. */
-function trustedTarball(registry: string, tarball: string): boolean {
-  try {
-    return new URL(registry).origin === new URL(tarball).origin;
   } catch {
     return false;
   }

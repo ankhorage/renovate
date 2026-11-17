@@ -15,6 +15,7 @@ interface GitHubContent {
 
 interface PackageManifest {
   readonly dependencies?: Readonly<Record<string, string>>;
+  readonly devDependencies?: Readonly<Record<string, string>>;
   readonly optionalDependencies?: Readonly<Record<string, string>>;
 }
 
@@ -99,10 +100,11 @@ function dependenciesUpdated(
   });
 }
 
-/** Locate a package declaration across the direct runtime dependency sections. */
+/** Locate a package declaration across direct update sections. */
 function dependencyRange(manifest: PackageManifest, packageName: string): string | undefined {
   return (
     findDependency(manifest.dependencies, packageName) ??
+    findDependency(manifest.devDependencies, packageName) ??
     findDependency(manifest.optionalDependencies, packageName)
   );
 }
@@ -115,12 +117,37 @@ function findDependency(
   return Object.entries(dependencies ?? {}).find(([name]) => name === packageName)?.[1];
 }
 
-/** Ensure the updated lockfile contains every exact planned package version. */
+/** Ensure Bun's root workspace resolves every direct declaration to its exact planned package. */
 function lockfileRecordsExpectedDependencies(lockfile: string, node: ReleaseWaveNode): boolean {
-  return node.expectedDependencies.every(
-    (dependency) =>
-      lockfile.includes(dependency.packageName) && lockfile.includes(dependency.version),
-  );
+  try {
+    const parsed = JSON.parse(lockfile) as {
+      readonly packages?: Readonly<Record<string, readonly unknown[]>>;
+      readonly workspaces?: Readonly<
+        Record<
+          string,
+          Pick<PackageManifest, 'dependencies' | 'devDependencies' | 'optionalDependencies'>
+        >
+      >;
+    };
+    const workspace = parsed.workspaces?.[''];
+    return (
+      workspace !== undefined &&
+      node.expectedDependencies.every((dependency) => {
+        const declaration = dependencyRange(workspace, dependency.packageName);
+        const packageRecord = parsed.packages?.[dependency.packageName];
+        const resolved = packageRecord?.[0];
+        return (
+          declaration !== undefined &&
+          validRange(declaration) !== null &&
+          satisfies(dependency.version, declaration) &&
+          typeof resolved === 'string' &&
+          resolved === dependency.packageName + '@' + dependency.version
+        );
+      })
+    );
+  } catch {
+    return false;
+  }
 }
 
 /** Identify the only supported Changeset files; config and README files never qualify. */

@@ -9,8 +9,6 @@ export interface ReleaseWaveRepository {
   readonly fullName: string;
   readonly packageName?: string;
   readonly packageVersion?: string;
-  /** Canonical Changesets release-plan entry captured before this wave starts. */
-  readonly plannedPublication?: ChangesetReleasePlan;
   readonly private: boolean;
   readonly publishable: boolean;
 }
@@ -21,7 +19,7 @@ export interface PublishedPackage {
 }
 
 /** A package-version decision emitted by the managed Changesets release planner. */
-interface ChangesetReleasePlan {
+export interface ChangesetReleasePlan {
   readonly packageName: string;
   readonly releases: readonly ChangesetRelease[];
   readonly version: string;

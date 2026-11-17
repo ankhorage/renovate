@@ -1,5 +1,9 @@
 import { readFile, writeFile } from 'node:fs/promises';
 
+import {
+  type ChangesetCheckout,
+  changesetReleasePlansAsync,
+} from '../../../features/release-waves/adapters/changesets/changesetReleasePlansAsync.js';
 import { planReleaseWaves } from '../../../features/release-waves/domain/planReleaseWaves.js';
 import type { PublishedPackage, ReleaseWaveRepository } from '../../../types/releaseWave.js';
 
@@ -7,7 +11,13 @@ import type { PublishedPackage, ReleaseWaveRepository } from '../../../types/rel
 export async function planReleaseWavesAsync(inputPath: string, outputPath: string): Promise<void> {
   const input = JSON.parse(await readFile(inputPath, 'utf8')) as unknown;
   if (!isReleaseWaveInput(input)) throw new Error('Release-wave input is invalid.');
-  const plan = planReleaseWaves(input.repositories, input.publishedPackages, input.runId);
+  const publicationPlans = await changesetReleasePlansAsync(input.checkouts);
+  const plan = planReleaseWaves(
+    input.repositories,
+    input.publishedPackages,
+    input.runId,
+    publicationPlans,
+  );
   await writeFile(
     outputPath,
     JSON.stringify(
@@ -41,6 +51,7 @@ function readRepository(entry: string): string {
 /*** Narrow externally collected JSON to the coordinator input boundary. */
 function isReleaseWaveInput(input: unknown): input is {
   readonly publishedPackages: readonly PublishedPackage[];
+  readonly checkouts: Readonly<Record<string, ChangesetCheckout>>;
   readonly repositories: readonly ReleaseWaveRepository[];
   readonly runId: string;
 } {
@@ -48,10 +59,13 @@ function isReleaseWaveInput(input: unknown): input is {
     typeof input === 'object' &&
     input !== null &&
     'publishedPackages' in input &&
+    'checkouts' in input &&
     'repositories' in input &&
     'runId' in input &&
     Array.isArray(input.publishedPackages) &&
     Array.isArray(input.repositories) &&
+    typeof input.checkouts === 'object' &&
+    input.checkouts !== null &&
     typeof input.runId === 'string'
   );
 }
