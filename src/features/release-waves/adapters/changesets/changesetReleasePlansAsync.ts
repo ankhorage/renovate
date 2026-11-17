@@ -42,14 +42,17 @@ async function changesetReleasePlanAsync(
   const outputPath = join(directory, 'status.json');
   try {
     const command =
-      Bun.which('ankhorage-changeset') ??
-      join(process.cwd(), 'node_modules', '.bin', 'ankhorage-changeset');
+      Bun.which('changeset') ?? join(process.cwd(), 'node_modules', '.bin', 'changeset');
     const subprocess = Bun.spawn([command, 'status', '--output', outputPath], {
       cwd: checkout.path,
       stderr: 'pipe',
       stdout: 'pipe',
     });
-    if ((await subprocess.exited) !== 0) throw new Error('Changesets status command failed.');
+    if ((await subprocess.exited) !== 0) {
+      throw new Error(
+        'Changesets status command failed: ' + (await new Response(subprocess.stderr).text()),
+      );
+    }
     if ((await gitRevisionAsync(checkout.path)) !== checkout.revision) {
       throw new Error('Changesets checkout revision changed during collection.');
     }
