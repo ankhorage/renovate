@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 
 import type {
+  ChangesetReleasePlan,
   PublishedPackage,
   ReleaseWavePlan,
   ReleaseWaveRepository,
@@ -33,22 +34,25 @@ export async function runReleaseWaveCoordinatorAsync(input: {
   readonly maximumConcurrency: number;
   readonly maximumQueueRetries: number;
   readonly now: () => Date;
+  readonly publicationPlans: ReadonlyMap<string, ChangesetReleasePlan>;
   /** Current verified inventory used only to validate consumer candidates, never to acknowledge an event. */
   readonly publishedPackages: readonly PublishedPackage[];
   readonly queuePort: ReleaseWaveEventQueuePort;
   readonly repositories: readonly ReleaseWaveRepository[];
-  /** Authoritative, complete upstream evidence; queue timing is never settlement proof. */
   readonly settledPublications: readonly SettledPublication[];
 }): Promise<ReleaseWavePlan | undefined> {
   const publications = validateSettledPublications(input.settledPublications);
-  const current = await input.queuePort.loadReleaseWaveEventQueueAsync();
-  const events = completeCohortEvents(current?.queue, publications);
+  const events = completeCohortEvents(
+    (await input.queuePort.loadReleaseWaveEventQueueAsync())?.queue,
+    publications,
+  );
   if (events === undefined) return undefined;
   const runId = logicalWaveId(publications);
   const { closurePlan, plan } = plansForCohort(
     input.repositories,
     publications,
     input.publishedPackages,
+    input.publicationPlans,
     runId,
   );
   if (closurePlan.waves.length > 0)
@@ -62,19 +66,26 @@ export async function runReleaseWaveCoordinatorAsync(input: {
       plan,
     });
   if (closurePlan.blocked.length > 0) return plan;
+  if (!(await allPlanNodesSettledAsync(input.checkpointPort, plan))) return plan;
+  await acknowledgeEventsAsync(input.queuePort, events, plan.runId, input.maximumQueueRetries);
+  return plan;
+}
+
+/*** Prevent queue acknowledgement until every planned consumer reached a durable terminal state. */
+async function allPlanNodesSettledAsync(
+  checkpointPort: ReleaseWaveCheckpointPort,
+  plan: ReleaseWavePlan,
+): Promise<boolean> {
   const checkpoint =
     plan.nodes.length === 0
       ? undefined
-      : await input.checkpointPort.loadReleaseWaveCheckpointAsync(plan.runId);
-  if (
-    checkpoint !== undefined &&
-    !plan.nodes.every((node) =>
+      : await checkpointPort.loadReleaseWaveCheckpointAsync(plan.runId);
+  return (
+    checkpoint === undefined ||
+    plan.nodes.every((node) =>
       ['released', 'verified'].includes(checkpoint.checkpoint.ledger.nodes[node.repository] ?? ''),
     )
-  )
-    return plan;
-  await acknowledgeEventsAsync(input.queuePort, events, plan.runId, input.maximumQueueRetries);
-  return plan;
+  );
 }
 
 /*** Retain full selected-inventory audit while confining candidate mutations to the affected closure. */
@@ -82,14 +93,16 @@ function plansForCohort(
   repositories: readonly ReleaseWaveRepository[],
   publications: readonly SettledPublication[],
   publishedPackages: readonly PublishedPackage[],
+  publicationPlans: ReadonlyMap<string, ChangesetReleasePlan>,
   runId: string,
 ): { readonly closurePlan: ReleaseWavePlan; readonly plan: ReleaseWavePlan } {
   const closurePlan = planReleaseWaves(
     affectedConsumers(repositories, publications),
     publishedPackages,
     runId,
+    publicationPlans,
   );
-  const inventoryPlan = planReleaseWaves(repositories, publishedPackages, runId);
+  const inventoryPlan = planReleaseWaves(repositories, publishedPackages, runId, publicationPlans);
   return {
     closurePlan,
     plan: {

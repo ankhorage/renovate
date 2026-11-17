@@ -2,13 +2,13 @@ import { expect, test } from 'bun:test';
 
 import { ingestPackageReleaseEventAsync } from './ingestPackageReleaseEventAsync.js';
 import { ingestReleaseWaveEventAsync } from './ingestReleaseWaveEventAsync.js';
+import { runReleaseWaveCoordinatorAsync } from './runReleaseWaveCoordinatorAsync.js';
 import {
   coordinatorInput,
   event,
   eventQueue,
   repository,
 } from './test-support/releaseWaveFixtures.js';
-import { runReleaseWaveCoordinatorAsync } from './runReleaseWaveCoordinatorAsync.js';
 
 test('waits for complete settlement when base arrives first, then creates exactly one consumer release', async () => {
   const queue = eventQueue();

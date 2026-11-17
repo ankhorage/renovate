@@ -25,6 +25,12 @@ export function coordinatorInput(
     maximumQueueRetries: 3,
     now: () => new Date('2026-11-16T00:00:00.000Z'),
     publishedPackages: [...publications(), { name: '@ankhorage/consumer', version: '1.1.0' }],
+    publicationPlans: new Map(
+      ['base', 'left', 'consumer'].map((name) => {
+        const item = repository(name);
+        return [item.fullName, item.plannedPublication] as const;
+      }),
+    ),
     queuePort,
     repositories: [repository('base'), repository('left'), consumerRepository()],
     settledPublications: published,
