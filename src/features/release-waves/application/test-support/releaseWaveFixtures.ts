@@ -1,14 +1,14 @@
 import type {
   ReleaseWaveCheckpoint,
   ReleaseWaveCheckpointPort,
-} from '../ports/releaseWaveCheckpoint.js';
-import { ReleaseWaveCheckpointConflictError } from '../ports/releaseWaveCheckpoint.js';
+} from '../../ports/releaseWaveCheckpoint.js';
+import { ReleaseWaveCheckpointConflictError } from '../../ports/releaseWaveCheckpoint.js';
 import type {
   ReleaseWaveEventQueue,
   ReleaseWaveEventQueuePort,
-} from '../ports/releaseWaveEventQueue.js';
-import { ReleaseWaveEventQueueConflictError } from '../ports/releaseWaveEventQueue.js';
-import type { ReleaseWaveExecutionPort } from '../ports/releaseWaveExecution.js';
+} from '../../ports/releaseWaveEventQueue.js';
+import { ReleaseWaveEventQueueConflictError } from '../../ports/releaseWaveEventQueue.js';
+import type { ReleaseWaveExecutionPort } from '../../ports/releaseWaveExecution.js';
 
 /** Build deterministic coordinator inputs around a complete two-publisher cohort. */
 export function coordinatorInput(
@@ -44,7 +44,7 @@ export function event(name: string, version: string) {
 }
 
 /** Provide the complete planned publisher cohort. */
-export function publications() {
+function publications() {
   return ['base', 'left'].map((name) => ({ ...event(name, '1.1.0'), name: '@ankhorage/' + name }));
 }
 
