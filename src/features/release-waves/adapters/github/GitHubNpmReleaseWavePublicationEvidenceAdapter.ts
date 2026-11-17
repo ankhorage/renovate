@@ -5,6 +5,8 @@ interface GitHubNpmReleaseWavePublicationEvidenceAdapterInput {
   readonly apiBaseUrl: string;
   readonly npmRegistryUrl: string;
   readonly requestAsync: (input: string | URL, init?: RequestInit) => Promise<Response>;
+  /** Immutable repository workflow filename that is allowed to establish publisher provenance. */
+  readonly releaseWorkflowFile: string;
   readonly token: string;
 }
 
@@ -44,9 +46,8 @@ async function enrichPackageReleaseAsync(
     release.draft === true ||
     release.prerelease === true ||
     event.releaseTag !== 'v' + event.version ||
-    release.target_commitish !== tagCommit ||
     npmManifest.gitHead !== tagCommit ||
-    !workflows.workflow_runs.some(
+    !workflows.some(
       (workflow) => workflow.conclusion === 'success' && workflow.head_sha === tagCommit,
     )
   )
@@ -65,6 +66,7 @@ async function loadPublisherEvidenceAsync(
   },
 ) {
   const releaseTag = 'v' + dispatch.version;
+  const tagCommitPromise = tagCommitAsync(input, dispatch.source_repository, releaseTag);
   const [npmManifest, release, tagCommit, workflows] = await Promise.all([
     jsonAsync<NpmManifest>(
       input,
@@ -84,17 +86,38 @@ async function loadPublisherEvidenceAsync(
         encodeURIComponent(releaseTag),
       githubHeaders(input),
     ),
-    tagCommitAsync(input, dispatch.source_repository, releaseTag),
-    jsonAsync<GitHubWorkflowRuns>(
+    tagCommitPromise,
+    workflowRunsAsync(input, dispatch.source_repository, tagCommitPromise),
+  ]);
+  return { npmManifest, release, tagCommit, workflows };
+}
+
+/*** Discover every completed invocation of the configured release workflow, failing closed on an unbounded feed. */
+async function workflowRunsAsync(
+  input: GitHubNpmReleaseWavePublicationEvidenceAdapterInput,
+  repository: string,
+  tagCommitPromise: Promise<string>,
+): Promise<readonly GitHubWorkflowRun[]> {
+  const tagCommit = await tagCommitPromise;
+  const runs: GitHubWorkflowRun[] = [];
+  for (let page = 1; page <= 100; page += 1) {
+    const result = await jsonAsync<GitHubWorkflowRuns>(
       input,
       input.apiBaseUrl +
         '/repos/' +
-        dispatch.source_repository +
-        '/actions/runs?event=release&status=completed&per_page=100',
+        repository +
+        '/actions/workflows/' +
+        encodeURIComponent(input.releaseWorkflowFile) +
+        '/runs?event=release&status=completed&head_sha=' +
+        encodeURIComponent(tagCommit) +
+        '&per_page=100&page=' +
+        page,
       githubHeaders(input),
-    ),
-  ]);
-  return { npmManifest, release, tagCommit, workflows };
+    );
+    runs.push(...result.workflow_runs);
+    if (result.workflow_runs.length < 100) return runs;
+  }
+  throw new Error('Release workflow provenance pagination is incomplete.');
 }
 
 /*** Provide authenticated GitHub headers for every provenance request. */
@@ -154,7 +177,7 @@ function npmManifestRepositoryMatches(
 
 /*** Reject incomplete adapter configuration before making any provider request. */
 function validateInput(input: GitHubNpmReleaseWavePublicationEvidenceAdapterInput): void {
-  if (!input.apiBaseUrl || !input.npmRegistryUrl || !input.token)
+  if (!input.apiBaseUrl || !input.npmRegistryUrl || !input.releaseWorkflowFile || !input.token)
     throw new Error('Release-wave publication evidence adapter configuration is incomplete.');
 }
 
@@ -181,5 +204,10 @@ interface GitHubAnnotatedTag {
   readonly object?: { readonly sha?: string; readonly type?: string };
 }
 interface GitHubWorkflowRuns {
-  readonly workflow_runs: readonly { readonly conclusion?: string; readonly head_sha?: string }[];
+  readonly workflow_runs: readonly GitHubWorkflowRun[];
+}
+
+interface GitHubWorkflowRun {
+  readonly conclusion?: string;
+  readonly head_sha?: string;
 }
