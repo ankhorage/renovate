@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { ChangesetReleasePlan } from '../../../../types/releaseWave.js';
+import type { ChangesetReleasePlan, ReleaseWaveCheckout } from '../../../../types/releaseWave.js';
 
 interface ChangesetStatus {
   readonly releases?: readonly ChangesetStatusRelease[];
@@ -14,14 +14,9 @@ interface ChangesetStatusRelease {
   readonly type?: 'major' | 'minor' | 'patch';
 }
 
-export interface ChangesetCheckout {
-  readonly path: string;
-  readonly revision: string;
-}
-
 /*** Collect immutable Changesets release plans by running status in each pinned consumer checkout. */
 export async function changesetReleasePlansAsync(
-  checkouts: Readonly<Record<string, ChangesetCheckout>>,
+  checkouts: Readonly<Record<string, ReleaseWaveCheckout>>,
 ): Promise<ReadonlyMap<string, ChangesetReleasePlan>> {
   const entries = await Promise.all(
     Object.entries(checkouts).map(
@@ -38,7 +33,7 @@ export async function changesetReleasePlansAsync(
 
 /*** Execute Changesets against one exact checkout and retain only a sole patch publication decision. */
 async function changesetReleasePlanAsync(
-  checkout: ChangesetCheckout,
+  checkout: ReleaseWaveCheckout,
 ): Promise<ChangesetReleasePlan | undefined> {
   if ((await gitRevisionAsync(checkout.path)) !== checkout.revision) {
     throw new Error('Changesets checkout revision is not immutable.');

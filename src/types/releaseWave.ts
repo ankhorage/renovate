@@ -25,6 +25,12 @@ export interface ChangesetReleasePlan {
   readonly version: string;
 }
 
+/** Immutable local consumer checkout identity used to collect managed Changesets output. */
+export interface ReleaseWaveCheckout {
+  readonly path: string;
+  readonly revision: string;
+}
+
 /** One source Changeset that contributes to a planned package publication. */
 interface ChangesetRelease {
   readonly packageName: string;
