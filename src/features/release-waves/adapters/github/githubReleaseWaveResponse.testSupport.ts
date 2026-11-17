@@ -19,6 +19,7 @@ function directResponse(url: string): Response | undefined {
   if (url.includes('/issues?')) return json([{ number: 42 }]);
   if (url.includes('/branches/main/protection'))
     return json({
+      enforce_admins: { enabled: true },
       required_pull_request_reviews: { required_approving_review_count: 1 },
       required_status_checks: { contexts: ['validate'] },
     });

@@ -29,6 +29,7 @@ interface GitTag {
 }
 
 interface Protection {
+  readonly enforce_admins?: { readonly enabled?: boolean };
   readonly required_pull_request_reviews?: {
     readonly require_code_owner_reviews?: boolean;
     readonly required_approving_review_count?: number;
@@ -217,7 +218,8 @@ function requiredReviewsPassed(
   }
   return (
     [...current.values()].filter((review) => review.state === 'APPROVED').length >=
-    (policy.required_approving_review_count ?? 0)
+      (policy.required_approving_review_count ?? 0) &&
+    (!policy.require_code_owner_reviews || protection.enforce_admins?.enabled === true)
   );
 }
 
