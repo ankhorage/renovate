@@ -1,4 +1,8 @@
-import type { ChangesetReleasePlan, ReleaseWaveRepository } from '../../../types/releaseWave.js';
+import type {
+  ChangesetReleaseDecision,
+  ChangesetReleasePlan,
+  ReleaseWaveRepository,
+} from '../../../types/releaseWave.js';
 
 /** Create a complete selected repository whose revision binds a Changesets publication decision. */
 export function publisherRepository(
@@ -37,6 +41,19 @@ export function publisherPlan(
     revision: repository.sourceRevision,
     statusHash: 'b'.repeat(64),
     version,
+  };
+}
+
+/** Bind one planned publisher decision to its immutable Changesets status hash. */
+export function publisherDecision(
+  repository: ReleaseWaveRepository,
+  version = '1.1.0',
+): ChangesetReleaseDecision {
+  const releasePlan = publisherPlan(repository, version);
+  return {
+    releasePlan,
+    revision: releasePlan.revision,
+    statusHash: releasePlan.statusHash ?? '',
   };
 }
 

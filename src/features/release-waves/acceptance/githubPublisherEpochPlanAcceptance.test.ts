@@ -5,7 +5,7 @@ import { expect, test } from 'bun:test';
 import { GitHubReleaseWavePublisherEpochAdapter } from '../adapters/github/GitHubReleaseWavePublisherEpochAdapter.js';
 import {
   githubContentsFixture,
-  publisherPlan,
+  publisherDecision,
   publisherRepository,
 } from './githubPublisherEpochPlanAcceptance.testSupport.js';
 
@@ -77,12 +77,12 @@ test('persists authenticated epoch A, appends independent epoch B, and reads bot
   const left = publisherRepository('@ankhorage/left');
   const first = await adapter.adoptReleaseWavePublisherEpochAsync({
     inventoryId,
-    publicationPlans: new Map([[base.fullName, publisherPlan(base)]]),
+    publicationDecisions: new Map([[base.fullName, publisherDecision(base)]]),
     repositories: [base],
   });
   const second = await adapter.adoptReleaseWavePublisherEpochAsync({
     inventoryId,
-    publicationPlans: new Map([[left.fullName, publisherPlan(left)]]),
+    publicationDecisions: new Map([[left.fullName, publisherDecision(left)]]),
     repositories: [left],
   });
   const persisted = await adapter.loadReleaseWavePublisherEpochsAsync({
@@ -111,12 +111,12 @@ test('rejects concurrent CAS writers, overlapping schedules, and source decision
   const outcomes = await Promise.allSettled([
     firstWriter.adoptReleaseWavePublisherEpochAsync({
       inventoryId,
-      publicationPlans: new Map([[base.fullName, publisherPlan(base)]]),
+      publicationDecisions: new Map([[base.fullName, publisherDecision(base)]]),
       repositories: [base],
     }),
     secondWriter.adoptReleaseWavePublisherEpochAsync({
       inventoryId,
-      publicationPlans: new Map([[left.fullName, publisherPlan(left)]]),
+      publicationDecisions: new Map([[left.fullName, publisherDecision(left)]]),
       repositories: [left],
     }),
   ]);
@@ -132,7 +132,7 @@ test('rejects concurrent CAS writers, overlapping schedules, and source decision
     await failureMessageAsync(
       epochWriter(overlap.requestAsync).adoptReleaseWavePublisherEpochAsync({
         inventoryId,
-        publicationPlans: new Map([[base.fullName, publisherPlan(base, '1.2.0')]]),
+        publicationDecisions: new Map([[base.fullName, publisherDecision(base, '1.2.0')]]),
         repositories: [base],
       }),
     ),
@@ -141,7 +141,7 @@ test('rejects concurrent CAS writers, overlapping schedules, and source decision
     await failureMessageAsync(
       epochWriter(githubContentsFixture().requestAsync).adoptReleaseWavePublisherEpochAsync({
         inventoryId,
-        publicationPlans: new Map([[stale.fullName, publisherPlan(base)]]),
+        publicationDecisions: new Map([[stale.fullName, publisherDecision(base)]]),
         repositories: [stale],
       }),
     ),
