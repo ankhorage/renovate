@@ -3,21 +3,23 @@ import { expect, test } from 'bun:test';
 import { GitHubReleaseWavePublisherEpochAdapter } from '../adapters/github/GitHubReleaseWavePublisherEpochAdapter.js';
 
 const revision = 'e'.repeat(40);
+const inventoryId = 'a'.repeat(64);
+const otherInventoryId = 'b'.repeat(64);
 const endpoint =
   'https://api.github.provider-contract.test/repos/ankhorage/renovate/contents/.github/release-wave-publisher-epochs.json?ref=main';
 
 test('reads the authenticated GitHub Contents epoch plan and binds its immutable source revision', async () => {
   const paths: string[] = [];
-  const epochs = await epochAdapter(file(plan('inventory-a'))).loadReleaseWavePublisherEpochsAsync({
-    inventoryId: 'inventory-a',
+  const epochs = await epochAdapter(file(plan(inventoryId))).loadReleaseWavePublisherEpochsAsync({
+    inventoryId,
     repositories: [{} as never],
   });
 
   expect(paths).toEqual([endpoint]);
   expect(epochs).toEqual([
     {
-      id: 'epoch-inventory-a',
-      inventoryId: 'inventory-a',
+      id: 'c'.repeat(64),
+      inventoryId,
       publishers: [
         {
           packageName: '@ankhorage/base',
@@ -48,14 +50,11 @@ test('reads the authenticated GitHub Contents epoch plan and binds its immutable
 
 test('fails closed for a missing plan, malformed document, and mismatched selected inventory', async () => {
   const [missing, malformed, mismatched] = await Promise.all([
-    failureMessageAsync(load(new Response(null, { status: 404 }), 'inventory-a')),
+    failureMessageAsync(load(new Response(null, { status: 404 }), inventoryId)),
     failureMessageAsync(
-      load(
-        file({ epochs: [{ id: 'bad', inventoryId: 'inventory-a', publishers: [] }] }),
-        'inventory-a',
-      ),
+      load(file({ epochs: [{ id: 'bad', inventoryId, publishers: [] }] }), inventoryId),
     ),
-    failureMessageAsync(load(file(plan('other-inventory')), 'inventory-a')),
+    failureMessageAsync(load(file(plan(otherInventoryId)), inventoryId)),
   ]);
   expect(missing).toContain('authenticated');
   expect(malformed).toContain('malformed');
@@ -85,7 +84,7 @@ function plan(inventoryId: string) {
   return {
     epochs: [
       {
-        id: 'epoch-' + inventoryId,
+        id: 'c'.repeat(64),
         inventoryId,
         publishers: [
           {
