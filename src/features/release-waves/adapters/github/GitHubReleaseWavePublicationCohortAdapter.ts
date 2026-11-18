@@ -1,5 +1,3 @@
-import { createHash } from 'node:crypto';
-
 import type { ReleaseWaveRepository } from '../../../../types/releaseWave.js';
 import { releaseWaveEventIdentity } from '../../domain/releaseWaveEventIdentity.js';
 import type {
@@ -12,8 +10,9 @@ import type { ReleaseWavePublisherEpochPort } from '../../ports/releaseWavePubli
 import { githubReleaseWaveConfiguration } from './githubReleaseWaveConfiguration.js';
 import { githubReleaseWaveEmptyDependencies } from './githubReleaseWaveEmptyDependencies.js';
 import { githubReleaseWavePublisherEpochAsync } from './githubReleaseWavePublisherEpoch.js';
+import { githubReleaseWaveSnapshotId } from './githubReleaseWaveSnapshotId.js';
 
-interface GitHubReleaseWavePublicationCohortAdapterInput {
+export interface GitHubReleaseWavePublicationCohortAdapterInput {
   readonly apiBaseUrl: string;
   readonly publicationEvidencePort: ReleaseWavePublicationEvidencePort;
   /** Authenticated durable release-plan source; it is intentionally independent from webhook arrival order. */
@@ -41,9 +40,8 @@ async function collectReleaseWavePublicationCohortAsync(
   >[0]['pendingEvents'],
 ): Promise<ReleaseWavePublicationCohort | undefined> {
   if (pendingEvents.length === 0) return undefined;
-  const repositories = await selectedRepositoriesAsync(input);
+  const { inventoryId, repositories } = await collectGitHubReleaseWaveInventoryAsync(input);
   const byPackage = uniqueRepositoriesByPackage(repositories);
-  const inventoryId = releaseWaveSnapshotId(repositories);
   const scheduled = await githubReleaseWavePublisherEpochAsync({
     inventoryId,
     pendingEvents,
@@ -62,6 +60,18 @@ async function collectReleaseWavePublicationCohortAsync(
     publications: publications.filter(isPublication),
     repositories,
   };
+}
+
+/*** Collect one complete authenticated installation snapshot for epoch admission and execution. */
+export async function collectGitHubReleaseWaveInventoryAsync(
+  input: GitHubReleaseWavePublicationCohortAdapterInput,
+): Promise<{
+  readonly inventoryId: string;
+  readonly repositories: readonly ReleaseWaveRepository[];
+}> {
+  const repositories = await selectedRepositoriesAsync(input);
+  if (repositories.length === 0) throw new Error('Selected installation inventory is empty.');
+  return { inventoryId: githubReleaseWaveSnapshotId(repositories), repositories };
 }
 
 /*** Load every repository visible to the installation, rejecting incomplete pagination. */
@@ -280,31 +290,6 @@ function dependencyRecord(value: unknown, section: string): Readonly<Record<stri
   if (Object.values(value).some((entry) => typeof entry !== 'string'))
     throw new Error('Selected installation manifest has malformed ' + section + '.');
   return value as Readonly<Record<string, string>>;
-}
-
-/*** Bind the selected identities and immutable source revisions to a deterministic cohort snapshot. */
-function releaseWaveSnapshotId(repositories: readonly ReleaseWaveRepository[]): string {
-  return createHash('sha256')
-    .update(
-      repositories
-        .map((repository) =>
-          [
-            repository.fullName,
-            repository.archived ? 'archived' : 'active',
-            repository.bootstrapReady ? 'bootstrap-ready' : 'pending-bootstrap',
-            repository.excludedReason ?? '',
-            repository.packageName ?? '',
-            repository.packageVersion ?? '',
-            repository.private ? 'private' : 'public',
-            repository.publishable ? 'publishable' : 'not-publishable',
-            repository.sourceRevision ?? '',
-            JSON.stringify(repository.dependencies),
-          ].join('\\n'),
-        )
-        .sort()
-        .join('\\n\\n'),
-    )
-    .digest('hex');
 }
 
 interface GitHubInstallationRepository {

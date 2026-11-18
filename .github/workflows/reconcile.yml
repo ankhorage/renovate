@@ -80,7 +80,8 @@ jobs:
             core.setOutput('repositories', JSON.stringify(ready));
   reconcile:
     needs: prepare
-    if: needs.prepare.outputs.repositories != '[]'
+    # Coordinator activation fences all legacy Renovate mutation paths, including scheduled repair.
+    if: vars.ANKHORAGE_RELEASE_WAVE_COORDINATOR_ENABLED != 'true' && needs.prepare.outputs.repositories != '[]'
     strategy:
       fail-fast: false
       max-parallel: 4

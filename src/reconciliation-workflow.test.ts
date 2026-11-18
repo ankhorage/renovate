@@ -35,4 +35,8 @@ describe('Renovate reconciliation workflow', () => {
     expect(workflow).toContain('RENOVATE_PACKAGE_RULES');
     expect(workflow).toContain('"@ankhorage/**"');
   });
+
+  test('stands down legacy reconciliation when the coordinator is explicitly enabled', () => {
+    expect(workflow).toContain("ANKHORAGE_RELEASE_WAVE_COORDINATOR_ENABLED != 'true'");
+  });
 });

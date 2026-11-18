@@ -9,7 +9,7 @@ export interface GitHubNpmReleaseWaveExecutionAdapterInput {
   readonly candidateCheckoutAsync?: (input: {
     readonly repository: string;
     readonly revision: string;
-  }) => Promise<ReleaseWaveCheckout>;
+  }) => Promise<ReleaseWaveCheckout & { readonly cleanupAsync?: () => Promise<void> }>;
   readonly npmRegistryUrl: string;
   readonly owner: string;
   readonly releaseWorkflowFile: string;
@@ -33,14 +33,18 @@ export function GitHubNpmReleaseWaveExecutionAdapter(
         repository: node.repository,
         revision,
       });
-      if (checkout.revision !== revision) throw new Error('candidate-checkout-revision-mismatch');
-      const plan = (await changesetReleasePlansAsync({ [node.repository]: checkout })).get(
-        node.repository,
-      );
-      if (plan === undefined) throw new Error('candidate-changeset-plan-missing');
-      if ((await candidate.headRevisionAsync(node, operationId)) !== revision)
-        throw new Error('candidate-head-changed-during-changeset-collection');
-      return plan;
+      try {
+        if (checkout.revision !== revision) throw new Error('candidate-checkout-revision-mismatch');
+        const plan = (await changesetReleasePlansAsync({ [node.repository]: checkout })).get(
+          node.repository,
+        );
+        if (plan === undefined) throw new Error('candidate-changeset-plan-missing');
+        if ((await candidate.headRevisionAsync(node, operationId)) !== revision)
+          throw new Error('candidate-head-changed-during-changeset-collection');
+        return plan;
+      } finally {
+        await checkout.cleanupAsync?.();
+      }
     },
     reconcileReleaseWaveRepositoryAsync: ({ node, operationId }) =>
       candidate.reconcileAsync(node, operationId),

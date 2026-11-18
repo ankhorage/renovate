@@ -39,6 +39,13 @@ describe('package release rollout', () => {
     expect(workflow).toContain('"automerge":false');
     expect(workflow).toContain('"platformAutomerge":false');
   });
+
+  test('keeps exactly one legacy or coordinator mutation path enabled per run', () => {
+    expect(workflow).toContain("ANKHORAGE_RELEASE_WAVE_COORDINATOR_ENABLED != 'true'");
+    expect(workflow).toContain("ANKHORAGE_RELEASE_WAVE_COORDINATOR_ENABLED == 'true'");
+    expect(workflow).toContain('Run the authenticated durable release-wave coordinator');
+    expect(workflow).toContain('RELEASE_WAVE_STATE_BRANCH');
+  });
 });
 
 describe('release recovery contract', () => {
