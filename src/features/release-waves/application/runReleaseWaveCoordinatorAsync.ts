@@ -40,7 +40,7 @@ export async function runReleaseWaveCoordinatorAsync(input: {
   const cohort = await collectedCohortAsync(input);
   if (cohort === undefined) return undefined;
   const { events, publications, repositories } = cohort;
-  const runId = logicalWaveId(publications);
+  const runId = logicalWaveId(publications, cohort.snapshotId);
   const { closurePlan, plan } = plansForCohort(
     repositories,
     publications,
@@ -73,6 +73,7 @@ async function collectedCohortAsync(input: {
       readonly events: readonly DurableReleaseWaveEvent[];
       readonly publications: readonly SettledReleaseWavePublication[];
       readonly repositories: readonly ReleaseWaveRepository[];
+      readonly snapshotId: string | undefined;
     }
   | undefined
 > {
@@ -89,7 +90,12 @@ async function collectedCohortAsync(input: {
   const events = completeCohortEvents(queue, publications);
   return events === undefined
     ? undefined
-    : { events, publications, repositories: collected.repositories };
+    : {
+        events,
+        publications,
+        repositories: collected.repositories,
+        snapshotId: collected.snapshotId,
+      };
 }
 
 /*** Prevent queue acknowledgement until every planned consumer reached a durable terminal state. */
@@ -171,7 +177,10 @@ function completeCohortEvents(
 }
 
 /*** Use the immutable complete cohort, rather than a transient queue snapshot, as checkpoint identity. */
-function logicalWaveId(publications: readonly SettledReleaseWavePublication[]): string {
+function logicalWaveId(
+  publications: readonly SettledReleaseWavePublication[],
+  snapshotId: string | undefined,
+): string {
   return (
     'wave-' +
     createHash('sha256')
@@ -179,7 +188,9 @@ function logicalWaveId(publications: readonly SettledReleaseWavePublication[]): 
         publications
           .map((publication) => releaseWaveEventIdentity(publicationEvent(publication)))
           .sort()
-          .join('\n'),
+          .join('\n') +
+          '\n' +
+          (snapshotId ?? ''),
       )
       .digest('hex')
       .slice(0, 24)

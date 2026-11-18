@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import type { ReleaseWaveRepository } from '../../../../types/releaseWave.js';
 import { releaseWaveEventIdentity } from '../../domain/releaseWaveEventIdentity.js';
 import type {
@@ -35,7 +37,7 @@ async function collectReleaseWavePublicationCohortAsync(
   if (pendingEvents.length === 0) return undefined;
   const repositories = await selectedRepositoriesAsync(input);
   const byPackage = uniqueRepositoriesByPackage(repositories);
-  const expected = expectedPublisherPackages(repositories, pendingEvents, byPackage);
+  const expected = expectedPublisherPackages(pendingEvents, byPackage);
   if (expected === undefined) return undefined;
   const events = pendingEvents.filter((event) => expected.has(event.packageName));
   if (events.length !== expected.size) return undefined;
@@ -43,7 +45,11 @@ async function collectReleaseWavePublicationCohortAsync(
     events.map((event) => settledPublicationAsync(input, event, byPackage.get(event.packageName))),
   );
   if (publications.some((publication) => publication === undefined)) return undefined;
-  return { publications: publications.filter(isPublication), repositories };
+  return {
+    publications: publications.filter(isPublication),
+    repositories,
+    snapshotId: releaseWaveSnapshotId(repositories),
+  };
 }
 
 /*** Load every repository visible to the installation, rejecting incomplete pagination. */
@@ -77,7 +83,7 @@ async function repositoryProfileAsync(
   const revision = reference.object?.type === 'commit' ? reference.object.sha : undefined;
   if (!revision)
     throw new Error('Selected installation repository default branch is not immutable.');
-  const manifest = await contentAsync<PackageManifest>(
+  const manifestSource = await optionalContentAsync<string>(
     input,
     repository.full_name,
     'package.json',
@@ -89,31 +95,31 @@ async function repositoryProfileAsync(
     '.github/workflows/renovate.yml',
     revision,
   );
-  return profileFromManifest(repository, manifest, workflow);
+  return profileFromManifest(
+    repository,
+    manifestSource === undefined ? undefined : parsePackageManifest(manifestSource),
+    workflow,
+    revision,
+  );
+}
+
+/*** Decode package metadata only after the immutable source response has been authenticated. */
+function parsePackageManifest(source: string): PackageManifest {
+  const value = JSON.parse(source) as unknown;
+  if (typeof value !== 'object' || value === null || Array.isArray(value))
+    throw new Error('Selected installation package manifest is malformed.');
+  return value;
 }
 
 /*** Expand every pending publisher through selected consumers to the full direct-upstream cohort. */
 function expectedPublisherPackages(
-  repositories: readonly ReleaseWaveRepository[],
   events: Parameters<
     ReleaseWavePublicationCohortPort['collectReleaseWavePublicationCohortAsync']
   >[0]['pendingEvents'],
   byPackage: ReadonlyMap<string, ReleaseWaveRepository>,
 ): ReadonlySet<string> | undefined {
-  const initial = events.map((event) => event.packageName);
-  if (initial.some((packageName) => !byPackage.has(packageName))) return undefined;
-  const expected = new Set(initial);
-  for (;;) {
-    const consumers = repositories.filter((repository) =>
-      dependenciesOf(repository).some((dependency) => expected.has(dependency)),
-    );
-    const next = consumers.flatMap((repository) =>
-      dependenciesOf(repository).filter((dependency) => byPackage.has(dependency)),
-    );
-    const { size } = expected;
-    for (const packageName of next) expected.add(packageName);
-    if (size === expected.size) return expected;
-  }
+  const expected = new Set(events.map((event) => event.packageName));
+  return [...expected].every((packageName) => byPackage.has(packageName)) ? expected : undefined;
 }
 
 /*** Re-verify each queued event with the App-token-backed evidence boundary and source identity. */
@@ -141,11 +147,23 @@ async function settledPublicationAsync(
 /*** Decode a manifest into the narrow release-wave profile without carrying provider response shapes inward. */
 function profileFromManifest(
   repository: GitHubInstallationRepository,
-  manifest: PackageManifest,
+  manifest: PackageManifest | undefined,
   workflow: string | undefined,
+  sourceRevision: string,
 ): ReleaseWaveRepository {
   const { full_name: fullName } = repository;
   if (!fullName) throw new Error('Selected installation repository name is incomplete.');
+  if (manifest === undefined)
+    return {
+      archived: repository.archived === true,
+      bootstrapReady: false,
+      dependencies: emptyDependencies(),
+      excludedReason: 'missing package.json',
+      fullName,
+      private: true,
+      publishable: false,
+      sourceRevision,
+    };
   const packageName = typeof manifest.name === 'string' ? manifest.name : undefined;
   const packageVersion = typeof manifest.version === 'string' ? manifest.version : undefined;
   const privatePackage = manifest.private === true;
@@ -161,26 +179,18 @@ function profileFromManifest(
     packageVersion,
     private: privatePackage,
     publishable: !privatePackage && packageName !== undefined && packageVersion !== undefined,
+    sourceRevision,
   };
 }
 
 /*** Preserve only declared dependency maps, treating malformed manifest fields as empty rather than trusted. */
 function dependencySections(manifest: PackageManifest): ReleaseWaveRepository['dependencies'] {
   return {
-    dependencies: stringRecord(manifest.dependencies),
-    devDependencies: stringRecord(manifest.devDependencies),
-    optionalDependencies: stringRecord(manifest.optionalDependencies),
-    peerDependencies: stringRecord(manifest.peerDependencies),
+    dependencies: dependencyRecord(manifest.dependencies, 'dependencies'),
+    devDependencies: dependencyRecord(manifest.devDependencies, 'devDependencies'),
+    optionalDependencies: dependencyRecord(manifest.optionalDependencies, 'optionalDependencies'),
+    peerDependencies: dependencyRecord(manifest.peerDependencies, 'peerDependencies'),
   };
-}
-
-/*** Enumerate all dependency declarations relevant to update-cohort closure. */
-function dependenciesOf(repository: ReleaseWaveRepository): readonly string[] {
-  return [
-    ...Object.keys(repository.dependencies.dependencies),
-    ...Object.keys(repository.dependencies.devDependencies),
-    ...Object.keys(repository.dependencies.optionalDependencies),
-  ];
 }
 
 /*** Reject duplicate selected package identities because no source identity can then be authoritative. */
@@ -214,22 +224,6 @@ async function pagesAsync<T>(
     if (entries.length < 100) return values;
   }
   throw new Error('Selected installation pagination is incomplete.');
-}
-
-/*** Decode an immutable GitHub contents response. */
-async function contentAsync<T>(
-  input: GitHubReleaseWavePublicationCohortAdapterInput,
-  repository: string,
-  path: string,
-  revision: string,
-): Promise<T> {
-  const content = await jsonAsync<{ readonly content?: string; readonly encoding?: string }>(
-    input,
-    '/repos/' + repository + '/contents/' + path + '?ref=' + encodeURIComponent(revision),
-  );
-  if (content.encoding !== 'base64' || !content.content)
-    throw new Error('Selected installation content is not a readable base64 file.');
-  return JSON.parse(Buffer.from(content.content, 'base64').toString('utf8')) as T;
 }
 
 /*** Read optional bootstrap policy while allowing a selected repository to remain pending bootstrap. */
@@ -278,13 +272,36 @@ function headers(
 }
 
 /*** Narrow untrusted JSON to a dependency record containing only string declarations. */
-function stringRecord(value: unknown): Readonly<Record<string, string>> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return {};
-  return Object.fromEntries(
-    Object.entries(value).filter(
-      (entry): entry is [string, string] => typeof entry[1] === 'string',
-    ),
-  );
+function dependencyRecord(value: unknown, section: string): Readonly<Record<string, string>> {
+  if (value === undefined) return {};
+  if (typeof value !== 'object' || value === null || Array.isArray(value))
+    throw new Error('Selected installation manifest has malformed ' + section + '.');
+  if (Object.values(value).some((entry) => typeof entry !== 'string'))
+    throw new Error('Selected installation manifest has malformed ' + section + '.');
+  return value as Readonly<Record<string, string>>;
+}
+
+/*** Keep a visible non-package selected profile free of invented dependency declarations. */
+function emptyDependencies(): ReleaseWaveRepository['dependencies'] {
+  return { dependencies: {}, devDependencies: {}, optionalDependencies: {}, peerDependencies: {} };
+}
+
+/*** Bind the selected identities and immutable source revisions to a deterministic cohort snapshot. */
+function releaseWaveSnapshotId(repositories: readonly ReleaseWaveRepository[]): string {
+  return createHash('sha256')
+    .update(
+      repositories
+        .map((repository) =>
+          [
+            repository.fullName,
+            repository.sourceRevision ?? '',
+            JSON.stringify(repository.dependencies),
+          ].join('\\n'),
+        )
+        .sort()
+        .join('\\n\\n'),
+    )
+    .digest('hex');
 }
 
 /*** Reject incomplete composition before attempting an authenticated inventory snapshot. */

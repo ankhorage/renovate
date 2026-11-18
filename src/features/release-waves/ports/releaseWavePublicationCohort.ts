@@ -13,6 +13,8 @@ export interface SettledReleaseWavePublication extends PublishedPackage {
 export interface ReleaseWavePublicationCohort {
   readonly publications: readonly SettledReleaseWavePublication[];
   readonly repositories: readonly ReleaseWaveRepository[];
+  /** Hash of the selected-installation identities and immutable graph inputs. */
+  readonly snapshotId?: string;
 }
 
 /** Discover a complete publisher cohort from selected installation inventory and provider evidence. */

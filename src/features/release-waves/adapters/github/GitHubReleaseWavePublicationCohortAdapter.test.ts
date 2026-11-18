@@ -3,11 +3,12 @@ import { expect, test } from 'bun:test';
 import { releaseWaveEventIdentity } from '../../domain/releaseWaveEventIdentity.js';
 import { GitHubReleaseWavePublicationCohortAdapter } from './GitHubReleaseWavePublicationCohortAdapter.js';
 
-test('waits for every selected upstream publisher required by a selected consumer diamond', async () => {
+test('collects an updated publisher without waiting for an unchanged stable dependency', async () => {
   const adapter = cohortAdapter();
-  expect(
-    await adapter.collectReleaseWavePublicationCohortAsync({ pendingEvents: [event('base')] }),
-  ).toBeUndefined();
+  const stable = await adapter.collectReleaseWavePublicationCohortAsync({
+    pendingEvents: [event('base')],
+  });
+  expect(stable?.publications.map((publication) => publication.name)).toEqual(['@ankhorage/base']);
   const cohort = await adapter.collectReleaseWavePublicationCohortAsync({
     pendingEvents: [event('base'), event('left')],
   });
@@ -18,12 +19,38 @@ test('waits for every selected upstream publisher required by a selected consume
   expect(cohort?.repositories.map((repository) => repository.fullName)).toEqual([
     'ankhorage/base',
     'ankhorage/consumer',
+    'ankhorage/docs',
     'ankhorage/left',
     'ankhorage/private',
   ]);
   expect(
     cohort?.repositories.find((repository) => repository.fullName === 'ankhorage/private'),
   ).toMatchObject({ bootstrapReady: false, private: true });
+});
+
+test('retains a selected repository without package metadata as an explicit excluded profile', async () => {
+  const cohort = await cohortAdapter().collectReleaseWavePublicationCohortAsync({
+    pendingEvents: [event('base')],
+  });
+  expect(
+    cohort?.repositories.find((repository) => repository.fullName === 'ankhorage/docs'),
+  ).toMatchObject({
+    excludedReason: 'missing package.json',
+    publishable: false,
+  });
+});
+
+test('fails closed when a selected dependency section is malformed', () => {
+  const adapter = cohortAdapter((url) => {
+    if (String(url).includes('/repos/ankhorage/consumer/contents/package.json'))
+      return Promise.resolve(
+        content({ dependencies: 'not-a-map', name: '@ankhorage/consumer', version: '1.0.0' }),
+      );
+    return Promise.resolve(response(String(url)));
+  });
+  expect(
+    adapter.collectReleaseWavePublicationCohortAsync({ pendingEvents: [event('base')] }),
+  ).rejects.toThrow('malformed dependencies');
 });
 
 test('rejects a queued source identity that changes within the selected installation', async () => {
@@ -35,7 +62,9 @@ test('rejects a queued source identity that changes within the selected installa
   ).toBeUndefined();
 });
 
-function cohortAdapter() {
+function cohortAdapter(
+  requestAsync = (url: string | URL) => Promise.resolve(response(String(url))),
+) {
   return GitHubReleaseWavePublicationCohortAdapter({
     apiBaseUrl: 'https://api.github.test',
     publicationEvidencePort: {
@@ -47,7 +76,7 @@ function cohortAdapter() {
           version: dispatch.version,
         }),
     },
-    requestAsync: (url) => Promise.resolve(response(String(url))),
+    requestAsync,
     token: 'installation-token',
   });
 }
@@ -67,7 +96,7 @@ function event(name: string) {
 function response(url: string): Response {
   if (url.includes('/installation/repositories'))
     return json({
-      repositories: ['base', 'consumer', 'left', 'private'].map((name) => ({
+      repositories: ['base', 'consumer', 'docs', 'left', 'private'].map((name) => ({
         archived: false,
         default_branch: 'main',
         full_name: 'ankhorage/' + name,
@@ -81,6 +110,8 @@ function response(url: string): Response {
     return name === 'private'
       ? new Response(null, { status: 404 })
       : content("github.event.pull_request.user.login == 'ankhorage-renovate-sync[bot]'");
+  if (name === 'docs' && url.includes('/contents/package.json'))
+    return new Response(null, { status: 404 });
   if (url.includes('/contents/package.json')) return content(manifest(name));
   return new Response(null, { status: 404 });
 }

@@ -11,6 +11,8 @@ export interface ReleaseWaveRepository {
   readonly packageVersion?: string;
   readonly private: boolean;
   readonly publishable: boolean;
+  /** Immutable selected default-branch commit that supplied this profile. */
+  readonly sourceRevision?: string;
 }
 
 export interface PublishedPackage {
