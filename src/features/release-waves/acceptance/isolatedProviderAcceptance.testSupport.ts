@@ -40,11 +40,11 @@ export function cohortAdapter(paths: string[]) {
       enrichPackageReleaseAsync: (dispatch) => Promise.resolve(eventFor(dispatch)),
     },
     publisherEpochPort: {
-      loadReleaseWavePublisherEpochsAsync: ({ inventoryId }) =>
+      loadReleaseWavePublisherEpochsAsync: () =>
         Promise.resolve([
           {
             id: 'isolated-provider-epoch',
-            inventoryId,
+            inventoryId: 'a'.repeat(64),
             publishers: [
               {
                 packageName: '@ankhorage/base',
@@ -94,7 +94,7 @@ function inventoryResponse(url: string): Response {
     ? content({
         name: '@ankhorage/' + repository,
         private: repository === 'private',
-        version: '1.0.0',
+        version: repository === 'base' ? '1.1.0' : '1.0.0',
       })
     : new Response(null, { status: 404 });
 }

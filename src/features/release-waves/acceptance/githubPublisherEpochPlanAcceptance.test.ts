@@ -11,16 +11,12 @@ import {
 
 const revision = 'e'.repeat(40);
 const inventoryId = 'a'.repeat(64);
-const otherInventoryId = 'b'.repeat(64);
 const endpoint =
   'https://api.github.provider-contract.test/repos/ankhorage/renovate/contents/.github/release-wave-publisher-epochs.json?ref=main';
 
 test('reads the authenticated GitHub Contents epoch plan and binds its immutable source revision', async () => {
   const paths: string[] = [];
-  const epochs = await epochAdapter(file(plan(inventoryId))).loadReleaseWavePublisherEpochsAsync({
-    inventoryId,
-    repositories: [{} as never],
-  });
+  const epochs = await epochAdapter(file(plan(inventoryId))).loadReleaseWavePublisherEpochsAsync();
 
   expect(paths).toEqual([endpoint]);
   expect(epochs).toEqual([
@@ -57,17 +53,13 @@ test('reads the authenticated GitHub Contents epoch plan and binds its immutable
   }
 });
 
-test('fails closed for a missing plan, malformed document, and mismatched selected inventory', async () => {
-  const [missing, malformed, mismatched] = await Promise.all([
-    failureMessageAsync(load(new Response(null, { status: 404 }), inventoryId)),
-    failureMessageAsync(
-      load(file({ epochs: [{ id: 'bad', inventoryId, publishers: [] }] }), inventoryId),
-    ),
-    failureMessageAsync(load(file(plan(otherInventoryId)), inventoryId)),
+test('fails closed for a missing plan and malformed document', async () => {
+  const [missing, malformed] = await Promise.all([
+    failureMessageAsync(load(new Response(null, { status: 404 }))),
+    failureMessageAsync(load(file({ epochs: [{ id: 'bad', inventoryId, publishers: [] }] }))),
   ]);
   expect(missing).toContain('authenticated');
   expect(malformed).toContain('malformed');
-  expect(mismatched).toContain('does not cover');
 });
 
 test('persists authenticated epoch A, appends independent epoch B, and reads both at the new revision', async () => {
@@ -85,10 +77,7 @@ test('persists authenticated epoch A, appends independent epoch B, and reads bot
     publicationDecisions: new Map([[left.fullName, publisherDecision(left)]]),
     repositories: [left],
   });
-  const persisted = await adapter.loadReleaseWavePublisherEpochsAsync({
-    inventoryId,
-    repositories: [base, left],
-  });
+  const persisted = await adapter.loadReleaseWavePublisherEpochsAsync();
 
   expect(first.sourceRevision).toBe('0000000000000000000000000000000000000001');
   expect(second.sourceRevision).toBe('0000000000000000000000000000000000000002');
@@ -162,14 +151,14 @@ test('rejects a source downgrade even when its decision has a complete Changeset
   ).toContain('not bound');
 });
 
-function load(response: Response, inventoryId: string) {
+function load(response: Response) {
   return GitHubReleaseWavePublisherEpochAdapter({
     apiBaseUrl: 'https://api.github.provider-contract.test',
     branch: 'main',
     repository: 'ankhorage/renovate',
     requestAsync: () => Promise.resolve(response),
     token: 'isolated-installation-token',
-  }).loadReleaseWavePublisherEpochsAsync({ inventoryId, repositories: [{} as never] });
+  }).loadReleaseWavePublisherEpochsAsync();
 }
 
 function epochWriter(requestAsync: (url: string | URL, init?: RequestInit) => Promise<Response>) {
