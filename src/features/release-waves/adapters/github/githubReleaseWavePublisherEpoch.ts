@@ -8,7 +8,6 @@ import type { ReleaseWavePublisherEpochPort } from '../../ports/releaseWavePubli
 
 /*** Select a complete durable epoch without allowing one blocked branch to prevent an unrelated cohort. */
 export async function githubReleaseWavePublisherEpochAsync(input: {
-  readonly inventoryId: string;
   readonly pendingEvents: readonly DurableReleaseWaveEvent[];
   readonly publisherEpochPort: ReleaseWavePublisherEpochPort;
   readonly repositories: readonly ReleaseWaveRepository[];
@@ -19,19 +18,38 @@ export async function githubReleaseWavePublisherEpochAsync(input: {
     }
   | undefined
 > {
-  const epochs = await input.publisherEpochPort.loadReleaseWavePublisherEpochsAsync({
-    inventoryId: input.inventoryId,
-    repositories: input.repositories,
-  });
+  const epochs = await input.publisherEpochPort.loadReleaseWavePublisherEpochsAsync();
   for (const epoch of [...epochs].sort((left, right) => left.id.localeCompare(right.id))) {
-    if (epoch.inventoryId !== input.inventoryId || epoch.sourceRevision.length === 0)
-      throw new Error(
-        'Release-wave publisher epoch inventory does not match selected installation.',
-      );
+    if (!isCurrentSelectedEpoch(epoch, input.repositories)) continue;
     const events = epochEvents(input.pendingEvents, epoch.publishers);
     if (events !== undefined) return { epoch, events };
   }
   return undefined;
+}
+
+/*** Admit frozen publisher evidence only while every publisher is still positively selected by the App. */
+function isCurrentSelectedEpoch(
+  epoch: ReleaseWavePublisherEpoch,
+  repositories: readonly ReleaseWaveRepository[],
+): boolean {
+  if (!/^[a-f0-9]{64}$/.test(epoch.inventoryId) || !/^[a-f0-9]{40}$/.test(epoch.sourceRevision))
+    throw new Error('Release-wave publisher epoch has invalid immutable evidence.');
+  const selected = new Map(repositories.map((repository) => [repository.fullName, repository]));
+  if (selected.size !== repositories.length)
+    throw new Error('Selected installation has duplicate repositories.');
+  return epoch.publishers.every((publisher) => {
+    const repository = selected.get(publisher.sourceRepository);
+    return (
+      repository !== undefined &&
+      !repository.archived &&
+      repository.excludedReason === undefined &&
+      repository.bootstrapReady &&
+      repository.publishable &&
+      !repository.private &&
+      repository.packageName === publisher.packageName &&
+      repository.packageVersion === publisher.version
+    );
+  });
 }
 
 /*** Match exact scheduled publisher identities, refusing duplicate or superseding event evidence. */

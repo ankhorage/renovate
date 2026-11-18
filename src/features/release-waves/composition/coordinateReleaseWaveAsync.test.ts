@@ -21,9 +21,15 @@ test('limits registry evidence and candidate checkouts to eligible selected prof
   expect(source).toContain('repository.excludedReason !== undefined');
 });
 
-test('composes durable epoch recovery, verified ingress, and fenced coordinator execution', () => {
-  expect(source).toContain('prepareReleaseWavePublisherEpochAsync({');
+test('persists verified ingress before resolving only a previously frozen publisher epoch', () => {
+  expect(source).not.toContain('prepareReleaseWavePublisherEpochAsync');
   expect(source).toContain('admitVerifiedPackageReleaseEventAsync({');
+  expect(source.indexOf('admitVerifiedPackageReleaseEventAsync({')).toBeLessThan(
+    source.indexOf('executeCoordinatorAsync({'),
+  );
+  expect(
+    source.indexOf('const inventory = await collectGitHubReleaseWaveInventoryAsync('),
+  ).toBeGreaterThan(source.indexOf('async function executeCoordinatorAsync'));
   expect(source).toContain('releaseWaveMutationFenceFromEnvironment(environment)');
   expect(source).toContain('FencedReleaseWaveExecutionAdapter({');
   expect(source).toContain('leaseId: input.configuration.mutationLeaseId');

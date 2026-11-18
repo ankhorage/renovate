@@ -13,7 +13,6 @@ import { GitHubReleaseWavePublisherEpochAdapter } from '../adapters/github/GitHu
 import { runReleaseWaveRenovateAsync } from '../adapters/renovate/runReleaseWaveRenovateAsync.js';
 import { runReleaseWaveCoordinatorAsync } from '../application/runReleaseWaveCoordinatorAsync.js';
 import { admitVerifiedPackageReleaseEventAsync } from './admitVerifiedPackageReleaseEventAsync.js';
-import { prepareReleaseWavePublisherEpochAsync } from './prepareReleaseWavePublisherEpochAsync.js';
 import { releaseWaveMutationFenceFromEnvironment } from './releaseWaveMutationFenceFromEnvironment.js';
 
 type RequestAsync = (input: string | URL, init?: RequestInit) => Promise<Response>;
@@ -35,15 +34,10 @@ export async function coordinateReleaseWaveAsync(environment: NodeJS.ProcessEnv)
   const configuration = releaseWaveConfiguration(environment);
   const now = () => new Date();
   const requestAsync = (input: string | URL, init?: RequestInit) => fetch(input, init);
-  const { checkpointPort, cohortInput, epochPort, publicationEvidencePort, queuePort } =
-    releaseWavePorts(configuration, requestAsync);
-  const inventory = await collectGitHubReleaseWaveInventoryAsync(cohortInput);
-  await prepareReleaseWavePublisherEpochAsync({
-    inventoryId: inventory.inventoryId,
-    publisherEpochWriterPort: epochPort,
-    repositories: inventory.repositories,
-    token: configuration.token,
-  });
+  const { checkpointPort, cohortInput, publicationEvidencePort, queuePort } = releaseWavePorts(
+    configuration,
+    requestAsync,
+  );
   await admitVerifiedPackageReleaseEventAsync({
     maximumRetries: 4,
     packageName: configuration.packageName,
@@ -57,7 +51,6 @@ export async function coordinateReleaseWaveAsync(environment: NodeJS.ProcessEnv)
     cohortInput,
     configuration,
     fencePort: releaseWaveMutationFenceFromEnvironment(environment),
-    inventory,
     now,
     queuePort,
   });
@@ -98,7 +91,6 @@ function releaseWavePorts(
       requestAsync,
       token: configuration.token,
     },
-    epochPort,
     publicationEvidencePort,
     queuePort: GitHubReleaseWaveEventQueueAdapter(state),
   };
@@ -110,12 +102,12 @@ async function executeCoordinatorAsync(input: {
   readonly cohortInput: Parameters<typeof GitHubReleaseWavePublicationCohortAdapter>[0];
   readonly configuration: ReturnType<typeof releaseWaveConfiguration>;
   readonly fencePort: ReturnType<typeof releaseWaveMutationFenceFromEnvironment>;
-  readonly inventory: Awaited<ReturnType<typeof collectGitHubReleaseWaveInventoryAsync>>;
   readonly now: () => Date;
   readonly queuePort: ReturnType<typeof GitHubReleaseWaveEventQueueAdapter>;
 }) {
+  const inventory = await collectGitHubReleaseWaveInventoryAsync(input.cohortInput);
   const repositories = new Map(
-    input.inventory.repositories.map((repository) => [repository.fullName, repository]),
+    inventory.repositories.map((repository) => [repository.fullName, repository]),
   );
   await runReleaseWaveCoordinatorAsync({
     checkpointPort: input.checkpointPort,
@@ -144,7 +136,7 @@ async function executeCoordinatorAsync(input: {
     now: input.now,
     publicationPlans: new Map(),
     publishedPackages: await publishedPackagesAsync(
-      input.inventory.repositories,
+      inventory.repositories,
       input.configuration.npmRegistryUrl,
     ),
     queuePort: input.queuePort,

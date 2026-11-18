@@ -6,10 +6,11 @@ import type { ReleaseWavePublisherEpoch } from './releaseWavePublicationCohort.j
 
 /** Read immutable publisher schedules from the authoritative release-plan boundary. */
 export interface ReleaseWavePublisherEpochPort {
-  loadReleaseWavePublisherEpochsAsync(input: {
-    readonly inventoryId: string;
-    readonly repositories: readonly ReleaseWaveRepository[];
-  }): Promise<readonly ReleaseWavePublisherEpoch[]>;
+  /**
+   * Load every structurally valid immutable epoch. The current App installation decides which
+   * epoch remains admissible after its publishers have advanced their mutable default branches.
+   */
+  loadReleaseWavePublisherEpochsAsync(): Promise<readonly ReleaseWavePublisherEpoch[]>;
 }
 
 /** Persist one complete, immutable publisher schedule before any of its releases are consumed. */

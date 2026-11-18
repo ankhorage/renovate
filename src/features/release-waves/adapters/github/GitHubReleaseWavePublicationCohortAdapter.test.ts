@@ -1,9 +1,11 @@
+import { createHash } from 'node:crypto';
+
 import { expect, test } from 'bun:test';
 
 import { releaseWaveEventIdentity } from '../../domain/releaseWaveEventIdentity.js';
 import { GitHubReleaseWavePublicationCohortAdapter } from './GitHubReleaseWavePublicationCohortAdapter.js';
 
-test('waits for every publisher scheduled by the immutable diamond epoch', async () => {
+test('recovers the frozen pre-publish epoch after publisher versions and default-branch revisions advance', async () => {
   const adapter = cohortAdapter();
   const stable = await adapter.collectReleaseWavePublicationCohortAsync({
     pendingEvents: [event('base')],
@@ -16,6 +18,12 @@ test('waits for every publisher scheduled by the immutable diamond epoch', async
     '@ankhorage/base',
     '@ankhorage/left',
   ]);
+  expect(
+    cohort?.repositories.find((repository) => repository.fullName === 'ankhorage/base'),
+  ).toMatchObject({
+    packageVersion: '1.1.0',
+    sourceRevision: createHash('sha1').update('base').digest('hex'),
+  });
   expect(cohort?.repositories.map((repository) => repository.fullName)).toEqual([
     'ankhorage/base',
     'ankhorage/consumer',
@@ -83,8 +91,40 @@ test('rejects a queued source identity that changes within the selected installa
   ).toBeUndefined();
 });
 
+test('does not admit a frozen epoch after its publisher leaves the current App selection', async () => {
+  const adapter = cohortAdapter((url) => {
+    if (String(url).includes('/installation/repositories'))
+      return Promise.resolve(
+        json({
+          repositories: ['consumer', 'docs', 'left', 'old', 'pending', 'private'].map((name) => ({
+            archived: name === 'old',
+            default_branch: 'main',
+            full_name: 'ankhorage/' + name,
+          })),
+        }),
+      );
+    return Promise.resolve(response(String(url)));
+  });
+  expect(
+    await adapter.collectReleaseWavePublicationCohortAsync({
+      pendingEvents: [event('base'), event('left')],
+    }),
+  ).toBeUndefined();
+});
+
+test('keeps an independent complete cohort executable when another frozen epoch is no longer current', async () => {
+  const adapter = cohortAdapter(undefined, [publisherEpoch(['base']), publisherEpoch(['left'])]);
+  const cohort = await adapter.collectReleaseWavePublicationCohortAsync({
+    pendingEvents: [event('left')],
+  });
+  expect(cohort?.epoch.publishers.map((publisher) => publisher.packageName)).toEqual([
+    '@ankhorage/left',
+  ]);
+});
+
 function cohortAdapter(
   requestAsync = (url: string | URL) => Promise.resolve(response(String(url))),
+  epochs = [publisherEpoch(['base', 'left'])],
 ) {
   return GitHubReleaseWavePublicationCohortAdapter({
     apiBaseUrl: 'https://api.github.test',
@@ -98,25 +138,26 @@ function cohortAdapter(
         }),
     },
     publisherEpochPort: {
-      loadReleaseWavePublisherEpochsAsync: ({ inventoryId }) =>
-        Promise.resolve([
-          {
-            id: 'diamond-epoch',
-            inventoryId,
-            sourceRevision: 'c'.repeat(40),
-            publishers: ['base', 'left'].map((name) => ({
-              packageName: '@ankhorage/' + name,
-              planRevision: 'a'.repeat(40),
-              planStatusHash: 'b'.repeat(64),
-              sourceRepository: 'ankhorage/' + name,
-              version: '1.1.0',
-            })),
-          },
-        ]),
+      loadReleaseWavePublisherEpochsAsync: () => Promise.resolve(epochs),
     },
     requestAsync,
     token: 'installation-token',
   });
+}
+
+function publisherEpoch(names: readonly string[]) {
+  return {
+    id: createHash('sha256').update(names.join('\n')).digest('hex'),
+    inventoryId: 'd'.repeat(64),
+    sourceRevision: 'c'.repeat(40),
+    publishers: names.map((name) => ({
+      packageName: '@ankhorage/' + name,
+      planRevision: 'a'.repeat(40),
+      planStatusHash: 'b'.repeat(64),
+      sourceRepository: 'ankhorage/' + name,
+      version: '1.1.0',
+    })),
+  };
 }
 
 function event(name: string) {
@@ -145,7 +186,7 @@ function response(url: string): Response {
   const name = /repos\/ankhorage\/([^/]+)/.exec(url)?.[1];
   if (!name) return new Response(null, { status: 404 });
   if (url.includes('/git/ref/heads/'))
-    return json({ object: { sha: name + '-sha', type: 'commit' } });
+    return json({ object: { sha: createHash('sha1').update(name).digest('hex'), type: 'commit' } });
   if (url.includes('renovate.yml'))
     return ['pending', 'private'].includes(name)
       ? new Response(null, { status: 404 })
@@ -163,7 +204,7 @@ function manifest(name: string) {
     dependencies,
     name: '@ankhorage/' + name,
     private: name === 'private',
-    version: '1.0.0',
+    version: ['base', 'left'].includes(name) ? '1.1.0' : '1.0.0',
   };
 }
 
