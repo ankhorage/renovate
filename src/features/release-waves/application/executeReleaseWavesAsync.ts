@@ -12,6 +12,10 @@ import { isReleaseWaveCheckpointConflict } from '../ports/releaseWaveCheckpoint.
 import type { ReleaseWaveExecutionPort } from '../ports/releaseWaveExecution.js';
 import { claimableReleaseWaveCheckpoint } from './claimableReleaseWaveCheckpoint.js';
 import { isReleaseWaveVerificationComplete } from './isReleaseWaveVerificationComplete.js';
+import {
+  candidatePublicationAsync,
+  collectReleaseWaveCandidatePublicationAsync,
+} from './releaseWaveCandidatePublicationAsync.js';
 import { releaseWaveFailure } from './releaseWaveFailure.js';
 import {
   requireReleaseWaveCheckpointAsync,
@@ -133,12 +137,8 @@ async function executeReleaseWaveRepositoryAsync(
       'awaiting-review',
       claim.operation,
     );
-    await verifyClaimedReleaseWaveRepositoryAsync(
-      input,
-      repository,
-      node.requiresNpmPublication,
-      claim.operation,
-    );
+    await collectReleaseWaveCandidatePublicationAsync(input, node, operationId, claim.operation);
+    await verifyClaimedReleaseWaveRepositoryAsync(input, node, claim.operation);
   } catch (error) {
     await failReleaseWaveRepositoryAsync(input, repository, error, claim.operation);
   }
@@ -150,12 +150,13 @@ async function resumeReleaseWaveVerificationAsync(
   node: ReleaseWavePlan['nodes'][number],
   claim: ReleaseWaveOperation,
 ): Promise<void> {
-  await verifyClaimedReleaseWaveRepositoryAsync(
+  await collectReleaseWaveCandidatePublicationAsync(
     input,
-    node.repository,
-    node.requiresNpmPublication,
+    node,
+    releaseWaveOperationId(input.plan.runId, node.repository),
     claim,
   );
+  await verifyClaimedReleaseWaveRepositoryAsync(input, node, claim);
 }
 
 /*** Claim ready, failed, or expired work with CAS; no live owner can be stolen during mutation or review. */
@@ -289,22 +290,25 @@ function isClaimableReleaseWaveOperation(
 /*** Verify an owned candidate without replaying its mutation after review or CI is delayed. */
 async function verifyClaimedReleaseWaveRepositoryAsync(
   input: ExecuteReleaseWavesInput,
-  repository: string,
-  requiresNpmPublication: boolean,
+  node: ReleaseWavePlan['nodes'][number],
   claim: ReleaseWaveOperation,
 ): Promise<void> {
-  const node = input.plan.nodes.find((candidate) => candidate.repository === repository);
-  if (node === undefined)
-    throw new Error('Release-wave plan is missing repository ' + repository + '.');
+  const publication = await candidatePublicationAsync(input, node.repository);
+  if (publication === undefined)
+    throw new Error('Release-wave candidate Changesets publication is missing.');
+  const verifiedNode = {
+    ...node,
+    expectedPublication: { version: publication.version },
+  };
   const verification = await input.executionPort.verifyReleaseWaveRepositoryAsync({
-    node,
+    node: verifiedNode,
     runId: input.plan.runId,
   });
-  if (isReleaseWaveVerificationComplete(requiresNpmPublication, verification))
+  if (isReleaseWaveVerificationComplete(node.requiresNpmPublication, verification))
     await transitionReleaseWaveRepositoryAsync(
       input,
-      repository,
-      requiresNpmPublication ? 'released' : 'verified',
+      node.repository,
+      node.requiresNpmPublication ? 'released' : 'verified',
       claim,
     );
 }

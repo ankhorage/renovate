@@ -5,7 +5,7 @@ import type { GitHubNpmReleaseWaveExecutionAdapterInput } from './GitHubNpmRelea
 import { githubReleaseWaveClient } from './githubReleaseWaveClient.js';
 
 interface PullRequest {
-  readonly head: { readonly ref: string };
+  readonly head: { readonly ref: string; readonly sha: string };
   readonly merged_at: string | null;
   readonly number: number;
 }
@@ -14,6 +14,8 @@ interface PullRequest {
 export function githubReleaseWaveCandidate(input: GitHubNpmReleaseWaveExecutionAdapterInput) {
   const client = githubReleaseWaveClient(input);
   return {
+    headRevisionAsync: (node: ReleaseWaveNode, operationId: string): Promise<string> =>
+      headRevisionAsync(client, node, operationId),
     ensureAsync: (node: ReleaseWaveNode, operationId: string): Promise<void> =>
       ensureAsync(input, client, node, operationId),
     reconcileAsync: (
@@ -22,6 +24,18 @@ export function githubReleaseWaveCandidate(input: GitHubNpmReleaseWaveExecutionA
     ): Promise<'awaiting-review' | 'released' | 'missing'> =>
       reconcileAsync(client, node, operationId),
   };
+}
+
+/*** Resolve the exact labelled candidate revision after creation or crash recovery. */
+async function headRevisionAsync(
+  client: ReturnType<typeof githubReleaseWaveClient>,
+  node: ReleaseWaveNode,
+  operationId: string,
+): Promise<string> {
+  const pull = await markedPullAsync(client, node.repository, operationId);
+  if (pull === undefined || !/^[0-9a-f]{40}$/u.test(pull.head.sha))
+    throw new Error('candidate-missing');
+  return pull.head.sha;
 }
 
 /*** Return durable candidate state without treating a merged PR as release proof. */

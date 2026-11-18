@@ -6,9 +6,11 @@ export async function githubReleaseWaveCodeownersAsync(
   repository: string,
   revision: string,
 ): Promise<string | undefined> {
-  const tree = await client.jsonAsync<{ readonly tree?: readonly { readonly path?: string }[] }>(
-    '/repos/' + repository + '/git/trees/' + revision + '?recursive=1',
-  );
+  const tree = await client.jsonAsync<{
+    readonly tree?: readonly { readonly path?: string }[];
+    readonly truncated?: boolean;
+  }>('/repos/' + repository + '/git/trees/' + revision + '?recursive=1');
+  if (tree.truncated === true) return undefined;
   const paths = new Set(
     tree.tree?.flatMap((entry) => (entry.path === undefined ? [] : [entry.path])),
   );
@@ -20,17 +22,22 @@ export async function githubReleaseWaveCodeownersAsync(
 
 /*** Prove every changed path has an individual owner among exact-head human approvers. */
 export function githubReleaseWaveCodeownerApprovalPassed(
-  files: readonly { readonly filename: string }[],
+  files: readonly { readonly filename: string; readonly previous_filename?: string }[],
   codeowners: string | undefined,
   approvers: ReadonlySet<string>,
 ): boolean {
   return (
     codeowners !== undefined &&
     files.length > 0 &&
-    files.every((file) => {
-      const owners = codeownersForPath(codeowners, file.filename);
-      return owners.length > 0 && owners.some((owner) => approvers.has(owner));
-    })
+    hasSupportedCodeownersGrammar(codeowners) &&
+    files.every((file) =>
+      [file.filename, file.previous_filename]
+        .filter((path): path is string => path !== undefined)
+        .every((path) => {
+          const owners = codeownersForPath(codeowners, path);
+          return owners?.some((owner) => approvers.has(owner)) === true;
+        }),
+    )
   );
 }
 
@@ -50,7 +57,7 @@ async function githubContentAsync(
 }
 
 /*** Apply ordered rules; team ownership fails closed because membership is not review evidence. */
-function codeownersForPath(codeowners: string, path: string): readonly string[] {
+function codeownersForPath(codeowners: string, path: string): readonly string[] | undefined {
   const matching = codeowners
     .split('\n')
     .map((line) =>
@@ -65,14 +72,13 @@ function codeownersForPath(codeowners: string, path: string): readonly string[] 
       return pattern !== undefined && codeownersPattern(pattern, path);
     });
   const owners = matching.at(-1)?.slice(1) ?? [];
-  return owners.flatMap((owner) =>
-    owner.startsWith('@') && !owner.includes('/') ? [owner.slice(1)] : [],
-  );
+  if (owners.length === 0 || owners.some((owner) => !isIndividualOwner(owner))) return undefined;
+  return owners.map((owner) => owner.slice(1));
 }
 
 /*** Match a deliberately bounded CODEOWNERS glob grammar. */
 function codeownersPattern(pattern: string, path: string): boolean {
-  if (pattern.startsWith('!')) return false;
+  if (!isSupportedPattern(pattern)) return false;
   const escaped = pattern
     .replace(/^\//u, '')
     .replace(/[.+^${}()|[\]\\]/gu, '\\$&')
@@ -81,4 +87,28 @@ function codeownersPattern(pattern: string, path: string): boolean {
     .replace(/§§/gu, '.*')
     .replace(/\?/gu, '[^/]');
   return new RegExp('^' + escaped + (pattern.endsWith('/') ? '.*' : '') + '$', 'u').test(path);
+}
+
+/*** Refuse a policy file whose matcher grammar cannot be authoritatively evaluated here. */
+function hasSupportedCodeownersGrammar(codeowners: string): boolean {
+  return codeowners
+    .split('\n')
+    .map((line) =>
+      line
+        .replace(/\s+#.*$/u, '')
+        .trim()
+        .split(/\s+/u),
+    )
+    .filter((parts) => parts.length >= 2 && !parts[0]?.startsWith('#'))
+    .every(([pattern]) => pattern !== undefined && isSupportedPattern(pattern));
+}
+
+/*** Keep the locally evaluated grammar intentionally smaller than GitHub's full syntax. */
+function isSupportedPattern(pattern: string): boolean {
+  return !pattern.startsWith('!') && !/[[\]\\]/u.test(pattern);
+}
+
+/*** Accept only GitHub individual owners; team membership is unavailable at this evidence boundary. */
+function isIndividualOwner(owner: string): boolean {
+  return /^@[A-Za-z0-9-]+$/u.test(owner);
 }

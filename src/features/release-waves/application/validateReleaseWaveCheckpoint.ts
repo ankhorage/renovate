@@ -34,6 +34,13 @@ export function validateReleaseWaveCheckpoint(
     )
   )
     throw new Error('Persisted release-wave checkpoint operation identity is invalid.');
+  if (
+    Object.entries(checkpoint.ledger.candidatePublications ?? {}).some(
+      ([repository, publication]) =>
+        !enrolled.has(repository) || !isCandidatePublication(publication),
+    )
+  )
+    throw new Error('Persisted release-wave candidate publication is invalid.');
   return checkpoint;
 }
 
@@ -85,5 +92,24 @@ function isOperation(value: unknown): boolean {
     typeof value.fencingToken === 'string' &&
     typeof value.operationId === 'string' &&
     typeof value.ownerId === 'string'
+  );
+}
+
+/*** Restrict durable candidate evidence to immutable status output for exactly one patch decision. */
+function isCandidatePublication(value: unknown): boolean {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'packageName' in value &&
+    'revision' in value &&
+    'releases' in value &&
+    'statusHash' in value &&
+    'version' in value &&
+    typeof value.packageName === 'string' &&
+    /^[0-9a-f]{40}$/u.test(String(value.revision)) &&
+    Array.isArray(value.releases) &&
+    value.releases.length === 1 &&
+    /^[a-f0-9]{64}$/u.test(String(value.statusHash)) &&
+    typeof value.version === 'string'
   );
 }

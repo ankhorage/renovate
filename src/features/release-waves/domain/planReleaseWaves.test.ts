@@ -1,65 +1,7 @@
 import { expect, test } from 'bun:test';
 
-import type { ChangesetReleasePlan, ReleaseWaveRepository } from '../../../types/releaseWave.js';
-import {
-  mergeReleaseWaveLedger,
-  partitionReleaseWave,
-  planReleaseWaves,
-} from './planReleaseWaves.js';
-
-const emptyDependencies = {
-  dependencies: {},
-  devDependencies: {},
-  optionalDependencies: {},
-  peerDependencies: {},
-} as const;
-
-/*** Create a selected, publishable installation repository fixture. */
-function repository(
-  fullName: string,
-  packageName: string,
-  version: string,
-  dependencies: ReleaseWaveRepository['dependencies'] = emptyDependencies,
-): ReleaseWaveRepository & {
-  readonly packageName: string;
-  readonly packageVersion: string;
-  readonly plannedPublication: ChangesetReleasePlan;
-} {
-  return {
-    archived: false,
-    bootstrapReady: true,
-    dependencies,
-    fullName,
-    packageName,
-    packageVersion: version,
-    plannedPublication: {
-      packageName,
-      releases: [{ packageName, type: 'patch' }],
-      version: version.replace(/(\d+)$/, (_, patch: string) => String(Number(patch) + 1)),
-    },
-    private: false,
-    publishable: true,
-  };
-}
-
-/** Collect fixture Changesets output separately from the inventory under test. */
-function fixturePlan(
-  repositories: readonly ReleaseWaveRepository[],
-  published: Parameters<typeof planReleaseWaves>[1],
-  runId: string,
-) {
-  const plans = new Map(
-    repositories.flatMap((item) => {
-      const planned = (
-        item as ReleaseWaveRepository & {
-          readonly plannedPublication?: ChangesetReleasePlan;
-        }
-      ).plannedPublication;
-      return planned === undefined ? [] : [[item.fullName, planned] as const];
-    }),
-  );
-  return planReleaseWaves(repositories, published, runId, plans);
-}
+import { mergeReleaseWaveLedger, partitionReleaseWave } from './planReleaseWaves.js';
+import { emptyDependencies, fixturePlan, repository } from './planReleaseWaves.testSupport.js';
 
 test('settles a dependency diamond before one consolidated consumer release', () => {
   const repositories = [
@@ -285,7 +227,7 @@ test('accepts a verified external provider without enrolling it for mutation', (
   expect(plan.waves).toEqual([['ankhorage/consumer']]);
 });
 
-test('requires a canonical Changesets release plan for every publishable node', () => {
+test('plans a publishable consumer before its grouped candidate creates a Changeset', () => {
   const publishable = {
     ...repository('ankhorage/package', '@ankhorage/package', '1.0.0'),
     plannedPublication: undefined,
@@ -295,10 +237,10 @@ test('requires a canonical Changesets release plan for every publishable node', 
     [{ name: '@ankhorage/package', version: '1.0.0' }],
     'missing-publication-plan',
   );
-  expect(plan.blocked).toEqual([
-    'ankhorage/package: missing canonical Changesets publication plan',
+  expect(plan.blocked).toEqual([]);
+  expect(plan.nodes).toMatchObject([
+    { expectedPublication: undefined, repository: 'ankhorage/package' },
   ]);
-  expect(plan.nodes).toEqual([]);
 });
 
 test('rejects an arbitrary inventory version without a matching patch Changeset plan', () => {

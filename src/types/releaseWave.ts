@@ -21,6 +21,8 @@ export interface PublishedPackage {
 /** A package-version decision emitted by the managed Changesets release planner. */
 export interface ChangesetReleasePlan {
   readonly packageName: string;
+  /** Immutable candidate revision whose clean checkout produced the status document. */
+  readonly revision: string;
   readonly releases: readonly ChangesetRelease[];
   /** SHA-256 of the exact Changesets status document collected from the clean pinned checkout. */
   readonly statusHash?: string;
@@ -71,6 +73,8 @@ export interface ReleaseWavePlan {
 }
 
 export interface ReleaseWaveLedger {
+  /** Candidate-scoped Changesets evidence, written before protected-release verification. */
+  readonly candidatePublications?: Readonly<Record<string, ChangesetReleasePlan>>;
   readonly nodes: Readonly<
     Record<
       string,

@@ -68,7 +68,12 @@ async function changesetReleasePlanAsync(
       ),
     ]);
     await assertImmutableCheckoutAsync(checkout);
-    return releasePlan(JSON.parse(statusOutput) as ChangesetStatus, manifest, statusOutput);
+    return releasePlan(
+      JSON.parse(statusOutput) as ChangesetStatus,
+      manifest,
+      statusOutput,
+      checkout.revision,
+    );
   } finally {
     await rm(directory, { force: true, recursive: true });
   }
@@ -107,6 +112,7 @@ function releasePlan(
   status: ChangesetStatus,
   manifest: PackageManifest,
   statusOutput: string,
+  revision: string,
 ): ChangesetReleasePlan | undefined {
   const releases = status.releases ?? [];
   if (releases.length !== 1) return undefined;
@@ -124,6 +130,7 @@ function releasePlan(
   if (!isSolePatchRelease(release, manifest.name, manifest.version)) return undefined;
   return {
     packageName: release.name,
+    revision,
     releases: [{ packageName: release.name, type: 'patch' }],
     version: release.newVersion,
     statusHash: createHash('sha256').update(statusOutput).digest('hex'),

@@ -1,4 +1,4 @@
-import type { ReleaseWaveNode } from '../../../types/releaseWave.js';
+import type { ChangesetReleasePlan, ReleaseWaveNode } from '../../../types/releaseWave.js';
 
 export interface ReleaseWaveVerification {
   readonly documentationGenerated: boolean;
@@ -11,6 +11,12 @@ export interface ReleaseWaveVerification {
 }
 
 export interface ReleaseWaveExecutionPort {
+  /** Collect one clean immutable candidate Changesets decision after its grouped PR exists. */
+  collectReleaseWaveCandidatePublicationAsync(input: {
+    readonly node: ReleaseWaveNode;
+    readonly operationId: string;
+    readonly runId: string;
+  }): Promise<ChangesetReleasePlan>;
   /** Reconcile the durable operation identity before a reclaimed lease may create a candidate. */
   reconcileReleaseWaveRepositoryAsync(input: {
     readonly node: ReleaseWaveNode;

@@ -181,8 +181,9 @@ function publicationExpectation(
   publicationPlans: ReadonlyMap<string, ChangesetReleasePlan>,
 ) {
   if (!requiresNpmPublication(repository)) return undefined;
-  if (!hasCanonicalPublicationPlan(repository, publicationPlans))
-    throw new Error('Release-wave publishable node is missing its canonical Changesets plan.');
+  // A grouped candidate creates the managed Changeset. Requiring it here would make candidate
+  // creation circular; it is instead collected and durably bound after candidate creation.
+  if (!hasCanonicalPublicationPlan(repository, publicationPlans)) return undefined;
   const plan = publicationPlans.get(repository.fullName);
   if (plan === undefined) throw new Error('Release-wave publication plan disappeared.');
   return { version: plan.version };
