@@ -60,6 +60,7 @@ export function cohortEpoch(id: string, names: readonly string[]) {
   return {
     id,
     inventoryId: 'inventory-1',
+    sourceRevision: 'c'.repeat(40),
     publishers: names.map((name) => ({
       packageName: '@ankhorage/' + name,
       sourceRepository: 'ankhorage/' + name,

@@ -54,6 +54,7 @@ export async function runReleaseWaveCoordinatorAsync(input: {
     cohort: {
       epochId: epoch.id,
       inventoryId: epoch.inventoryId,
+      epochRevision: epoch.sourceRevision,
       publisherEventIds: events.map((event) => event.eventId).sort(),
     },
   };
@@ -206,6 +207,8 @@ function logicalWaveId(epoch: ReleaseWavePublisherEpoch): string {
     createHash('sha256')
       .update(
         epoch.id +
+          '\n' +
+          epoch.sourceRevision +
           '\n' +
           epoch.publishers
             .map((publisher) =>

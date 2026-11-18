@@ -5,10 +5,10 @@ import { releaseWaveEventIdentity } from '../../domain/releaseWaveEventIdentity.
 import type {
   ReleaseWavePublicationCohort,
   ReleaseWavePublicationCohortPort,
-  ReleaseWavePublisherEpoch,
   SettledReleaseWavePublication,
 } from '../../ports/releaseWavePublicationCohort.js';
 import type { ReleaseWavePublicationEvidencePort } from '../../ports/releaseWavePublicationEvidence.js';
+import type { ReleaseWavePublisherEpochPort } from '../../ports/releaseWavePublisherEpoch.js';
 import { githubReleaseWaveConfiguration } from './githubReleaseWaveConfiguration.js';
 import { githubReleaseWaveEmptyDependencies } from './githubReleaseWaveEmptyDependencies.js';
 import { githubReleaseWavePublisherEpochAsync } from './githubReleaseWavePublisherEpoch.js';
@@ -16,11 +16,8 @@ import { githubReleaseWavePublisherEpochAsync } from './githubReleaseWavePublish
 interface GitHubReleaseWavePublicationCohortAdapterInput {
   readonly apiBaseUrl: string;
   readonly publicationEvidencePort: ReleaseWavePublicationEvidencePort;
-  /** Durable release-plan source; it is intentionally independent from webhook arrival order. */
-  readonly publisherEpochsAsync: (input: {
-    readonly inventoryId: string;
-    readonly repositories: readonly ReleaseWaveRepository[];
-  }) => Promise<readonly ReleaseWavePublisherEpoch[]>;
+  /** Authenticated durable release-plan source; it is intentionally independent from webhook arrival order. */
+  readonly publisherEpochPort: ReleaseWavePublisherEpochPort;
   readonly requestAsync: (input: string | URL, init?: RequestInit) => Promise<Response>;
   readonly token: string;
 }
@@ -50,7 +47,7 @@ async function collectReleaseWavePublicationCohortAsync(
   const scheduled = await githubReleaseWavePublisherEpochAsync({
     inventoryId,
     pendingEvents,
-    publisherEpochsAsync: input.publisherEpochsAsync,
+    publisherEpochPort: input.publisherEpochPort,
     repositories,
   });
   if (scheduled === undefined) return undefined;

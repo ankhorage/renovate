@@ -4,15 +4,13 @@ import type {
   ReleaseWavePublisherEpoch,
   ReleaseWaveScheduledPublisher,
 } from '../../ports/releaseWavePublicationCohort.js';
+import type { ReleaseWavePublisherEpochPort } from '../../ports/releaseWavePublisherEpoch.js';
 
 /*** Select a complete durable epoch without allowing one blocked branch to prevent an unrelated cohort. */
 export async function githubReleaseWavePublisherEpochAsync(input: {
   readonly inventoryId: string;
   readonly pendingEvents: readonly DurableReleaseWaveEvent[];
-  readonly publisherEpochsAsync: (input: {
-    readonly inventoryId: string;
-    readonly repositories: readonly ReleaseWaveRepository[];
-  }) => Promise<readonly ReleaseWavePublisherEpoch[]>;
+  readonly publisherEpochPort: ReleaseWavePublisherEpochPort;
   readonly repositories: readonly ReleaseWaveRepository[];
 }): Promise<
   | {
@@ -21,12 +19,12 @@ export async function githubReleaseWavePublisherEpochAsync(input: {
     }
   | undefined
 > {
-  const epochs = await input.publisherEpochsAsync({
+  const epochs = await input.publisherEpochPort.loadReleaseWavePublisherEpochsAsync({
     inventoryId: input.inventoryId,
     repositories: input.repositories,
   });
   for (const epoch of [...epochs].sort((left, right) => left.id.localeCompare(right.id))) {
-    if (epoch.inventoryId !== input.inventoryId)
+    if (epoch.inventoryId !== input.inventoryId || epoch.sourceRevision.length === 0)
       throw new Error(
         'Release-wave publisher epoch inventory does not match selected installation.',
       );

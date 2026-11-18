@@ -23,6 +23,8 @@ export interface ReleaseWavePublisherEpoch {
   readonly id: string;
   /** Digest of the selected installation identities and immutable graph inputs. */
   readonly inventoryId: string;
+  /** Immutable GitHub Contents revision of the authenticated release-plan document. */
+  readonly sourceRevision: string;
   /** Exact package identities that must provide verified publication evidence before execution. */
   readonly publishers: readonly ReleaseWaveScheduledPublisher[];
 }

@@ -76,18 +76,21 @@ function cohortAdapter(
           version: dispatch.version,
         }),
     },
-    publisherEpochsAsync: ({ inventoryId }) =>
-      Promise.resolve([
-        {
-          id: 'diamond-epoch',
-          inventoryId,
-          publishers: ['base', 'left'].map((name) => ({
-            packageName: '@ankhorage/' + name,
-            sourceRepository: 'ankhorage/' + name,
-            version: '1.1.0',
-          })),
-        },
-      ]),
+    publisherEpochPort: {
+      loadReleaseWavePublisherEpochsAsync: ({ inventoryId }) =>
+        Promise.resolve([
+          {
+            id: 'diamond-epoch',
+            inventoryId,
+            sourceRevision: 'c'.repeat(40),
+            publishers: ['base', 'left'].map((name) => ({
+              packageName: '@ankhorage/' + name,
+              sourceRepository: 'ankhorage/' + name,
+              version: '1.1.0',
+            })),
+          },
+        ]),
+    },
     requestAsync,
     token: 'installation-token',
   });
