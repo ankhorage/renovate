@@ -127,6 +127,35 @@ export function eventQueue(
   };
 }
 
+/** Preserve an in-flight candidate so recovery can prove its identity without acknowledging events. */
+export function interruptedExecutionPort(calls: string[]): ReleaseWaveExecutionPort {
+  return {
+    collectReleaseWaveCandidatePublicationAsync: ({ node }) =>
+      Promise.resolve({
+        packageName: node.packageName,
+        releases: [{ packageName: node.packageName, type: 'patch' as const }],
+        revision: 'a'.repeat(40),
+        statusHash: 'b'.repeat(64),
+        version: '1.1.1',
+      }),
+    reconcileReleaseWaveRepositoryAsync: () => Promise.resolve('missing'),
+    ensureReleaseWaveRepositoryAsync: ({ node }) => {
+      calls.push('ensure:' + node.repository);
+      return Promise.resolve();
+    },
+    verifyReleaseWaveRepositoryAsync: () =>
+      Promise.resolve({
+        documentationGenerated: true,
+        exactHeadCiPassed: false,
+        lockfileUpdated: true,
+        npmArtifactVerified: true,
+        npmVersionVerified: true,
+        releaseWorkflowPassed: true,
+        requiredReviewsApproved: true,
+      }),
+  };
+}
+
 /** Create isolated checkpoint persistence. */
 function checkpointPort(): ReleaseWaveCheckpointPort {
   let checkpoint: ReleaseWaveCheckpoint | undefined;

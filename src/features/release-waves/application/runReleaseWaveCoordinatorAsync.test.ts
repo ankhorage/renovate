@@ -8,6 +8,7 @@ import {
   coordinatorInput,
   event,
   eventQueue,
+  interruptedExecutionPort,
   repository,
 } from './test-support/releaseWaveFixtures.js';
 
@@ -40,6 +41,7 @@ test('resumes epoch A with its original checkpoint after an unrelated epoch B ch
           ],
         }),
     },
+    executionPort: interruptedExecutionPort(calls),
   };
   await ingestReleaseWaveEventAsync({
     event: event('base', '1.1.0'),
@@ -54,9 +56,9 @@ test('resumes epoch A with its original checkpoint after an unrelated epoch B ch
   const first = await runReleaseWaveCoordinatorAsync(input);
   state.epoch = cohortEpoch('epoch-a', ['base', 'left'], 'b'.repeat(40));
   const resumed = await runReleaseWaveCoordinatorAsync(input);
-  expect(resumed).toBeUndefined();
-  expect(first?.runId).toBeDefined();
+  expect(resumed?.runId).toBe(first?.runId);
   expect(calls.filter((call) => call === 'ensure:ankhorage/consumer')).toHaveLength(1);
+  expect((await queue.loadReleaseWaveEventQueueAsync())?.queue.events).toHaveLength(2);
 });
 
 test('waits for complete settlement when base arrives first, then creates exactly one consumer release', async () => {
