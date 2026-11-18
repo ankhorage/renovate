@@ -2,7 +2,7 @@ import type { ReleaseWaveEventQueuePort } from '../ports/releaseWaveEventQueue.j
 import type { ReleaseWavePublicationEvidencePort } from '../ports/releaseWavePublicationEvidence.js';
 import { ingestReleaseWaveEventAsync } from './ingestReleaseWaveEventAsync.js';
 
-/*** Enrich the stable publisher dispatch contract before admitting a durable release-wave event. */
+/*** Admit verified publisher evidence before any later epoch lookup can block cohort recovery. */
 export async function ingestPackageReleaseEventAsync(input: {
   readonly maximumRetries: number;
   readonly publicationEvidencePort: ReleaseWavePublicationEvidencePort;

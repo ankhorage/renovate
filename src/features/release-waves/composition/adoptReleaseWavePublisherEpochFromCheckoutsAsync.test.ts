@@ -1,3 +1,6 @@
+import { rm } from 'node:fs/promises';
+import { join } from 'node:path';
+
 import { expect, test } from 'bun:test';
 
 import type { ReleaseWaveRepository } from '../../../types/releaseWave.js';
@@ -18,6 +21,32 @@ test('collects the complete selected publisher decision set before one epoch ado
     expect(calls).toHaveLength(1);
     expect(calls[0]).toMatchObject({
       publicationDecisions: new Map(),
+    });
+  } finally {
+    await fixture.removeAsync();
+  }
+});
+
+test('retains the planned publisher intent after versioning consumes its Changeset', async () => {
+  const fixture = await changesetCheckoutFixtureAsync();
+  const calls: unknown[] = [];
+  try {
+    await adoptReleaseWavePublisherEpochFromCheckoutsAsync({
+      checkouts: { 'ankhorage/example': fixture },
+      inventoryId: 'a'.repeat(64),
+      publisherEpochWriterPort: writer(calls),
+      repositories: [repository(fixture.revision)],
+    });
+    await rm(join(fixture.path, '.changeset', 'example.md'));
+    expect(calls[0]).toMatchObject({
+      publicationDecisions: new Map([
+        [
+          'ankhorage/example',
+          {
+            releasePlan: { packageName: '@ankhorage/example', version: '1.0.1' },
+          },
+        ],
+      ]),
     });
   } finally {
     await fixture.removeAsync();
