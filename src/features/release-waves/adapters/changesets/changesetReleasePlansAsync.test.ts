@@ -43,11 +43,26 @@ test('rejects an untracked Changeset that could alter status output', async () =
 test('rejects real Changesets output that combines more than one patch declaration', async () => {
   const fixture = await changesetCheckoutFixtureAsync({ additionalPatchChangeset: true });
   try {
-    expect(await changesetReleasePlansAsync({ 'ankhorage/example': fixture })).toEqual(new Map());
+    await expectInvalidStatusFailureAsync(fixture.path);
   } finally {
     await fixture.removeAsync();
   }
 });
+
+/*** Confirm a non-sole Changesets status cannot become an unchanged baseline decision. */
+async function expectInvalidStatusFailureAsync(path: string): Promise<void> {
+  try {
+    await changesetReleasePlansAsync({
+      'ankhorage/example': { path, revision: await revisionAsync(path) },
+    });
+    throw new Error('Changesets collection unexpectedly accepted an aggregated release status.');
+  } catch (error) {
+    expect(error).toHaveProperty(
+      'message',
+      'Changesets status release is not one managed patch publication.',
+    );
+  }
+}
 
 /*** Assert that an inventory revision cannot redirect the adapter to a mutable checkout. */
 async function expectImmutableRevisionFailureAsync(path: string): Promise<void> {

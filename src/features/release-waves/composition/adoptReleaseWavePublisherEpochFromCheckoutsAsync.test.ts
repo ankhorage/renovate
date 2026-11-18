@@ -35,6 +35,35 @@ test('rejects an omitted selected publisher before Changesets can be collected o
   ).rejects.toThrow('checkout collection is incomplete');
 });
 
+test('does not persist a partial base-only epoch when left has invalid scheduled Changesets intent', async () => {
+  const base = await changesetCheckoutFixtureAsync();
+  const left = await changesetCheckoutFixtureAsync({ additionalPatchChangeset: true });
+  const calls: unknown[] = [];
+  try {
+    try {
+      await adoptReleaseWavePublisherEpochFromCheckoutsAsync({
+        checkouts: { 'ankhorage/base': base, 'ankhorage/left': left },
+        inventoryId: 'a'.repeat(64),
+        publisherEpochWriterPort: writer(calls),
+        repositories: [
+          { ...repository(base.revision), fullName: 'ankhorage/base' },
+          { ...repository(left.revision), fullName: 'ankhorage/left' },
+        ],
+      });
+      throw new Error('Epoch adoption unexpectedly accepted invalid left Changesets intent.');
+    } catch (error) {
+      expect(error).toHaveProperty(
+        'message',
+        'Changesets status release is not one managed patch publication.',
+      );
+    }
+    expect(calls).toHaveLength(0);
+  } finally {
+    await base.removeAsync();
+    await left.removeAsync();
+  }
+});
+
 function writer(calls: unknown[]): ReleaseWavePublisherEpochWriterPort {
   return {
     adoptReleaseWavePublisherEpochAsync: (input) => {

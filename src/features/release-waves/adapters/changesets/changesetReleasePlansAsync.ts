@@ -12,7 +12,7 @@ import type {
 } from '../../../../types/releaseWave.js';
 
 interface ChangesetStatus {
-  readonly releases?: readonly ChangesetStatusRelease[];
+  readonly releases: readonly ChangesetStatusRelease[];
 }
 
 interface ChangesetStatusRelease {
@@ -81,7 +81,7 @@ async function changesetReleaseDecisionAsync(
     ]);
     await assertImmutableCheckoutAsync(checkout);
     return {
-      releasePlan: releasePlan(
+      releasePlan: changesetReleasePlanFromStatus(
         JSON.parse(statusOutput) as ChangesetStatus,
         manifest,
         statusOutput,
@@ -123,15 +123,21 @@ async function gitOutputAsync(
   return (await new Response(subprocess.stdout).text()).trim();
 }
 
-/*** Accept exactly one managed patch publication from the authoritative Changesets status document. */
-function releasePlan(
-  status: ChangesetStatus,
+/*** Accept an unchanged baseline only from `releases: []`; reject every other non-sole status. */
+export function changesetReleasePlanFromStatus(
+  status: unknown,
   manifest: PackageManifest,
   statusOutput: string,
   revision: string,
 ): ChangesetReleasePlan | undefined {
-  const releases = status.releases ?? [];
-  if (releases.length !== 1) return undefined;
+  if (!isChangesetStatus(status))
+    throw new Error('Changesets status is missing an explicit releases list.');
+  const { releases } = status;
+  if (releases.length === 0) return undefined;
+  if (releases.length !== 1)
+    throw new Error(
+      'Changesets status must contain exactly one release or an explicit empty list.',
+    );
   const [release] = releases;
   if (
     release?.name === undefined ||
@@ -140,10 +146,10 @@ function releasePlan(
     manifest.version === undefined ||
     valid(manifest.version) === null ||
     valid(release.newVersion) === null
-  ) {
-    return undefined;
-  }
-  if (!isSolePatchRelease(release, manifest.name, manifest.version)) return undefined;
+  )
+    throw new Error('Changesets status release is malformed.');
+  if (!isSolePatchRelease(release, manifest.name, manifest.version))
+    throw new Error('Changesets status release is not one managed patch publication.');
   return {
     packageName: release.name,
     revision,
@@ -151,6 +157,16 @@ function releasePlan(
     version: release.newVersion,
     statusHash: createHash('sha256').update(statusOutput).digest('hex'),
   };
+}
+
+/*** Narrow untrusted status JSON before its release list can establish an unchanged baseline. */
+function isChangesetStatus(value: unknown): value is ChangesetStatus {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'releases' in value &&
+    Array.isArray(value.releases)
+  );
 }
 
 /** Ensure Changesets chose one patch from this exact package version. */
