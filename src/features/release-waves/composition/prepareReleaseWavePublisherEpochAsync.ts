@@ -3,7 +3,7 @@ import { acquireGitHubReleaseWaveCheckoutsAsync } from '../adapters/github/acqui
 import type { ReleaseWavePublisherEpochWriterPort } from '../ports/releaseWavePublisherEpoch.js';
 import { adoptReleaseWavePublisherEpochFromCheckoutsAsync } from './adoptReleaseWavePublisherEpochFromCheckoutsAsync.js';
 
-/*** Freeze a complete selected publisher schedule from verified temporary immutable checkouts. */
+/*** Freeze the complete publisher epoch before Changesets versioning consumes its immutable intent. */
 export async function prepareReleaseWavePublisherEpochAsync(input: {
   readonly inventoryId: string;
   readonly publisherEpochWriterPort: ReleaseWavePublisherEpochWriterPort;

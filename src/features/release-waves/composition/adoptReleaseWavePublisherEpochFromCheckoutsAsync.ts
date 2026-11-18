@@ -2,7 +2,7 @@ import type { ReleaseWaveCheckout, ReleaseWaveRepository } from '../../../types/
 import { changesetReleaseDecisionsAsync } from '../adapters/changesets/changesetReleasePlansAsync.js';
 import type { ReleaseWavePublisherEpochWriterPort } from '../ports/releaseWavePublisherEpoch.js';
 
-/*** Collect every eligible selected source decision before atomically adopting its publisher epoch. */
+/*** Capture every eligible selected source decision before versioning can consume its Changesets. */
 export async function adoptReleaseWavePublisherEpochFromCheckoutsAsync(input: {
   readonly checkouts: Readonly<Record<string, ReleaseWaveCheckout>>;
   readonly inventoryId: string;

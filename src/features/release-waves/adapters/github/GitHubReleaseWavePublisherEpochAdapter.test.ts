@@ -83,6 +83,24 @@ test('creates a complete selected-app epoch through GitHub Contents CAS', async 
   expect(Buffer.from(body.content, 'base64').toString('utf8')).toContain('ankhorage/base');
 });
 
+test('fails closed on an epoch CAS conflict so a caller can retry from fresh immutable state', () => {
+  const adapter = GitHubReleaseWavePublisherEpochAdapter({
+    apiBaseUrl: 'https://api.github.test',
+    branch: 'main',
+    repository: 'ankhorage/renovate',
+    token: 'token',
+    requestAsync: (_url, init) =>
+      Promise.resolve(
+        init?.method === 'PUT'
+          ? new Response(null, { status: 409 })
+          : new Response(null, { status: 404 }),
+      ),
+  });
+  return expect(adapter.adoptReleaseWavePublisherEpochAsync(publisherRequest())).rejects.toThrow(
+    'CAS conflict',
+  );
+});
+
 test('refuses a malicious base-only plan when selected left is also scheduled', () => {
   const adapter = GitHubReleaseWavePublisherEpochAdapter({
     apiBaseUrl: 'https://api.github.test',
