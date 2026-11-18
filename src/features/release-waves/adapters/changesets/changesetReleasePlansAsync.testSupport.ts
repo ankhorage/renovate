@@ -3,13 +3,29 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 /*** Create a disposable committed package fixture for real Changesets collection tests. */
-export async function changesetCheckoutFixtureAsync(): Promise<{
+export async function changesetCheckoutFixtureAsync(
+  input: { readonly additionalPatchChangeset?: boolean } = {},
+): Promise<{
   readonly path: string;
   readonly removeAsync: () => Promise<void>;
   readonly revision: string;
 }> {
   const path = await mkdtemp(join(tmpdir(), 'changeset-release-plan-test-'));
   await mkdir(join(path, '.changeset'));
+  await writeFixtureFilesAsync(path, input.additionalPatchChangeset === true);
+  await commitFixtureAsync(path);
+  return {
+    path,
+    removeAsync: () => rm(path, { force: true, recursive: true }),
+    revision: await revisionAsync(path),
+  };
+}
+
+/** Populate a package fixture with either one intended or two conflicting patch Changesets. */
+async function writeFixtureFilesAsync(
+  path: string,
+  additionalPatchChangeset: boolean,
+): Promise<void> {
   await writeFile(
     join(path, 'package.json'),
     JSON.stringify({ name: '@ankhorage/example', version: '1.0.0' }),
@@ -31,6 +47,16 @@ export async function changesetCheckoutFixtureAsync(): Promise<{
     join(path, '.changeset', 'example.md'),
     "---\n'@ankhorage/example': patch\n---\n\nRelease.\n",
   );
+  if (additionalPatchChangeset) {
+    await writeFile(
+      join(path, '.changeset', 'second.md'),
+      "---\n'@ankhorage/example': patch\n---\n\nUnplanned duplicate release.\n",
+    );
+  }
+}
+
+/** Commit the fixture to give Changesets collection an immutable Git revision. */
+async function commitFixtureAsync(path: string): Promise<void> {
   await commandAsync(['git', 'init', '--initial-branch=main'], path);
   await commandAsync(['git', 'add', '.'], path);
   await commandAsync(
@@ -46,11 +72,6 @@ export async function changesetCheckoutFixtureAsync(): Promise<{
     ],
     path,
   );
-  return {
-    path,
-    removeAsync: () => rm(path, { force: true, recursive: true }),
-    revision: await revisionAsync(path),
-  };
 }
 
 /*** Run a fixture-only Git command without shell interpretation. */

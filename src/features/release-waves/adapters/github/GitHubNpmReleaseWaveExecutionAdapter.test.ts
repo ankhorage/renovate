@@ -154,6 +154,7 @@ test('accepts a CODEOWNER-protected candidate only with a merged immutable revie
   const verification = await verifyWith((url, _method) =>
     url.includes('/branches/main/protection')
       ? json({
+          enforce_admins: { enabled: true },
           required_pull_request_reviews: {
             require_code_owner_reviews: true,
             required_approving_review_count: 1,
@@ -163,6 +164,22 @@ test('accepts a CODEOWNER-protected candidate only with a merged immutable revie
       : githubReleaseWaveResponseFor(url),
   );
   expect(verification.requiredReviewsApproved).toBe(true);
+});
+
+test('blocks a CODEOWNER-protected candidate without effective protected-branch enforcement', async () => {
+  const verification = await verifyWith((url, _method) =>
+    url.includes('/branches/main/protection')
+      ? json({
+          enforce_admins: { enabled: false },
+          required_pull_request_reviews: {
+            require_code_owner_reviews: true,
+            required_approving_review_count: 1,
+          },
+          required_status_checks: { contexts: ['validate'] },
+        })
+      : githubReleaseWaveResponseFor(url),
+  );
+  expect(verification.requiredReviewsApproved).toBe(false);
 });
 
 test('rejects a merged candidate when the available approval reviewed a different head', async () => {

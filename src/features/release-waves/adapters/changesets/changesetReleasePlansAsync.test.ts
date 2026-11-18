@@ -25,6 +25,15 @@ test('collects one patch publication from real Changesets status output at the p
   }
 });
 
+test('rejects real Changesets output that combines more than one patch declaration', async () => {
+  const fixture = await changesetCheckoutFixtureAsync({ additionalPatchChangeset: true });
+  try {
+    expect(await changesetReleasePlansAsync({ 'ankhorage/example': fixture })).toEqual(new Map());
+  } finally {
+    await fixture.removeAsync();
+  }
+});
+
 /*** Assert that an inventory revision cannot redirect the adapter to a mutable checkout. */
 async function expectImmutableRevisionFailureAsync(path: string): Promise<void> {
   try {
