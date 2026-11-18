@@ -29,10 +29,7 @@ export function publisherRepository(
 }
 
 /** Create the only eligible single-package patch Changesets decision for a selected repository. */
-export function publisherPlan(
-  repository: ReleaseWaveRepository,
-  version = '1.1.0',
-): ChangesetReleasePlan {
+function publisherPlan(repository: ReleaseWaveRepository, version = '1.1.0'): ChangesetReleasePlan {
   if (repository.packageName === undefined || repository.sourceRevision === undefined)
     throw new Error('Provider-contract publisher fixture requires an immutable package source.');
   return {
