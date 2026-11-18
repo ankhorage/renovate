@@ -25,7 +25,8 @@ permissions:
 concurrency:
   # Serialize every settled publisher event through the one release-wave lane. Renovate reuses the
   # stable branch below, so delayed/reordered events amend one consumer PR instead of fanning out.
-  group: coordinated-release-wave
+  # Never cancel pending work: each dispatch must reach the durable mutation fence.
+  group: release-wave-mutation
   cancel-in-progress: false
 
 jobs:
@@ -203,6 +204,14 @@ jobs:
           permission-issues: write
           permission-pull-requests: write
           permission-workflows: write
+
+      - name: Admit this legacy rollout mutation through the durable cutover fence
+        id: mutation-fence
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          RELEASE_WAVE_MUTATION_LEASE_ID: ${{ github.run_id }}-${{ strategy.job-index }}
+          RELEASE_WAVE_STATE_BRANCH: ${{ vars.ANKHORAGE_RELEASE_WAVE_STATE_BRANCH }}
+        run: bun src/cli/commands/release/fence.ts acquire legacy
 
       - name: Check pinned Renovate sync protocol
         id: protocol
@@ -397,3 +406,62 @@ jobs:
         run: |
           echo "Reconciling the coordinated release-wave PR after $ROLLOUT_PACKAGE_NAME@$ROLLOUT_VERSION for $RENOVATE_REPOSITORIES"
           bun x renovate
+
+      - name: Release this legacy rollout mutation lease
+        if: always() && steps.mutation-fence.outcome == 'success'
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          RELEASE_WAVE_MUTATION_LEASE_ID: ${{ github.run_id }}-${{ strategy.job-index }}
+          RELEASE_WAVE_STATE_BRANCH: ${{ vars.ANKHORAGE_RELEASE_WAVE_STATE_BRANCH }}
+        run: bun src/cli/commands/release/fence.ts release
+
+  coordinator:
+    needs: validate
+    # Disabled by default. Runtime admission below denies execution until a drained cutover exists.
+    if: vars.ANKHORAGE_RELEASE_WAVE_COORDINATOR_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out canonical coordinator composition
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: '1.4.2'
+      - name: Install coordinator dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Mint the coordinator App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.ANKHORAGE_RENOVATE_SYNC_CLIENT_ID }}
+          private-key: ${{ secrets.ANKHORAGE_RENOVATE_SYNC_PRIVATE_KEY }}
+          owner: ankhorage
+          permission-contents: write
+          permission-issues: write
+          permission-pull-requests: write
+          permission-workflows: write
+      - name: Admit this coordinator through the durable cutover fence
+        id: mutation-fence
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          RELEASE_WAVE_MUTATION_LEASE_ID: ${{ github.run_id }}-coordinator
+          RELEASE_WAVE_STATE_BRANCH: ${{ vars.ANKHORAGE_RELEASE_WAVE_STATE_BRANCH }}
+        run: bun src/cli/commands/release/fence.ts acquire coordinator
+      - name: Run the authenticated durable release-wave coordinator
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          PACKAGE_NAME: ${{ needs.validate.outputs.package_name }}
+          PACKAGE_VERSION: ${{ needs.validate.outputs.version }}
+          RELEASE_WAVE_MUTATION_LEASE_ID: ${{ github.run_id }}-coordinator
+          RELEASE_WAVE_STATE_BRANCH: ${{ vars.ANKHORAGE_RELEASE_WAVE_STATE_BRANCH }}
+          SOURCE_REPOSITORY: ${{ needs.validate.outputs.source_repository }}
+        run: bun src/cli/commands/release/coordinate.ts
+      - name: Release this coordinator mutation lease
+        if: always() && steps.mutation-fence.outcome == 'success'
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          RELEASE_WAVE_MUTATION_LEASE_ID: ${{ github.run_id }}-coordinator
+          RELEASE_WAVE_STATE_BRANCH: ${{ vars.ANKHORAGE_RELEASE_WAVE_STATE_BRANCH }}
+        run: bun src/cli/commands/release/fence.ts release

@@ -1,0 +1,221 @@
+import type {
+  ReleaseWaveCheckpoint,
+  ReleaseWaveCheckpointPort,
+} from '../../ports/releaseWaveCheckpoint.js';
+import { ReleaseWaveCheckpointConflictError } from '../../ports/releaseWaveCheckpoint.js';
+import type {
+  ReleaseWaveEventQueue,
+  ReleaseWaveEventQueuePort,
+} from '../../ports/releaseWaveEventQueue.js';
+import { ReleaseWaveEventQueueConflictError } from '../../ports/releaseWaveEventQueue.js';
+import type { ReleaseWaveExecutionPort } from '../../ports/releaseWaveExecution.js';
+
+/** Build deterministic coordinator inputs around a complete two-publisher cohort. */
+export function coordinatorInput(
+  queuePort: ReleaseWaveEventQueuePort,
+  calls: string[],
+  published = publications(),
+) {
+  return {
+    checkpointPort: checkpointPort(),
+    cohortPort: {
+      collectReleaseWavePublicationCohortAsync: () =>
+        Promise.resolve({
+          epoch: cohortEpoch('publisher-epoch-1', ['base', 'left']),
+          publications: published,
+          repositories: [repository('base'), repository('left'), consumerRepository()],
+        }),
+    },
+    executionPort: executionPort(calls),
+    executorId: 'test-executor',
+    maximumCheckpointRetries: 3,
+    maximumConcurrency: 1,
+    maximumQueueRetries: 3,
+    now: () => new Date('2026-11-16T00:00:00.000Z'),
+    publishedPackages: [...publications(), { name: '@ankhorage/consumer', version: '1.1.0' }],
+    publicationPlans: new Map(
+      ['base', 'left', 'consumer'].map((name) => {
+        const item = repository(name);
+        return [item.fullName, item.plannedPublication] as const;
+      }),
+    ),
+    queuePort,
+  };
+}
+
+/** Create one verified publisher event. */
+export function event(name: string, version: string) {
+  return {
+    npmArtifactIntegrity: 'sha512-' + Buffer.from(name).toString('base64'),
+    packageName: '@ankhorage/' + name,
+    releaseId: name + '-' + version,
+    releaseTag: 'v' + version,
+    sourceRepository: 'ankhorage/' + name,
+    version,
+  };
+}
+
+/** Provide an immutable release-plan epoch without deriving schedule membership from arrivals. */
+export function cohortEpoch(id: string, names: readonly string[], sourceRevision = 'c'.repeat(40)) {
+  return {
+    id,
+    inventoryId: 'inventory-1',
+    sourceRevision,
+    publishers: names.map((name) => ({
+      packageName: '@ankhorage/' + name,
+      planRevision: 'a'.repeat(40),
+      planStatusHash: 'b'.repeat(64),
+      sourceRepository: 'ankhorage/' + name,
+      version: '1.1.0',
+    })),
+  };
+}
+
+/** Provide the complete planned publisher cohort. */
+function publications() {
+  return ['base', 'left'].map((name) => ({ ...event(name, '1.1.0'), name: '@ankhorage/' + name }));
+}
+
+/** Create a planned publishable repository. */
+export function repository(name: string) {
+  const packageName = '@ankhorage/' + name;
+  return {
+    archived: false,
+    bootstrapReady: true,
+    dependencies: {
+      dependencies: {},
+      devDependencies: {},
+      optionalDependencies: {},
+      peerDependencies: {},
+    },
+    fullName: 'ankhorage/' + name,
+    packageName,
+    packageVersion: '1.0.0',
+    plannedPublication: {
+      packageName,
+      revision: 'a'.repeat(40),
+      releases: [{ packageName, type: 'patch' as const }],
+      statusHash: 'b'.repeat(64),
+      version: '1.1.0',
+    },
+    private: false,
+    publishable: true,
+  };
+}
+
+/** Provide a revisioned in-memory durable queue. */
+export function eventQueue(
+  conflictingSaveAttempts: readonly number[] = [],
+): ReleaseWaveEventQueuePort {
+  let queue: ReleaseWaveEventQueue | undefined;
+  let revision = 0;
+  let saveAttempts = 0;
+  return {
+    loadReleaseWaveEventQueueAsync: () =>
+      Promise.resolve(queue === undefined ? undefined : { queue, revision: String(revision) }),
+    saveReleaseWaveEventQueueAsync: (next, expected) => {
+      saveAttempts += 1;
+      if (
+        conflictingSaveAttempts.includes(saveAttempts) ||
+        (queue !== undefined && expected !== String(revision))
+      )
+        throw new ReleaseWaveEventQueueConflictError();
+      queue = next;
+      revision += 1;
+      return Promise.resolve({ queue: next, revision: String(revision) });
+    },
+  };
+}
+
+/** Preserve an in-flight candidate so recovery can prove its identity without acknowledging events. */
+export function interruptedExecutionPort(calls: string[]): ReleaseWaveExecutionPort {
+  return {
+    collectReleaseWaveCandidatePublicationAsync: ({ node }) =>
+      Promise.resolve({
+        packageName: node.packageName,
+        releases: [{ packageName: node.packageName, type: 'patch' as const }],
+        revision: 'a'.repeat(40),
+        statusHash: 'b'.repeat(64),
+        version: '1.1.1',
+      }),
+    reconcileReleaseWaveRepositoryAsync: () => Promise.resolve('missing'),
+    ensureReleaseWaveRepositoryAsync: ({ node }) => {
+      calls.push('ensure:' + node.repository);
+      return Promise.resolve();
+    },
+    verifyReleaseWaveRepositoryAsync: () =>
+      Promise.resolve({
+        documentationGenerated: true,
+        exactHeadCiPassed: false,
+        lockfileUpdated: true,
+        npmArtifactVerified: true,
+        npmVersionVerified: true,
+        releaseWorkflowPassed: true,
+        requiredReviewsApproved: true,
+      }),
+  };
+}
+
+/** Create isolated checkpoint persistence. */
+function checkpointPort(): ReleaseWaveCheckpointPort {
+  let checkpoint: ReleaseWaveCheckpoint | undefined;
+  let revision = 0;
+  return {
+    loadReleaseWaveCheckpointAsync: () =>
+      Promise.resolve(
+        checkpoint === undefined ? undefined : { checkpoint, revision: String(revision) },
+      ),
+    saveReleaseWaveCheckpointAsync: (_run, next, expected) => {
+      if (checkpoint !== undefined && expected !== String(revision))
+        throw new ReleaseWaveCheckpointConflictError('test');
+      checkpoint = next;
+      revision += 1;
+      return Promise.resolve({ checkpoint: next, revision: String(revision) });
+    },
+  };
+}
+
+/** Record candidate creation and report complete downstream verification. */
+function executionPort(calls: string[]): ReleaseWaveExecutionPort {
+  const candidates = new Set<string>();
+  return {
+    collectReleaseWaveCandidatePublicationAsync: ({ node }) =>
+      Promise.resolve({
+        packageName: node.packageName,
+        releases: [{ packageName: node.packageName, type: 'patch' as const }],
+        revision: 'a'.repeat(40),
+        statusHash: 'b'.repeat(64),
+        version: '1.1.1',
+      }),
+    reconcileReleaseWaveRepositoryAsync: ({ node }) =>
+      Promise.resolve(candidates.has(node.repository) ? 'awaiting-review' : 'missing'),
+    ensureReleaseWaveRepositoryAsync: ({ node }) => {
+      candidates.add(node.repository);
+      calls.push('ensure:' + node.repository);
+      return Promise.resolve();
+    },
+    verifyReleaseWaveRepositoryAsync: () =>
+      Promise.resolve({
+        documentationGenerated: true,
+        exactHeadCiPassed: true,
+        lockfileUpdated: true,
+        npmArtifactVerified: true,
+        npmVersionVerified: true,
+        releaseWorkflowPassed: true,
+        requiredReviewsApproved: true,
+      }),
+  };
+}
+
+/** Link both publishers into the one downstream consumer. */
+function consumerRepository() {
+  return {
+    ...repository('consumer'),
+    dependencies: {
+      dependencies: { '@ankhorage/base': '^1.0.0', '@ankhorage/left': '^1.0.0' },
+      devDependencies: {},
+      optionalDependencies: {},
+      peerDependencies: {},
+    },
+  };
+}

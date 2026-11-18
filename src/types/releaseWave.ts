@@ -11,6 +11,8 @@ export interface ReleaseWaveRepository {
   readonly packageVersion?: string;
   readonly private: boolean;
   readonly publishable: boolean;
+  /** Immutable selected default-branch commit that supplied this profile. */
+  readonly sourceRevision?: string;
 }
 
 export interface PublishedPackage {
@@ -27,6 +29,19 @@ export interface ChangesetReleasePlan {
   /** SHA-256 of the exact Changesets status document collected from the clean pinned checkout. */
   readonly statusHash?: string;
   readonly version: string;
+}
+
+/**
+ * Exhaustive Changesets status evidence for one selected publishable source.
+ *
+ * An absent `releasePlan` is a verified unchanged baseline, not a missing
+ * collection result.  The epoch writer requires one decision for every
+ * eligible selected publisher before it can freeze a schedule.
+ */
+export interface ChangesetReleaseDecision {
+  readonly releasePlan?: ChangesetReleasePlan;
+  readonly revision: string;
+  readonly statusHash: string;
 }
 
 /** Immutable local consumer checkout identity used to collect managed Changesets output. */
@@ -65,6 +80,14 @@ interface ReleaseWavePublication {
 
 export interface ReleaseWavePlan {
   readonly blocked: readonly string[];
+  /** Immutable cohort identity persisted with the checkpoint to fence inventory and graph drift. */
+  readonly cohort?: {
+    readonly epochId: string;
+    /** Immutable epoch identity; the mutable provider index revision is not a recovery fence. */
+    readonly epochRevision: string;
+    readonly inventoryId: string;
+    readonly publisherEventIds: readonly string[];
+  };
   readonly excluded: readonly string[];
   readonly nodes: readonly ReleaseWaveNode[];
   readonly pendingBootstrap: readonly string[];

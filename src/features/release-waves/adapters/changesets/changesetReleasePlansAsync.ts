@@ -5,10 +5,14 @@ import { join } from 'node:path';
 
 import { inc, valid } from 'semver';
 
-import type { ChangesetReleasePlan, ReleaseWaveCheckout } from '../../../../types/releaseWave.js';
+import type {
+  ChangesetReleaseDecision,
+  ChangesetReleasePlan,
+  ReleaseWaveCheckout,
+} from '../../../../types/releaseWave.js';
 
 interface ChangesetStatus {
-  readonly releases?: readonly ChangesetStatusRelease[];
+  readonly releases: readonly ChangesetStatusRelease[];
 }
 
 interface ChangesetStatusRelease {
@@ -28,23 +32,31 @@ interface PackageManifest {
 export async function changesetReleasePlansAsync(
   checkouts: Readonly<Record<string, ReleaseWaveCheckout>>,
 ): Promise<ReadonlyMap<string, ChangesetReleasePlan>> {
-  const entries = await Promise.all(
-    Object.entries(checkouts).map(
-      async ([repository, checkout]) =>
-        [repository, await changesetReleasePlanAsync(checkout)] as const,
-    ),
-  );
+  const decisions = await changesetReleaseDecisionsAsync(checkouts);
   return new Map(
-    entries.flatMap(([repository, plan]) =>
-      plan === undefined ? [] : [[repository, plan] as const],
+    [...decisions.entries()].flatMap(([repository, decision]) =>
+      decision.releasePlan === undefined ? [] : [[repository, decision.releasePlan] as const],
     ),
   );
 }
 
+/*** Collect one explicit status decision per pinned checkout, including unchanged baselines. */
+export async function changesetReleaseDecisionsAsync(
+  checkouts: Readonly<Record<string, ReleaseWaveCheckout>>,
+): Promise<ReadonlyMap<string, ChangesetReleaseDecision>> {
+  const entries = await Promise.all(
+    Object.entries(checkouts).map(
+      async ([repository, checkout]) =>
+        [repository, await changesetReleaseDecisionAsync(checkout)] as const,
+    ),
+  );
+  return new Map(entries);
+}
+
 /*** Execute Changesets against one exact checkout and retain only a sole patch publication decision. */
-async function changesetReleasePlanAsync(
+async function changesetReleaseDecisionAsync(
   checkout: ReleaseWaveCheckout,
-): Promise<ChangesetReleasePlan | undefined> {
+): Promise<ChangesetReleaseDecision> {
   await assertImmutableCheckoutAsync(checkout);
   const directory = await mkdtemp(join(tmpdir(), 'ankhorage-changeset-status-'));
   const outputPath = join(directory, 'status.json');
@@ -68,12 +80,16 @@ async function changesetReleasePlanAsync(
       ),
     ]);
     await assertImmutableCheckoutAsync(checkout);
-    return releasePlan(
-      JSON.parse(statusOutput) as ChangesetStatus,
-      manifest,
-      statusOutput,
-      checkout.revision,
-    );
+    return {
+      releasePlan: changesetReleasePlanFromStatus(
+        JSON.parse(statusOutput) as ChangesetStatus,
+        manifest,
+        statusOutput,
+        checkout.revision,
+      ),
+      revision: checkout.revision,
+      statusHash: createHash('sha256').update(statusOutput).digest('hex'),
+    };
   } finally {
     await rm(directory, { force: true, recursive: true });
   }
@@ -107,15 +123,21 @@ async function gitOutputAsync(
   return (await new Response(subprocess.stdout).text()).trim();
 }
 
-/*** Accept exactly one managed patch publication from the authoritative Changesets status document. */
-function releasePlan(
-  status: ChangesetStatus,
+/*** Accept an unchanged baseline only from `releases: []`; reject every other non-sole status. */
+export function changesetReleasePlanFromStatus(
+  status: unknown,
   manifest: PackageManifest,
   statusOutput: string,
   revision: string,
 ): ChangesetReleasePlan | undefined {
-  const releases = status.releases ?? [];
-  if (releases.length !== 1) return undefined;
+  if (!isChangesetStatus(status))
+    throw new Error('Changesets status is missing an explicit releases list.');
+  const { releases } = status;
+  if (releases.length === 0) return undefined;
+  if (releases.length !== 1)
+    throw new Error(
+      'Changesets status must contain exactly one release or an explicit empty list.',
+    );
   const [release] = releases;
   if (
     release?.name === undefined ||
@@ -124,10 +146,10 @@ function releasePlan(
     manifest.version === undefined ||
     valid(manifest.version) === null ||
     valid(release.newVersion) === null
-  ) {
-    return undefined;
-  }
-  if (!isSolePatchRelease(release, manifest.name, manifest.version)) return undefined;
+  )
+    throw new Error('Changesets status release is malformed.');
+  if (!isSolePatchRelease(release, manifest.name, manifest.version))
+    throw new Error('Changesets status release is not one managed patch publication.');
   return {
     packageName: release.name,
     revision,
@@ -135,6 +157,16 @@ function releasePlan(
     version: release.newVersion,
     statusHash: createHash('sha256').update(statusOutput).digest('hex'),
   };
+}
+
+/*** Narrow untrusted status JSON before its release list can establish an unchanged baseline. */
+function isChangesetStatus(value: unknown): value is ChangesetStatus {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'releases' in value &&
+    Array.isArray(value.releases)
+  );
 }
 
 /** Ensure Changesets chose one patch from this exact package version. */

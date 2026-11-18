@@ -33,11 +33,24 @@ describe('package release rollout', () => {
   });
 
   test('serializes release events into one non-automerge Ankhorage consumer branch', () => {
-    expect(workflow).toContain('group: coordinated-release-wave');
+    expect(workflow).toContain('group: release-wave-mutation');
+    expect(workflow).toContain('cancel-in-progress: false');
     expect(workflow).toContain('"matchPackageNames":["@ankhorage/**"]');
     expect(workflow).toContain('"groupSlug":"ankhorage-release-wave"');
     expect(workflow).toContain('"automerge":false');
     expect(workflow).toContain('"platformAutomerge":false');
+  });
+
+  test('requires durable admission rather than a YAML-only old/new mutator switch', () => {
+    expect(workflow).toContain("ANKHORAGE_RELEASE_WAVE_COORDINATOR_ENABLED == 'true'");
+    expect(workflow).toContain(
+      'Admit this legacy rollout mutation through the durable cutover fence',
+    );
+    expect(workflow).toContain('Admit this coordinator through the durable cutover fence');
+    expect(workflow).toContain('fence.ts acquire legacy');
+    expect(workflow).toContain('fence.ts acquire coordinator');
+    expect(workflow).toContain('Run the authenticated durable release-wave coordinator');
+    expect(workflow).toContain('RELEASE_WAVE_STATE_BRANCH');
   });
 });
 
