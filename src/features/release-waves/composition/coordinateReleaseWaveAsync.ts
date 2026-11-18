@@ -13,6 +13,20 @@ import { ingestPackageReleaseEventAsync } from '../application/ingestPackageRele
 import { runReleaseWaveCoordinatorAsync } from '../application/runReleaseWaveCoordinatorAsync.js';
 import { prepareReleaseWavePublisherEpochAsync } from './prepareReleaseWavePublisherEpochAsync.js';
 
+type RequestAsync = (input: string | URL, init?: RequestInit) => Promise<Response>;
+interface GitHubContentInput {
+  readonly owner: string;
+  readonly path: string;
+  readonly repo: string;
+}
+type GitHubContentReadInput = GitHubContentInput & { readonly ref: string };
+type GitHubContentWriteInput = GitHubContentInput & {
+  readonly branch: string;
+  readonly content: string;
+  readonly message: string;
+  readonly sha?: string;
+};
+
 /*** Compose the authenticated durable release-wave coordinator from the stable publisher dispatch contract. */
 export async function coordinateReleaseWaveAsync(environment: NodeJS.ProcessEnv): Promise<void> {
   const configuration = releaseWaveConfiguration(environment);
@@ -46,7 +60,7 @@ export async function coordinateReleaseWaveAsync(environment: NodeJS.ProcessEnv)
 /*** Bind the durable state and publisher evidence adapters at the command's outer edge. */
 function releaseWavePorts(
   configuration: ReturnType<typeof releaseWaveConfiguration>,
-  requestAsync: (input: string | URL, init?: RequestInit) => Promise<Response>,
+  requestAsync: RequestAsync,
 ) {
   const client = githubContentsClient(configuration, requestAsync);
   const state = {
@@ -133,20 +147,27 @@ async function candidateCheckoutAsync(
   const selected = repositories.get(repository);
   if (selected === undefined)
     throw new Error('Release-wave candidate is not selected by the App installation.');
+  if (selected.archived || selected.excludedReason !== undefined || !selected.bootstrapReady)
+    throw new Error('Release-wave candidate is not eligible for checkout.');
   return acquireGitHubReleaseWaveCheckoutAsync({
     repository: { ...selected, sourceRevision: revision },
     token,
   });
 }
 
-/*** Query every selected public package registry manifest; incomplete provider data blocks execution. */
+/*** Query registry evidence only for active public publishers that can enter the current wave. */
 async function publishedPackagesAsync(
   repositories: readonly ReleaseWaveRepository[],
   registry: string,
 ): Promise<readonly PublishedPackage[]> {
   return Promise.all(
     repositories.flatMap((repository) =>
-      repository.packageName === undefined || repository.private
+      repository.archived ||
+      repository.excludedReason !== undefined ||
+      !repository.bootstrapReady ||
+      !repository.publishable ||
+      repository.private ||
+      repository.packageName === undefined
         ? []
         : [publishedPackageAsync(repository.packageName, registry)],
     ),
@@ -177,6 +198,7 @@ async function renovateAsync(
       ...process.env,
       RENOVATE_AUTODISCOVER: 'false',
       RENOVATE_ONBOARDING: 'false',
+      RENOVATE_PACKAGE_RULES: releaseWavePackageRules(),
       RENOVATE_PLATFORM: 'github',
       RENOVATE_REPOSITORIES: repository,
       RENOVATE_REQUIRE_CONFIG: 'required',
@@ -191,28 +213,22 @@ async function renovateAsync(
     );
 }
 
+/*** Preserve the one non-automerge Ankhorage-only policy used for a controlled release-wave candidate. */
+function releaseWavePackageRules(): string {
+  return '[{"matchDatasources":["npm"],"matchPackageNames":["*"],"enabled":false},{"matchDatasources":["npm"],"matchPackageNames":["@ankhorage/**"],"matchUpdateTypes":["major","minor","patch"],"enabled":true,"rangeStrategy":"bump","groupName":"Ankhorage release wave","groupSlug":"ankhorage-release-wave","automerge":false,"platformAutomerge":false,"recreateWhen":"always"}]';
+}
+
 /*** Adapt the narrow authenticated Contents operations required by durable ports. */
 function githubContentsClient(
   configuration: ReturnType<typeof releaseWaveConfiguration>,
-  requestAsync: (input: string | URL, init?: RequestInit) => Promise<Response>,
+  requestAsync: RequestAsync,
 ) {
   return {
     repos: {
-      createOrUpdateFileContents: (input: {
-        readonly branch: string;
-        readonly content: string;
-        readonly message: string;
-        readonly owner: string;
-        readonly path: string;
-        readonly repo: string;
-        readonly sha?: string;
-      }) => saveGithubContentAsync(configuration, requestAsync, input),
-      getContent: (input: {
-        readonly owner: string;
-        readonly path: string;
-        readonly ref: string;
-        readonly repo: string;
-      }) => loadGithubContentAsync(configuration, requestAsync, input),
+      createOrUpdateFileContents: (input: GitHubContentWriteInput) =>
+        saveGithubContentAsync(configuration, requestAsync, input),
+      getContent: (input: GitHubContentReadInput) =>
+        loadGithubContentAsync(configuration, requestAsync, input),
     },
   };
 }
@@ -220,16 +236,8 @@ function githubContentsClient(
 /*** Write a Contents document with its observed SHA so durable ports retain CAS semantics. */
 async function saveGithubContentAsync(
   configuration: ReturnType<typeof releaseWaveConfiguration>,
-  requestAsync: (input: string | URL, init?: RequestInit) => Promise<Response>,
-  input: {
-    readonly branch: string;
-    readonly content: string;
-    readonly message: string;
-    readonly owner: string;
-    readonly path: string;
-    readonly repo: string;
-    readonly sha?: string;
-  },
+  requestAsync: RequestAsync,
+  input: GitHubContentWriteInput,
 ) {
   const response = await requestAsync(
     configuration.apiBaseUrl +
@@ -246,7 +254,7 @@ async function saveGithubContentAsync(
         message: input.message,
         ...(input.sha === undefined ? {} : { sha: input.sha }),
       }),
-      headers: githubHeaders(configuration),
+      headers: configuration.headers,
       method: 'PUT',
     },
   );
@@ -257,13 +265,8 @@ async function saveGithubContentAsync(
 /*** Load a revisioned Contents document for durable queue and checkpoint recovery. */
 async function loadGithubContentAsync(
   configuration: ReturnType<typeof releaseWaveConfiguration>,
-  requestAsync: (input: string | URL, init?: RequestInit) => Promise<Response>,
-  input: {
-    readonly owner: string;
-    readonly path: string;
-    readonly ref: string;
-    readonly repo: string;
-  },
+  requestAsync: RequestAsync,
+  input: GitHubContentReadInput,
 ) {
   const response = await requestAsync(
     configuration.apiBaseUrl +
@@ -275,7 +278,7 @@ async function loadGithubContentAsync(
       input.path +
       '?ref=' +
       encodeURIComponent(input.ref),
-    { headers: githubHeaders(configuration) },
+    { headers: configuration.headers },
   );
   if (!response.ok) throw githubError(response.status);
   return {
@@ -285,17 +288,6 @@ async function loadGithubContentAsync(
       readonly sha: string;
       readonly type: string;
     },
-  };
-}
-
-/*** Keep authentication at the one outer provider boundary. */
-function githubHeaders(
-  configuration: ReturnType<typeof releaseWaveConfiguration>,
-): Record<string, string> {
-  return {
-    accept: 'application/vnd.github+json',
-    authorization: 'Bearer ' + configuration.token,
-    'content-type': 'application/json',
   };
 }
 
@@ -318,5 +310,12 @@ function releaseWaveConfiguration(environment: NodeJS.ProcessEnv) {
   };
   if (Object.values(value).some((entry) => entry.length === 0))
     throw new Error('Release-wave coordinator configuration is incomplete.');
-  return value;
+  return {
+    ...value,
+    headers: {
+      accept: 'application/vnd.github+json',
+      authorization: 'Bearer ' + value.token,
+      'content-type': 'application/json',
+    },
+  };
 }

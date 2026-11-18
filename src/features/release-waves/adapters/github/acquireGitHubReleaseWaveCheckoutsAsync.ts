@@ -14,7 +14,7 @@ export async function acquireGitHubReleaseWaveCheckoutsAsync<T>(input: {
     throw new Error('Release-wave checkout acquisition requires an installation token.');
   const root = await mkdtemp(join(tmpdir(), 'ankhorage-release-wave-'));
   try {
-    const eligible = input.repositories.filter((repository) => repository.publishable);
+    const eligible = input.repositories.filter(isEligiblePublisher);
     if (eligible.length === 0) throw new Error('Selected installation has no eligible publishers.');
     const checkouts = Object.fromEntries(
       await Promise.all(
@@ -28,6 +28,17 @@ export async function acquireGitHubReleaseWaveCheckoutsAsync<T>(input: {
   } finally {
     await rm(root, { force: true, recursive: true });
   }
+}
+
+/*** Limit publisher source acquisition to active selected public packages that may release in this wave. */
+function isEligiblePublisher(repository: ReleaseWaveRepository): boolean {
+  return (
+    !repository.archived &&
+    repository.excludedReason === undefined &&
+    repository.bootstrapReady &&
+    repository.publishable &&
+    !repository.private
+  );
 }
 
 /*** Acquire one candidate checkout with an explicit caller-owned cleanup operation. */

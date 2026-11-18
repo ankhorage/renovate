@@ -21,11 +21,32 @@ test('waits for every publisher scheduled by the immutable diamond epoch', async
     'ankhorage/consumer',
     'ankhorage/docs',
     'ankhorage/left',
+    'ankhorage/old',
+    'ankhorage/pending',
     'ankhorage/private',
   ]);
   expect(
     cohort?.repositories.find((repository) => repository.fullName === 'ankhorage/private'),
   ).toMatchObject({ bootstrapReady: false, private: true });
+});
+
+test('audits archived, excluded, private, and pending-bootstrap selected repositories distinctly', async () => {
+  const cohort = await cohortAdapter().collectReleaseWavePublicationCohortAsync({
+    pendingEvents: [event('base'), event('left')],
+  });
+
+  expect(
+    cohort?.repositories.find((repository) => repository.fullName === 'ankhorage/old'),
+  ).toMatchObject({ archived: true, publishable: true });
+  expect(
+    cohort?.repositories.find((repository) => repository.fullName === 'ankhorage/docs'),
+  ).toMatchObject({ excludedReason: 'missing package.json', publishable: false });
+  expect(
+    cohort?.repositories.find((repository) => repository.fullName === 'ankhorage/private'),
+  ).toMatchObject({ private: true, publishable: false });
+  expect(
+    cohort?.repositories.find((repository) => repository.fullName === 'ankhorage/pending'),
+  ).toMatchObject({ bootstrapReady: false, publishable: true });
 });
 
 test('retains a selected repository without package metadata as an explicit excluded profile', async () => {
@@ -113,18 +134,20 @@ function event(name: string) {
 function response(url: string): Response {
   if (url.includes('/installation/repositories'))
     return json({
-      repositories: ['base', 'consumer', 'docs', 'left', 'private'].map((name) => ({
-        archived: false,
-        default_branch: 'main',
-        full_name: 'ankhorage/' + name,
-      })),
+      repositories: ['base', 'consumer', 'docs', 'left', 'old', 'pending', 'private'].map(
+        (name) => ({
+          archived: name === 'old',
+          default_branch: 'main',
+          full_name: 'ankhorage/' + name,
+        }),
+      ),
     });
   const name = /repos\/ankhorage\/([^/]+)/.exec(url)?.[1];
   if (!name) return new Response(null, { status: 404 });
   if (url.includes('/git/ref/heads/'))
     return json({ object: { sha: name + '-sha', type: 'commit' } });
   if (url.includes('renovate.yml'))
-    return name === 'private'
+    return ['pending', 'private'].includes(name)
       ? new Response(null, { status: 404 })
       : content("github.event.pull_request.user.login == 'ankhorage-renovate-sync[bot]'");
   if (name === 'docs' && url.includes('/contents/package.json'))
