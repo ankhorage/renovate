@@ -5,7 +5,7 @@ import { expect, test } from 'bun:test';
 import type { ChangesetReleaseDecision } from '../../../../types/releaseWave.js';
 import { GitHubReleaseWavePublisherEpochAdapter } from './GitHubReleaseWavePublisherEpochAdapter.js';
 
-test('binds immutable scheduled publishers to the selected inventory and GitHub file revision', () => {
+test('loads immutable scheduled publishers across changed current inventory snapshots', () => {
   const adapter = GitHubReleaseWavePublisherEpochAdapter({
     apiBaseUrl: 'https://api.github.test',
     branch: 'main',
@@ -13,17 +13,15 @@ test('binds immutable scheduled publishers to the selected inventory and GitHub 
     token: 'token',
     requestAsync: () => Promise.resolve(file({ epochs: [epoch('inventory-1'), epoch('other')] })),
   });
-  return adapter
-    .loadReleaseWavePublisherEpochsAsync({
-      inventoryId: digest('inventory-1'),
-      repositories: [{} as never],
-    })
-    .then((epochs) =>
-      expect(epochs).toEqual([{ ...epoch('inventory-1'), sourceRevision: 'a'.repeat(40) }]),
-    );
+  return adapter.loadReleaseWavePublisherEpochsAsync().then((epochs) =>
+    expect(epochs).toEqual([
+      { ...epoch('inventory-1'), sourceRevision: 'a'.repeat(40) },
+      { ...epoch('other'), sourceRevision: 'a'.repeat(40) },
+    ]),
+  );
 });
 
-test('fails closed for a missing matching plan', () => {
+test('preserves a historical epoch for the current cohort to admit or reject', () => {
   const absent = GitHubReleaseWavePublisherEpochAdapter({
     apiBaseUrl: 'https://api.github.test',
     branch: 'main',
@@ -31,12 +29,9 @@ test('fails closed for a missing matching plan', () => {
     token: 'token',
     requestAsync: () => Promise.resolve(file({ epochs: [epoch('other')] })),
   });
-  return expect(
-    absent.loadReleaseWavePublisherEpochsAsync({
-      inventoryId: digest('inventory-1'),
-      repositories: [{} as never],
-    }),
-  ).rejects.toThrow('does not cover');
+  return expect(absent.loadReleaseWavePublisherEpochsAsync()).resolves.toEqual([
+    { ...epoch('other'), sourceRevision: 'a'.repeat(40) },
+  ]);
 });
 
 test('fails closed for a malformed publisher schedule', () => {
@@ -50,12 +45,7 @@ test('fails closed for a malformed publisher schedule', () => {
         file({ epochs: [{ id: 'bad', inventoryId: 'inventory-1', publishers: [] }] }),
       ),
   });
-  return expect(
-    malformed.loadReleaseWavePublisherEpochsAsync({
-      inventoryId: digest('inventory-1'),
-      repositories: [{} as never],
-    }),
-  ).rejects.toThrow('malformed');
+  return expect(malformed.loadReleaseWavePublisherEpochsAsync()).rejects.toThrow('malformed');
 });
 
 test('creates a complete selected-app epoch through GitHub Contents CAS', async () => {

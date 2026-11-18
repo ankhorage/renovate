@@ -40,10 +40,9 @@ async function collectReleaseWavePublicationCohortAsync(
   >[0]['pendingEvents'],
 ): Promise<ReleaseWavePublicationCohort | undefined> {
   if (pendingEvents.length === 0) return undefined;
-  const { inventoryId, repositories } = await collectGitHubReleaseWaveInventoryAsync(input);
+  const { repositories } = await collectGitHubReleaseWaveInventoryAsync(input);
   const byPackage = uniqueRepositoriesByPackage(repositories);
   const scheduled = await githubReleaseWavePublisherEpochAsync({
-    inventoryId,
     pendingEvents,
     publisherEpochPort: input.publisherEpochPort,
     repositories,

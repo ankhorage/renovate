@@ -28,8 +28,7 @@ export function GitHubReleaseWavePublisherEpochAdapter(
   return {
     adoptReleaseWavePublisherEpochAsync: (request) =>
       adoptReleaseWavePublisherEpochAsync(input, request),
-    loadReleaseWavePublisherEpochsAsync: ({ inventoryId, repositories }) =>
-      loadReleaseWavePublisherEpochsAsync(input, inventoryId, repositories),
+    loadReleaseWavePublisherEpochsAsync: () => loadReleaseWavePublisherEpochsAsync(input),
   };
 }
 
@@ -102,21 +101,14 @@ function adoptedEpoch(
   return { ...existing, sourceRevision: current.revision };
 }
 
-/*** Load a revisioned release plan and refuse schedules not bound to the selected inventory. */
+/*** Load every revisioned immutable epoch; current-installation admission belongs to the cohort boundary. */
 async function loadReleaseWavePublisherEpochsAsync(
   input: GitHubReleaseWavePublisherEpochAdapterInput,
-  inventoryId: string,
-  repositories: readonly ReleaseWaveRepository[],
 ): Promise<readonly ReleaseWavePublisherEpoch[]> {
-  if (repositories.length === 0)
-    throw new Error('Release-wave selected installation inventory is empty.');
   const { plan, revision } = await readReleasePlanAsync(input, false);
   if (revision === undefined)
     throw new Error('Release-wave publisher epoch plan has no immutable revision.');
-  const epochs = plan.epochs.filter((epoch) => epoch.inventoryId === inventoryId);
-  if (epochs.length === 0)
-    throw new Error('Release-wave publisher epoch plan does not cover the selected installation.');
-  return epochs.map((epoch) => ({ ...epoch, sourceRevision: revision }));
+  return plan.epochs.map((epoch) => ({ ...epoch, sourceRevision: revision }));
 }
 
 /** Load an existing immutable document; first creation is allowed only by the authoritative producer. */
@@ -161,7 +153,9 @@ function parseReleasePlan(value: unknown): {
   if (
     !isRecord(document) ||
     !Array.isArray(document.epochs) ||
-    document.epochs.some((epoch) => !isEpoch(epoch))
+    document.epochs.some((epoch) => !isEpoch(epoch)) ||
+    new Set(document.epochs.map((epoch) => (isRecord(epoch) ? epoch.id : undefined))).size !==
+      document.epochs.length
   )
     throw new Error('Release-wave publisher epoch plan is malformed.');
   return { epochs: document.epochs, revision: value.sha };
