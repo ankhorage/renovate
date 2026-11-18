@@ -315,7 +315,6 @@ test('rejects an arbitrary inventory version without a matching patch Changeset 
       .blocked,
   ).toEqual(['ankhorage/package: missing canonical Changesets publication plan']);
 });
-
 test('bounds concurrent work and makes terminal releases idempotent across recovery', () => {
   expect(partitionReleaseWave(['c', 'a', 'b'], 2)).toEqual([['a', 'b'], ['c']]);
   expect(() => partitionReleaseWave(['a'], 0)).toThrow('positive integer');

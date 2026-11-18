@@ -150,11 +150,10 @@ test('reads required checks from a later documented GitHub REST page', async () 
   expect(verification).toMatchObject({ exactHeadCiPassed: true });
 });
 
-test('accepts a CODEOWNER-protected candidate only with a merged immutable reviewed head', async () => {
+test('accepts a CODEOWNER-protected candidate only with an exact-head approval from the changed paths owner', async () => {
   const verification = await verifyWith((url, _method) =>
     url.includes('/branches/main/protection')
       ? json({
-          enforce_admins: { enabled: true },
           required_pull_request_reviews: {
             require_code_owner_reviews: true,
             required_approving_review_count: 1,
@@ -166,20 +165,49 @@ test('accepts a CODEOWNER-protected candidate only with a merged immutable revie
   expect(verification.requiredReviewsApproved).toBe(true);
 });
 
-test('blocks a CODEOWNER-protected candidate without effective protected-branch enforcement', async () => {
+test('blocks an unrelated approval even when branch protection applies to administrators', async () => {
+  const verification = await verifyWith((url, _method) => {
+    if (url.includes('/branches/main/protection'))
+      return json({
+        enforce_admins: { enabled: true },
+        required_pull_request_reviews: {
+          require_code_owner_reviews: true,
+          required_approving_review_count: 1,
+        },
+        required_status_checks: { contexts: ['validate'] },
+      });
+    if (url.includes('/pulls/42/reviews'))
+      return json([
+        {
+          commit_id: 'candidate-sha',
+          state: 'APPROVED',
+          user: { login: 'unrelated', type: 'User' },
+        },
+      ]);
+    return githubReleaseWaveResponseFor(url);
+  });
+  expect(verification.requiredReviewsApproved).toBe(false);
+});
+
+test('blocks a CODEOWNER requirement when policy or ownership evidence cannot prove the protected decision', async () => {
   const verification = await verifyWith((url, _method) =>
+    url.includes('/git/trees/base-sha') ? json({ tree: [] }) : githubReleaseWaveResponseFor(url),
+  );
+  expect(verification.requiredReviewsApproved).toBe(true);
+  const protectedVerification = await verifyWith((url, _method) =>
     url.includes('/branches/main/protection')
       ? json({
-          enforce_admins: { enabled: false },
           required_pull_request_reviews: {
             require_code_owner_reviews: true,
             required_approving_review_count: 1,
           },
           required_status_checks: { contexts: ['validate'] },
         })
-      : githubReleaseWaveResponseFor(url),
+      : url.includes('/git/trees/base-sha')
+        ? json({ tree: [] })
+        : githubReleaseWaveResponseFor(url),
   );
-  expect(verification.requiredReviewsApproved).toBe(false);
+  expect(protectedVerification.requiredReviewsApproved).toBe(false);
 });
 
 test('rejects a merged candidate when the available approval reviewed a different head', async () => {

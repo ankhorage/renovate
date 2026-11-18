@@ -9,6 +9,7 @@ export async function changesetCheckoutFixtureAsync(
   readonly path: string;
   readonly removeAsync: () => Promise<void>;
   readonly revision: string;
+  readonly writeDirtyChangesetAsync: (name: string) => Promise<void>;
 }> {
   const path = await mkdtemp(join(tmpdir(), 'changeset-release-plan-test-'));
   await mkdir(join(path, '.changeset'));
@@ -18,6 +19,11 @@ export async function changesetCheckoutFixtureAsync(
     path,
     removeAsync: () => rm(path, { force: true, recursive: true }),
     revision: await revisionAsync(path),
+    writeDirtyChangesetAsync: (name) =>
+      writeFile(
+        join(path, '.changeset', name),
+        "---\n'@ankhorage/example': patch\n---\n\nUncommitted release.\n",
+      ),
   };
 }
 
