@@ -21,6 +21,7 @@ export function coordinatorInput(
     cohortPort: {
       collectReleaseWavePublicationCohortAsync: () =>
         Promise.resolve({
+          epoch: cohortEpoch('publisher-epoch-1', ['base', 'left']),
           publications: published,
           repositories: [repository('base'), repository('left'), consumerRepository()],
         }),
@@ -54,6 +55,19 @@ export function event(name: string, version: string) {
   };
 }
 
+/** Provide an immutable release-plan epoch without deriving schedule membership from arrivals. */
+export function cohortEpoch(id: string, names: readonly string[]) {
+  return {
+    id,
+    inventoryId: 'inventory-1',
+    publishers: names.map((name) => ({
+      packageName: '@ankhorage/' + name,
+      sourceRepository: 'ankhorage/' + name,
+      version: '1.1.0',
+    })),
+  };
+}
+
 /** Provide the complete planned publisher cohort. */
 function publications() {
   return ['base', 'left'].map((name) => ({ ...event(name, '1.1.0'), name: '@ankhorage/' + name }));
@@ -76,7 +90,9 @@ export function repository(name: string) {
     packageVersion: '1.0.0',
     plannedPublication: {
       packageName,
+      revision: 'a'.repeat(40),
       releases: [{ packageName, type: 'patch' as const }],
+      statusHash: 'b'.repeat(64),
       version: '1.1.0',
     },
     private: false,
@@ -131,6 +147,14 @@ function checkpointPort(): ReleaseWaveCheckpointPort {
 function executionPort(calls: string[]): ReleaseWaveExecutionPort {
   const candidates = new Set<string>();
   return {
+    collectReleaseWaveCandidatePublicationAsync: ({ node }) =>
+      Promise.resolve({
+        packageName: node.packageName,
+        releases: [{ packageName: node.packageName, type: 'patch' as const }],
+        revision: 'a'.repeat(40),
+        statusHash: 'b'.repeat(64),
+        version: '1.1.1',
+      }),
     reconcileReleaseWaveRepositoryAsync: ({ node }) =>
       Promise.resolve(candidates.has(node.repository) ? 'awaiting-review' : 'missing'),
     ensureReleaseWaveRepositoryAsync: ({ node }) => {

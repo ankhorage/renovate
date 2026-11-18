@@ -67,6 +67,12 @@ interface ReleaseWavePublication {
 
 export interface ReleaseWavePlan {
   readonly blocked: readonly string[];
+  /** Immutable cohort identity persisted with the checkpoint to fence inventory and graph drift. */
+  readonly cohort?: {
+    readonly epochId: string;
+    readonly inventoryId: string;
+    readonly publisherEventIds: readonly string[];
+  };
   readonly excluded: readonly string[];
   readonly nodes: readonly ReleaseWaveNode[];
   readonly pendingBootstrap: readonly string[];

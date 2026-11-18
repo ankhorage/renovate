@@ -18,6 +18,7 @@ import { isReleaseWaveEventQueueConflict } from '../ports/releaseWaveEventQueue.
 import type { ReleaseWaveExecutionPort } from '../ports/releaseWaveExecution.js';
 import type {
   ReleaseWavePublicationCohortPort,
+  ReleaseWavePublisherEpoch,
   SettledReleaseWavePublication,
 } from '../ports/releaseWavePublicationCohort.js';
 import { executeReleaseWavesAsync } from './executeReleaseWavesAsync.js';
@@ -39,15 +40,23 @@ export async function runReleaseWaveCoordinatorAsync(input: {
 }): Promise<ReleaseWavePlan | undefined> {
   const cohort = await collectedCohortAsync(input);
   if (cohort === undefined) return undefined;
-  const { events, publications, repositories } = cohort;
-  const runId = logicalWaveId(publications, cohort.snapshotId);
-  const { closurePlan, plan } = plansForCohort(
+  const { epoch, events, publications, repositories } = cohort;
+  const runId = logicalWaveId(epoch);
+  const { closurePlan, plan: unboundPlan } = plansForCohort(
     repositories,
     publications,
     input.publishedPackages,
     input.publicationPlans,
     runId,
   );
+  const plan: ReleaseWavePlan = {
+    ...unboundPlan,
+    cohort: {
+      epochId: epoch.id,
+      inventoryId: epoch.inventoryId,
+      publisherEventIds: events.map((event) => event.eventId).sort(),
+    },
+  };
   if (closurePlan.waves.length > 0)
     await executeReleaseWavesAsync({
       checkpointPort: input.checkpointPort,
@@ -71,9 +80,9 @@ async function collectedCohortAsync(input: {
 }): Promise<
   | {
       readonly events: readonly DurableReleaseWaveEvent[];
+      readonly epoch: ReleaseWavePublisherEpoch;
       readonly publications: readonly SettledReleaseWavePublication[];
       readonly repositories: readonly ReleaseWaveRepository[];
-      readonly snapshotId: string | undefined;
     }
   | undefined
 > {
@@ -83,18 +92,14 @@ async function collectedCohortAsync(input: {
   });
   if (collected === undefined) return undefined;
   const publications = validateSettledPublications(collected.publications);
-  if (
-    !hasCompleteExpectedPublisherCohort(collected.repositories, queue?.events ?? [], publications)
-  )
-    return undefined;
-  const events = completeCohortEvents(queue, publications);
+  const events = completeCohortEvents(queue, collected.epoch, publications);
   return events === undefined
     ? undefined
     : {
+        epoch: collected.epoch,
         events,
         publications,
         repositories: collected.repositories,
-        snapshotId: collected.snapshotId,
       };
 }
 
@@ -147,8 +152,26 @@ function plansForCohort(
 /*** Require a complete exact cohort before any consumer can observe a partial update. */
 function completeCohortEvents(
   queue: ReleaseWaveEventQueue | undefined,
+  epoch: ReleaseWavePublisherEpoch,
   publications: readonly SettledReleaseWavePublication[],
 ): readonly DurableReleaseWaveEvent[] | undefined {
+  const scheduled = new Map(
+    epoch.publishers.map((publisher) => [
+      publisher.packageName,
+      publisher.sourceRepository + '\n' + publisher.version,
+    ]),
+  );
+  if (
+    scheduled.size === 0 ||
+    scheduled.size !== epoch.publishers.length ||
+    publications.length !== scheduled.size ||
+    publications.some(
+      (publication) =>
+        scheduled.get(publication.name) !==
+        publication.sourceRepository + '\n' + publication.version,
+    )
+  )
+    return undefined;
   const expected = new Map(
     publications.map((publication) => [
       releaseWaveEventIdentity(publicationEvent(publication)),
@@ -177,20 +200,19 @@ function completeCohortEvents(
 }
 
 /*** Use the immutable complete cohort, rather than a transient queue snapshot, as checkpoint identity. */
-function logicalWaveId(
-  publications: readonly SettledReleaseWavePublication[],
-  snapshotId: string | undefined,
-): string {
+function logicalWaveId(epoch: ReleaseWavePublisherEpoch): string {
   return (
     'wave-' +
     createHash('sha256')
       .update(
-        publications
-          .map((publication) => releaseWaveEventIdentity(publicationEvent(publication)))
-          .sort()
-          .join('\n') +
+        epoch.id +
           '\n' +
-          (snapshotId ?? ''),
+          epoch.publishers
+            .map((publisher) =>
+              [publisher.packageName, publisher.sourceRepository, publisher.version].join('\n'),
+            )
+            .sort()
+            .join('\n\n'),
       )
       .digest('hex')
       .slice(0, 24)
@@ -224,33 +246,6 @@ function updateDependencies(repository: ReleaseWaveRepository): readonly string[
     ...Object.keys(repository.dependencies.devDependencies),
     ...Object.keys(repository.dependencies.optionalDependencies),
   ];
-}
-
-/*** Derive every selected publisher needed by an affected consumer closure before allowing release execution. */
-function hasCompleteExpectedPublisherCohort(
-  repositories: readonly ReleaseWaveRepository[],
-  events: readonly DurableReleaseWaveEvent[],
-  publications: readonly SettledReleaseWavePublication[],
-): boolean {
-  const providers = new Set(
-    repositories.flatMap((repository) =>
-      repository.packageName === undefined ? [] : [repository.packageName],
-    ),
-  );
-  const expected = new Set(events.map((event) => event.packageName));
-  for (;;) {
-    const next = repositories.filter((repository) =>
-      updateDependencies(repository).some((dependency) => expected.has(dependency)),
-    );
-    const required = next.flatMap((repository) =>
-      updateDependencies(repository).filter((dependency) => providers.has(dependency)),
-    );
-    const { size } = expected;
-    for (const packageName of required) expected.add(packageName);
-    if (size === expected.size) break;
-  }
-  const actual = new Set(publications.map((publication) => publication.name));
-  return [...expected].every((packageName) => actual.has(packageName));
 }
 
 /*** Reject ambiguous, malformed, or duplicate publication evidence before it can name a wave. */

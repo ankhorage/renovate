@@ -4,6 +4,7 @@ import { ingestPackageReleaseEventAsync } from './ingestPackageReleaseEventAsync
 import { ingestReleaseWaveEventAsync } from './ingestReleaseWaveEventAsync.js';
 import { runReleaseWaveCoordinatorAsync } from './runReleaseWaveCoordinatorAsync.js';
 import {
+  cohortEpoch,
   coordinatorInput,
   event,
   eventQueue,
@@ -36,6 +37,41 @@ test('waits for complete settlement when base arrives first, then creates exactl
   ).toHaveLength(2);
 });
 
+test('releases a consumer after one scheduled publisher while an unchanged selected upstream remains a baseline', async () => {
+  const queue = eventQueue();
+  const calls: string[] = [];
+  await ingestReleaseWaveEventAsync({
+    event: event('base', '1.1.0'),
+    maximumRetries: 2,
+    queuePort: queue,
+  });
+  const result = await runReleaseWaveCoordinatorAsync({
+    ...coordinatorInput(queue, calls, [{ ...event('base', '1.1.0'), name: '@ankhorage/base' }]),
+    cohortPort: {
+      collectReleaseWavePublicationCohortAsync: () =>
+        Promise.resolve({
+          epoch: cohortEpoch('base-only-epoch', ['base']),
+          publications: [{ ...event('base', '1.1.0'), name: '@ankhorage/base' }],
+          repositories: [
+            repository('base'),
+            repository('left'),
+            {
+              ...repository('consumer'),
+              dependencies: {
+                dependencies: { '@ankhorage/base': '^1.0.0', '@ankhorage/left': '^1.0.0' },
+                devDependencies: {},
+                optionalDependencies: {},
+                peerDependencies: {},
+              },
+            },
+          ],
+        }),
+    },
+  });
+  expect(result?.waves).toEqual([['ankhorage/consumer']]);
+  expect(calls).toContain('ensure:ankhorage/consumer');
+});
+
 test('does not acknowledge wrong or superseded publication evidence', async () => {
   const queue = eventQueue();
   await ingestReleaseWaveEventAsync({
@@ -61,7 +97,7 @@ test('does not acknowledge wrong or superseded publication evidence', async () =
   expect(calls.filter((call) => call === 'ensure:ankhorage/consumer')).toHaveLength(1);
 });
 
-test('blocks a caller cohort that omits a second selected upstream publisher', async () => {
+test('waits when a caller cohort omits a publisher scheduled by the immutable epoch', async () => {
   const queue = eventQueue();
   const calls: string[] = [];
   await ingestReleaseWaveEventAsync({
@@ -74,6 +110,7 @@ test('blocks a caller cohort that omits a second selected upstream publisher', a
     cohortPort: {
       collectReleaseWavePublicationCohortAsync: () =>
         Promise.resolve({
+          epoch: cohortEpoch('diamond-epoch', ['base', 'left']),
           publications: [{ ...event('base', '1.1.0'), name: '@ankhorage/base' }],
           repositories: [
             repository('base'),
@@ -145,6 +182,7 @@ test('includes dev-only consumers without adding dev edges to runtime wave order
     cohortPort: {
       collectReleaseWavePublicationCohortAsync: () =>
         Promise.resolve({
+          epoch: cohortEpoch('diamond-epoch', ['base', 'left']),
           publications: [
             { ...event('base', '1.1.0'), name: '@ankhorage/base' },
             { ...event('left', '1.1.0'), name: '@ankhorage/left' },

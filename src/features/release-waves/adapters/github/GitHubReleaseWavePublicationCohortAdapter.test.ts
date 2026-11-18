@@ -3,12 +3,12 @@ import { expect, test } from 'bun:test';
 import { releaseWaveEventIdentity } from '../../domain/releaseWaveEventIdentity.js';
 import { GitHubReleaseWavePublicationCohortAdapter } from './GitHubReleaseWavePublicationCohortAdapter.js';
 
-test('collects an updated publisher without waiting for an unchanged stable dependency', async () => {
+test('waits for every publisher scheduled by the immutable diamond epoch', async () => {
   const adapter = cohortAdapter();
   const stable = await adapter.collectReleaseWavePublicationCohortAsync({
     pendingEvents: [event('base')],
   });
-  expect(stable?.publications.map((publication) => publication.name)).toEqual(['@ankhorage/base']);
+  expect(stable).toBeUndefined();
   const cohort = await adapter.collectReleaseWavePublicationCohortAsync({
     pendingEvents: [event('base'), event('left')],
   });
@@ -30,7 +30,7 @@ test('collects an updated publisher without waiting for an unchanged stable depe
 
 test('retains a selected repository without package metadata as an explicit excluded profile', async () => {
   const cohort = await cohortAdapter().collectReleaseWavePublicationCohortAsync({
-    pendingEvents: [event('base')],
+    pendingEvents: [event('base'), event('left')],
   });
   expect(
     cohort?.repositories.find((repository) => repository.fullName === 'ankhorage/docs'),
@@ -76,6 +76,18 @@ function cohortAdapter(
           version: dispatch.version,
         }),
     },
+    publisherEpochsAsync: ({ inventoryId }) =>
+      Promise.resolve([
+        {
+          id: 'diamond-epoch',
+          inventoryId,
+          publishers: ['base', 'left'].map((name) => ({
+            packageName: '@ankhorage/' + name,
+            sourceRepository: 'ankhorage/' + name,
+            version: '1.1.0',
+          })),
+        },
+      ]),
     requestAsync,
     token: 'installation-token',
   });

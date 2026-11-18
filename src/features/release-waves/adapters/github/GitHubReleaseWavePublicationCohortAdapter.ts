@@ -5,13 +5,22 @@ import { releaseWaveEventIdentity } from '../../domain/releaseWaveEventIdentity.
 import type {
   ReleaseWavePublicationCohort,
   ReleaseWavePublicationCohortPort,
+  ReleaseWavePublisherEpoch,
   SettledReleaseWavePublication,
 } from '../../ports/releaseWavePublicationCohort.js';
 import type { ReleaseWavePublicationEvidencePort } from '../../ports/releaseWavePublicationEvidence.js';
+import { githubReleaseWaveConfiguration } from './githubReleaseWaveConfiguration.js';
+import { githubReleaseWaveEmptyDependencies } from './githubReleaseWaveEmptyDependencies.js';
+import { githubReleaseWavePublisherEpochAsync } from './githubReleaseWavePublisherEpoch.js';
 
 interface GitHubReleaseWavePublicationCohortAdapterInput {
   readonly apiBaseUrl: string;
   readonly publicationEvidencePort: ReleaseWavePublicationEvidencePort;
+  /** Durable release-plan source; it is intentionally independent from webhook arrival order. */
+  readonly publisherEpochsAsync: (input: {
+    readonly inventoryId: string;
+    readonly repositories: readonly ReleaseWaveRepository[];
+  }) => Promise<readonly ReleaseWavePublisherEpoch[]>;
   readonly requestAsync: (input: string | URL, init?: RequestInit) => Promise<Response>;
   readonly token: string;
 }
@@ -20,7 +29,7 @@ interface GitHubReleaseWavePublicationCohortAdapterInput {
 export function GitHubReleaseWavePublicationCohortAdapter(
   input: GitHubReleaseWavePublicationCohortAdapterInput,
 ): ReleaseWavePublicationCohortPort {
-  validateInput(input);
+  githubReleaseWaveConfiguration(input);
   return {
     collectReleaseWavePublicationCohortAsync: (request) =>
       collectReleaseWavePublicationCohortAsync(input, request.pendingEvents),
@@ -37,18 +46,24 @@ async function collectReleaseWavePublicationCohortAsync(
   if (pendingEvents.length === 0) return undefined;
   const repositories = await selectedRepositoriesAsync(input);
   const byPackage = uniqueRepositoriesByPackage(repositories);
-  const expected = expectedPublisherPackages(pendingEvents, byPackage);
-  if (expected === undefined) return undefined;
-  const events = pendingEvents.filter((event) => expected.has(event.packageName));
-  if (events.length !== expected.size) return undefined;
+  const inventoryId = releaseWaveSnapshotId(repositories);
+  const scheduled = await githubReleaseWavePublisherEpochAsync({
+    inventoryId,
+    pendingEvents,
+    publisherEpochsAsync: input.publisherEpochsAsync,
+    repositories,
+  });
+  if (scheduled === undefined) return undefined;
   const publications = await Promise.all(
-    events.map((event) => settledPublicationAsync(input, event, byPackage.get(event.packageName))),
+    scheduled.events.map((event) =>
+      settledPublicationAsync(input, event, byPackage.get(event.packageName)),
+    ),
   );
   if (publications.some((publication) => publication === undefined)) return undefined;
   return {
+    epoch: scheduled.epoch,
     publications: publications.filter(isPublication),
     repositories,
-    snapshotId: releaseWaveSnapshotId(repositories),
   };
 }
 
@@ -111,17 +126,6 @@ function parsePackageManifest(source: string): PackageManifest {
   return value;
 }
 
-/*** Expand every pending publisher through selected consumers to the full direct-upstream cohort. */
-function expectedPublisherPackages(
-  events: Parameters<
-    ReleaseWavePublicationCohortPort['collectReleaseWavePublicationCohortAsync']
-  >[0]['pendingEvents'],
-  byPackage: ReadonlyMap<string, ReleaseWaveRepository>,
-): ReadonlySet<string> | undefined {
-  const expected = new Set(events.map((event) => event.packageName));
-  return [...expected].every((packageName) => byPackage.has(packageName)) ? expected : undefined;
-}
-
 /*** Re-verify each queued event with the App-token-backed evidence boundary and source identity. */
 async function settledPublicationAsync(
   input: GitHubReleaseWavePublicationCohortAdapterInput,
@@ -157,7 +161,7 @@ function profileFromManifest(
     return {
       archived: repository.archived === true,
       bootstrapReady: false,
-      dependencies: emptyDependencies(),
+      dependencies: githubReleaseWaveEmptyDependencies(),
       excludedReason: 'missing package.json',
       fullName,
       private: true,
@@ -281,11 +285,6 @@ function dependencyRecord(value: unknown, section: string): Readonly<Record<stri
   return value as Readonly<Record<string, string>>;
 }
 
-/*** Keep a visible non-package selected profile free of invented dependency declarations. */
-function emptyDependencies(): ReleaseWaveRepository['dependencies'] {
-  return { dependencies: {}, devDependencies: {}, optionalDependencies: {}, peerDependencies: {} };
-}
-
 /*** Bind the selected identities and immutable source revisions to a deterministic cohort snapshot. */
 function releaseWaveSnapshotId(repositories: readonly ReleaseWaveRepository[]): string {
   return createHash('sha256')
@@ -294,6 +293,13 @@ function releaseWaveSnapshotId(repositories: readonly ReleaseWaveRepository[]): 
         .map((repository) =>
           [
             repository.fullName,
+            repository.archived ? 'archived' : 'active',
+            repository.bootstrapReady ? 'bootstrap-ready' : 'pending-bootstrap',
+            repository.excludedReason ?? '',
+            repository.packageName ?? '',
+            repository.packageVersion ?? '',
+            repository.private ? 'private' : 'public',
+            repository.publishable ? 'publishable' : 'not-publishable',
             repository.sourceRevision ?? '',
             JSON.stringify(repository.dependencies),
           ].join('\\n'),
@@ -302,12 +308,6 @@ function releaseWaveSnapshotId(repositories: readonly ReleaseWaveRepository[]): 
         .join('\\n\\n'),
     )
     .digest('hex');
-}
-
-/*** Reject incomplete composition before attempting an authenticated inventory snapshot. */
-function validateInput(input: GitHubReleaseWavePublicationCohortAdapterInput): void {
-  if (!input.apiBaseUrl || !input.token)
-    throw new Error('Release-wave cohort adapter configuration is incomplete.');
 }
 
 interface GitHubInstallationRepository {
