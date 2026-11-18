@@ -4,7 +4,6 @@ import { expect, test } from 'bun:test';
 
 import { GitHubNpmReleaseWaveExecutionAdapter } from '../adapters/github/GitHubNpmReleaseWaveExecutionAdapter.js';
 import { GitHubNpmReleaseWavePublicationEvidenceAdapter } from '../adapters/github/GitHubNpmReleaseWavePublicationEvidenceAdapter.js';
-import { GitHubReleaseWavePublicationCohortAdapter } from '../adapters/github/GitHubReleaseWavePublicationCohortAdapter.js';
 import { ingestReleaseWaveEventAsync } from '../application/ingestReleaseWaveEventAsync.js';
 import { runReleaseWaveCoordinatorAsync } from '../application/runReleaseWaveCoordinatorAsync.js';
 import {
@@ -16,10 +15,10 @@ import { releaseWaveEventIdentity } from '../domain/releaseWaveEventIdentity.js'
 import {
   candidatePublication,
   candidateResponse,
+  cohortAdapter,
   eventFor,
   githubApi,
   integrity,
-  inventoryResponse,
   json,
   npmRegistry,
   publicationManifest,
@@ -28,34 +27,7 @@ import {
 
 test('accepts every paginated selected repository from authenticated epoch-plan evidence', async () => {
   const paths: string[] = [];
-  const adapter = GitHubReleaseWavePublicationCohortAdapter({
-    apiBaseUrl: githubApi,
-    publicationEvidencePort: {
-      enrichPackageReleaseAsync: (dispatch) => Promise.resolve(eventFor(dispatch)),
-    },
-    publisherEpochPort: {
-      loadReleaseWavePublisherEpochsAsync: ({ inventoryId }) =>
-        Promise.resolve([
-          {
-            id: 'isolated-provider-epoch',
-            inventoryId,
-            publishers: [
-              {
-                packageName: '@ankhorage/base',
-                sourceRepository: 'ankhorage/base',
-                version: '1.1.0',
-              },
-            ],
-            sourceRevision: 'e'.repeat(40),
-          },
-        ]),
-    },
-    requestAsync: (url) => {
-      paths.push(String(url));
-      return Promise.resolve(inventoryResponse(String(url)));
-    },
-    token: 'isolated-installation-token',
-  });
+  const adapter = cohortAdapter(paths);
 
   const base = eventFor({
     package_name: '@ankhorage/base',
@@ -224,4 +196,3 @@ test('keeps the legacy dispatch workflow excluded from the inactive coordinator 
   expect(workflow).not.toContain('runReleaseWaveCoordinatorAsync');
   expect(workflow).not.toContain('release-wave-checkpoints');
 });
-

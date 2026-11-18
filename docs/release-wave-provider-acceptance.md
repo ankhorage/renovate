@@ -14,3 +14,9 @@ test repositories, an isolated npm scope/registry, protected test branch, and no
 workflow are provisioned. That run must use only those targets and must record the issued App token's
 selected-repository inventory, pagination trace, exact tag/release/workflow SHA, npm `gitHead` and
 tarball integrity, required-review/check evidence, candidate PR/Changeset, and release acknowledgement.
+
+The isolated epoch-plan fixture proves authenticated GitHub Contents handling, immutable file revision
+binding, and fail-closed missing, malformed, or inventory-mismatched plans. Candidate verification
+uses a complete immutable patch Changeset publication fixture so stale approval, altered Changeset,
+and npm-lag assertions reach their intended security gates. It does not create a GitHub candidate,
+obtain protected-branch approval, or publish to npm.
