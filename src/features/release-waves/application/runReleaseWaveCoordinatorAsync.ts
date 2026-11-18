@@ -16,18 +16,16 @@ import type {
 } from '../ports/releaseWaveEventQueue.js';
 import { isReleaseWaveEventQueueConflict } from '../ports/releaseWaveEventQueue.js';
 import type { ReleaseWaveExecutionPort } from '../ports/releaseWaveExecution.js';
+import type {
+  ReleaseWavePublicationCohortPort,
+  SettledReleaseWavePublication,
+} from '../ports/releaseWavePublicationCohort.js';
 import { executeReleaseWavesAsync } from './executeReleaseWavesAsync.js';
 
-type SettledPublication = PublishedPackage & {
-  readonly npmArtifactIntegrity: string;
-  readonly releaseId: string;
-  readonly releaseTag: string;
-  readonly sourceRepository: string;
-};
-
-/*** Compose an explicitly settled publication cohort into one replay-safe consumer release wave. */
+/*** Compose a provider-collected complete publication cohort into one replay-safe consumer release wave. */
 export async function runReleaseWaveCoordinatorAsync(input: {
   readonly checkpointPort: ReleaseWaveCheckpointPort;
+  readonly cohortPort: ReleaseWavePublicationCohortPort;
   readonly executionPort: ReleaseWaveExecutionPort;
   readonly executorId: string;
   readonly maximumCheckpointRetries: number;
@@ -38,18 +36,13 @@ export async function runReleaseWaveCoordinatorAsync(input: {
   /** Current verified inventory used only to validate consumer candidates, never to acknowledge an event. */
   readonly publishedPackages: readonly PublishedPackage[];
   readonly queuePort: ReleaseWaveEventQueuePort;
-  readonly repositories: readonly ReleaseWaveRepository[];
-  readonly settledPublications: readonly SettledPublication[];
 }): Promise<ReleaseWavePlan | undefined> {
-  const publications = validateSettledPublications(input.settledPublications);
-  const events = completeCohortEvents(
-    (await input.queuePort.loadReleaseWaveEventQueueAsync())?.queue,
-    publications,
-  );
-  if (events === undefined) return undefined;
+  const cohort = await collectedCohortAsync(input);
+  if (cohort === undefined) return undefined;
+  const { events, publications, repositories } = cohort;
   const runId = logicalWaveId(publications);
   const { closurePlan, plan } = plansForCohort(
-    input.repositories,
+    repositories,
     publications,
     input.publishedPackages,
     input.publicationPlans,
@@ -71,6 +64,34 @@ export async function runReleaseWaveCoordinatorAsync(input: {
   return plan;
 }
 
+/*** Refuse to name a wave until provider collection covers the entire graph-derived publisher cohort. */
+async function collectedCohortAsync(input: {
+  readonly cohortPort: ReleaseWavePublicationCohortPort;
+  readonly queuePort: ReleaseWaveEventQueuePort;
+}): Promise<
+  | {
+      readonly events: readonly DurableReleaseWaveEvent[];
+      readonly publications: readonly SettledReleaseWavePublication[];
+      readonly repositories: readonly ReleaseWaveRepository[];
+    }
+  | undefined
+> {
+  const queue = (await input.queuePort.loadReleaseWaveEventQueueAsync())?.queue;
+  const collected = await input.cohortPort.collectReleaseWavePublicationCohortAsync({
+    pendingEvents: queue?.events ?? [],
+  });
+  if (collected === undefined) return undefined;
+  const publications = validateSettledPublications(collected.publications);
+  if (
+    !hasCompleteExpectedPublisherCohort(collected.repositories, queue?.events ?? [], publications)
+  )
+    return undefined;
+  const events = completeCohortEvents(queue, publications);
+  return events === undefined
+    ? undefined
+    : { events, publications, repositories: collected.repositories };
+}
+
 /*** Prevent queue acknowledgement until every planned consumer reached a durable terminal state. */
 async function allPlanNodesSettledAsync(
   checkpointPort: ReleaseWaveCheckpointPort,
@@ -81,17 +102,20 @@ async function allPlanNodesSettledAsync(
       ? undefined
       : await checkpointPort.loadReleaseWaveCheckpointAsync(plan.runId);
   return (
-    checkpoint === undefined ||
-    plan.nodes.every((node) =>
-      ['released', 'verified'].includes(checkpoint.checkpoint.ledger.nodes[node.repository] ?? ''),
-    )
+    plan.nodes.length === 0 ||
+    (checkpoint !== undefined &&
+      plan.nodes.every((node) =>
+        ['released', 'verified'].includes(
+          checkpoint.checkpoint.ledger.nodes[node.repository] ?? '',
+        ),
+      ))
   );
 }
 
 /*** Retain full selected-inventory audit while confining candidate mutations to the affected closure. */
 function plansForCohort(
   repositories: readonly ReleaseWaveRepository[],
-  publications: readonly SettledPublication[],
+  publications: readonly SettledReleaseWavePublication[],
   publishedPackages: readonly PublishedPackage[],
   publicationPlans: ReadonlyMap<string, ChangesetReleasePlan>,
   runId: string,
@@ -117,7 +141,7 @@ function plansForCohort(
 /*** Require a complete exact cohort before any consumer can observe a partial update. */
 function completeCohortEvents(
   queue: ReleaseWaveEventQueue | undefined,
-  publications: readonly SettledPublication[],
+  publications: readonly SettledReleaseWavePublication[],
 ): readonly DurableReleaseWaveEvent[] | undefined {
   const expected = new Map(
     publications.map((publication) => [
@@ -147,7 +171,7 @@ function completeCohortEvents(
 }
 
 /*** Use the immutable complete cohort, rather than a transient queue snapshot, as checkpoint identity. */
-function logicalWaveId(publications: readonly SettledPublication[]): string {
+function logicalWaveId(publications: readonly SettledReleaseWavePublication[]): string {
   return (
     'wave-' +
     createHash('sha256')
@@ -165,7 +189,7 @@ function logicalWaveId(publications: readonly SettledPublication[]): string {
 /*** Restrict mutation to consumers reachable from settled upstream packages in the selected inventory. */
 function affectedConsumers(
   repositories: readonly ReleaseWaveRepository[],
-  publications: readonly SettledPublication[],
+  publications: readonly SettledReleaseWavePublication[],
 ): readonly ReleaseWaveRepository[] {
   const affectedPackages = new Set(publications.map((publication) => publication.name));
   const selected: ReleaseWaveRepository[] = [];
@@ -191,10 +215,37 @@ function updateDependencies(repository: ReleaseWaveRepository): readonly string[
   ];
 }
 
+/*** Derive every selected publisher needed by an affected consumer closure before allowing release execution. */
+function hasCompleteExpectedPublisherCohort(
+  repositories: readonly ReleaseWaveRepository[],
+  events: readonly DurableReleaseWaveEvent[],
+  publications: readonly SettledReleaseWavePublication[],
+): boolean {
+  const providers = new Set(
+    repositories.flatMap((repository) =>
+      repository.packageName === undefined ? [] : [repository.packageName],
+    ),
+  );
+  const expected = new Set(events.map((event) => event.packageName));
+  for (;;) {
+    const next = repositories.filter((repository) =>
+      updateDependencies(repository).some((dependency) => expected.has(dependency)),
+    );
+    const required = next.flatMap((repository) =>
+      updateDependencies(repository).filter((dependency) => providers.has(dependency)),
+    );
+    const { size } = expected;
+    for (const packageName of required) expected.add(packageName);
+    if (size === expected.size) break;
+  }
+  const actual = new Set(publications.map((publication) => publication.name));
+  return [...expected].every((packageName) => actual.has(packageName));
+}
+
 /*** Reject ambiguous, malformed, or duplicate publication evidence before it can name a wave. */
 function validateSettledPublications(
-  publications: readonly SettledPublication[],
-): readonly SettledPublication[] {
+  publications: readonly SettledReleaseWavePublication[],
+): readonly SettledReleaseWavePublication[] {
   if (publications.length === 0) throw new Error('Release-wave settlement evidence is empty.');
   const ids = publications.map((publication) =>
     releaseWaveEventIdentity(publicationEvent(publication)),
@@ -209,7 +260,10 @@ function validateSettledPublications(
 }
 
 /*** Compare every release and npm proof field; a package name alone is never acknowledgement evidence. */
-function samePublication(event: DurableReleaseWaveEvent, publication: SettledPublication): boolean {
+function samePublication(
+  event: DurableReleaseWaveEvent,
+  publication: SettledReleaseWavePublication,
+): boolean {
   return (
     event.packageName === publication.name &&
     event.version === publication.version &&
@@ -221,7 +275,7 @@ function samePublication(event: DurableReleaseWaveEvent, publication: SettledPub
 }
 
 /*** Present verified package evidence in the event identity shape without inventing a second hash contract. */
-function publicationEvent(publication: SettledPublication): DurableReleaseWaveEvent {
+function publicationEvent(publication: SettledReleaseWavePublication): DurableReleaseWaveEvent {
   return {
     eventId: '',
     npmArtifactIntegrity: publication.npmArtifactIntegrity,

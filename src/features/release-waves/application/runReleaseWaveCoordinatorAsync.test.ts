@@ -61,6 +61,41 @@ test('does not acknowledge wrong or superseded publication evidence', async () =
   expect(calls.filter((call) => call === 'ensure:ankhorage/consumer')).toHaveLength(1);
 });
 
+test('blocks a caller cohort that omits a second selected upstream publisher', async () => {
+  const queue = eventQueue();
+  const calls: string[] = [];
+  await ingestReleaseWaveEventAsync({
+    event: event('base', '1.1.0'),
+    maximumRetries: 2,
+    queuePort: queue,
+  });
+  const result = await runReleaseWaveCoordinatorAsync({
+    ...coordinatorInput(queue, calls),
+    cohortPort: {
+      collectReleaseWavePublicationCohortAsync: () =>
+        Promise.resolve({
+          publications: [{ ...event('base', '1.1.0'), name: '@ankhorage/base' }],
+          repositories: [
+            repository('base'),
+            repository('left'),
+            {
+              ...repository('consumer'),
+              dependencies: {
+                dependencies: { '@ankhorage/base': '^1.0.0', '@ankhorage/left': '^1.0.0' },
+                devDependencies: {},
+                optionalDependencies: {},
+                peerDependencies: {},
+              },
+            },
+          ],
+        }),
+    },
+  });
+  expect(result).toBeUndefined();
+  expect(calls).toEqual([]);
+  expect((await queue.loadReleaseWaveEventQueueAsync())?.queue.events).toHaveLength(1);
+});
+
 test('retains compacted replay protection across later events, restart, and ingestion CAS contention', async () => {
   const queue = eventQueue();
   const calls: string[] = [];
@@ -107,19 +142,28 @@ test('includes dev-only consumers without adding dev edges to runtime wave order
   });
   const result = await runReleaseWaveCoordinatorAsync({
     ...coordinatorInput(queue, calls),
-    repositories: [
-      repository('base'),
-      repository('left'),
-      {
-        ...repository('consumer'),
-        dependencies: {
-          dependencies: {},
-          devDependencies: { '@ankhorage/base': '^1.0.0' },
-          optionalDependencies: {},
-          peerDependencies: {},
-        },
-      },
-    ],
+    cohortPort: {
+      collectReleaseWavePublicationCohortAsync: () =>
+        Promise.resolve({
+          publications: [
+            { ...event('base', '1.1.0'), name: '@ankhorage/base' },
+            { ...event('left', '1.1.0'), name: '@ankhorage/left' },
+          ],
+          repositories: [
+            repository('base'),
+            repository('left'),
+            {
+              ...repository('consumer'),
+              dependencies: {
+                dependencies: {},
+                devDependencies: { '@ankhorage/base': '^1.0.0' },
+                optionalDependencies: {},
+                peerDependencies: {},
+              },
+            },
+          ],
+        }),
+    },
   });
   expect(result?.waves).toEqual([['ankhorage/consumer']]);
 });

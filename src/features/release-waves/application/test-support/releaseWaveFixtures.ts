@@ -18,6 +18,13 @@ export function coordinatorInput(
 ) {
   return {
     checkpointPort: checkpointPort(),
+    cohortPort: {
+      collectReleaseWavePublicationCohortAsync: () =>
+        Promise.resolve({
+          publications: published,
+          repositories: [repository('base'), repository('left'), consumerRepository()],
+        }),
+    },
     executionPort: executionPort(calls),
     executorId: 'test-executor',
     maximumCheckpointRetries: 3,
@@ -32,8 +39,6 @@ export function coordinatorInput(
       }),
     ),
     queuePort,
-    repositories: [repository('base'), repository('left'), consumerRepository()],
-    settledPublications: published,
   };
 }
 
