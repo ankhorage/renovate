@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { expect, test } from 'bun:test';
 
 import { GitHubReleaseWavePublisherEpochAdapter } from '../adapters/github/GitHubReleaseWavePublisherEpochAdapter.js';
@@ -23,11 +25,13 @@ test('reads the authenticated GitHub Contents epoch plan and binds its immutable
   expect(paths).toEqual([endpoint]);
   expect(epochs).toEqual([
     {
-      id: 'c'.repeat(64),
+      id: epochId(inventoryId),
       inventoryId,
       publishers: [
         {
           packageName: '@ankhorage/base',
+          planRevision: 'd'.repeat(40),
+          planStatusHash: 'f'.repeat(64),
           sourceRepository: 'ankhorage/base',
           version: '1.1.0',
         },
@@ -183,21 +187,39 @@ function isEpochDocument(value: unknown): value is { readonly epochs: readonly u
 }
 
 function plan(inventoryId: string) {
+  const publishers = [
+    {
+      packageName: '@ankhorage/base',
+      planRevision: 'd'.repeat(40),
+      planStatusHash: 'f'.repeat(64),
+      sourceRepository: 'ankhorage/base',
+      version: '1.1.0',
+    },
+  ];
   return {
     epochs: [
       {
-        id: 'c'.repeat(64),
+        id: epochId(inventoryId),
         inventoryId,
-        publishers: [
-          {
-            packageName: '@ankhorage/base',
-            sourceRepository: 'ankhorage/base',
-            version: '1.1.0',
-          },
-        ],
+        publishers,
       },
     ],
   };
+}
+
+function epochId(inventory: string): string {
+  return createHash('sha256')
+    .update(
+      [
+        inventory,
+        '@ankhorage/base',
+        'd'.repeat(40),
+        'f'.repeat(64),
+        'ankhorage/base',
+        '1.1.0',
+      ].join('\n'),
+    )
+    .digest('hex');
 }
 
 function file(value: unknown): Response {

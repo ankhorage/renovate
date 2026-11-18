@@ -35,6 +35,7 @@ export function publisherPlan(
     packageName: repository.packageName,
     releases: [{ packageName: repository.packageName, type: 'patch' }],
     revision: repository.sourceRevision,
+    statusHash: 'b'.repeat(64),
     version,
   };
 }
