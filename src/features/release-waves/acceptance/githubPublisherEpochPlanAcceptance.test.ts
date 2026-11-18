@@ -1,6 +1,11 @@
 import { expect, test } from 'bun:test';
 
 import { GitHubReleaseWavePublisherEpochAdapter } from '../adapters/github/GitHubReleaseWavePublisherEpochAdapter.js';
+import {
+  githubContentsFixture,
+  publisherPlan,
+  publisherRepository,
+} from './githubPublisherEpochPlanAcceptance.testSupport.js';
 
 const revision = 'e'.repeat(40);
 const inventoryId = 'a'.repeat(64);
@@ -61,6 +66,84 @@ test('fails closed for a missing plan, malformed document, and mismatched select
   expect(mismatched).toContain('does not cover');
 });
 
+test('persists authenticated epoch A, appends independent epoch B, and reads both at the new revision', async () => {
+  const contents = githubContentsFixture();
+  const adapter = epochWriter(contents.requestAsync);
+  const base = publisherRepository('@ankhorage/base');
+  const left = publisherRepository('@ankhorage/left');
+  const first = await adapter.adoptReleaseWavePublisherEpochAsync({
+    inventoryId,
+    publicationPlans: new Map([[base.fullName, publisherPlan(base)]]),
+    repositories: [base],
+  });
+  const second = await adapter.adoptReleaseWavePublisherEpochAsync({
+    inventoryId,
+    publicationPlans: new Map([[left.fullName, publisherPlan(left)]]),
+    repositories: [left],
+  });
+  const persisted = await adapter.loadReleaseWavePublisherEpochsAsync({
+    inventoryId,
+    repositories: [base, left],
+  });
+
+  expect(first.sourceRevision).toBe('0000000000000000000000000000000000000001');
+  expect(second.sourceRevision).toBe('0000000000000000000000000000000000000002');
+  expect(persisted).toEqual([{ ...first, sourceRevision: second.sourceRevision }, second]);
+  expect(contents.document()).toEqual({
+    epochs: persisted.map(({ sourceRevision: _sourceRevision, ...epoch }) => epoch),
+  });
+  expect(contents.requests.filter(({ init }) => init?.method === 'PUT')).toHaveLength(2);
+  expect(contents.authorizations()).toEqual(
+    Array.from({ length: contents.requests.length }, () => 'Bearer isolated-installation-token'),
+  );
+});
+
+test('rejects concurrent CAS writers, overlapping schedules, and source decisions not bound to immutable selected input', async () => {
+  const base = publisherRepository('@ankhorage/base');
+  const left = publisherRepository('@ankhorage/left');
+  const concurrent = githubContentsFixture();
+  const firstWriter = epochWriter(concurrent.requestAsync);
+  const secondWriter = epochWriter(concurrent.requestAsync);
+  const outcomes = await Promise.allSettled([
+    firstWriter.adoptReleaseWavePublisherEpochAsync({
+      inventoryId,
+      publicationPlans: new Map([[base.fullName, publisherPlan(base)]]),
+      repositories: [base],
+    }),
+    secondWriter.adoptReleaseWavePublisherEpochAsync({
+      inventoryId,
+      publicationPlans: new Map([[left.fullName, publisherPlan(left)]]),
+      repositories: [left],
+    }),
+  ]);
+  const saved = concurrent.document();
+  if (!isEpochDocument(saved))
+    throw new Error('Concurrent winner did not persist an epoch document.');
+  const overlap = githubContentsFixture({ document: saved, revision: concurrent.revision() });
+  const stale = publisherRepository('@ankhorage/base', '1.0.0', 'b'.repeat(40));
+
+  expect(outcomes.filter((outcome) => outcome.status === 'rejected')).toHaveLength(1);
+  expect(outcomes.filter((outcome) => outcome.status === 'fulfilled')).toHaveLength(1);
+  expect(
+    await failureMessageAsync(
+      epochWriter(overlap.requestAsync).adoptReleaseWavePublisherEpochAsync({
+        inventoryId,
+        publicationPlans: new Map([[base.fullName, publisherPlan(base, '1.2.0')]]),
+        repositories: [base],
+      }),
+    ),
+  ).toContain('overlaps');
+  expect(
+    await failureMessageAsync(
+      epochWriter(githubContentsFixture().requestAsync).adoptReleaseWavePublisherEpochAsync({
+        inventoryId,
+        publicationPlans: new Map([[stale.fullName, publisherPlan(base)]]),
+        repositories: [stale],
+      }),
+    ),
+  ).toContain('not bound');
+});
+
 function load(response: Response, inventoryId: string) {
   return GitHubReleaseWavePublisherEpochAdapter({
     apiBaseUrl: 'https://api.github.provider-contract.test',
@@ -71,12 +154,31 @@ function load(response: Response, inventoryId: string) {
   }).loadReleaseWavePublisherEpochsAsync({ inventoryId, repositories: [{} as never] });
 }
 
+function epochWriter(requestAsync: (url: string | URL, init?: RequestInit) => Promise<Response>) {
+  return GitHubReleaseWavePublisherEpochAdapter({
+    apiBaseUrl: 'https://api.github.provider-contract.test',
+    branch: 'main',
+    repository: 'ankhorage/renovate',
+    requestAsync,
+    token: 'isolated-installation-token',
+  });
+}
+
 function failureMessageAsync(operation: Promise<unknown>): Promise<string> {
   return operation.then(
     () => {
       throw new Error('Expected epoch-plan reader to fail.');
     },
     (reason: unknown) => (reason instanceof Error ? reason.message : String(reason)),
+  );
+}
+
+function isEpochDocument(value: unknown): value is { readonly epochs: readonly unknown[] } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Array.isArray((value as Readonly<Record<string, unknown>>).epochs)
   );
 }
 
