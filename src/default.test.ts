@@ -22,30 +22,26 @@ describe('consumer preset', () => {
     expect(consumerPreset.enabledManagers).toEqual(['bun', 'custom.regex']);
   });
 
-  test('keeps ordinary Ankhorage packages eligible', () => {
+  test('reserves ordinary Ankhorage packages for an authorized release wave', () => {
     expect(
       resolveRules(consumerPreset.packageRules, dependency('@ankhorage/contracts')),
     ).toMatchObject({
-      automerge: true,
-      enabled: true,
-      groupName: 'Ankhorage libraries',
-      groupSlug: 'ankhorage-libraries',
-      labels: ['dependencies', 'renovate:automerge'],
+      enabled: false,
+      groupName: 'Ankhorage release wave',
+      groupSlug: 'ankhorage-release-wave',
+      labels: ['dependencies', 'release-wave'],
       rangeStrategy: 'bump',
       separateMajorMinor: false,
     });
   });
 
-  test('groups the compatible CLI and provider pair', () => {
+  test('keeps the CLI and provider pair out of independent Renovate execution', () => {
     for (const packageName of ['@ankhorage/ankh', '@ankhorage/devtools']) {
       expect(resolveRules(consumerPreset.packageRules, dependency(packageName))).toMatchObject({
-        automerge: true,
-        automergeType: 'pr',
-        enabled: true,
-        groupName: 'Ankhorage CLI and Devtools toolchain',
-        groupSlug: 'ankhorage-cli-and-devtools-toolchain',
-        labels: ['dependencies', 'renovate:automerge'],
-        platformAutomerge: true,
+        enabled: false,
+        groupName: 'Ankhorage release wave',
+        groupSlug: 'ankhorage-release-wave',
+        labels: ['dependencies', 'release-wave'],
         rangeStrategy: 'bump',
         separateMajorMinor: false,
       });
@@ -106,19 +102,15 @@ describe('consumer update policy', () => {
 });
 
 describe('consumer policy migration', () => {
-  test('replaces the closed pre-split group with distinct clean branch identities', () => {
-    const closedPreSplitBranch = 'renovate/ankhorage-packages';
-    const replacementBranches = [
+  test('uses one stable branch identity for every direct Ankhorage dependency', () => {
+    const branches = [
       branchName(resolveRules(consumerPreset.packageRules, dependency('@ankhorage/paradox'))),
       branchName(resolveRules(consumerPreset.packageRules, dependency('@ankhorage/devtools'))),
     ];
-
-    expect(replacementBranches).toEqual([
-      'renovate/ankhorage-libraries',
-      'renovate/ankhorage-cli-and-devtools-toolchain',
+    expect(branches).toEqual([
+      'renovate/ankhorage-release-wave',
+      'renovate/ankhorage-release-wave',
     ]);
-    expect(replacementBranches).not.toContain(closedPreSplitBranch);
-    expect(new Set(replacementBranches).size).toBe(replacementBranches.length);
   });
 });
 
@@ -193,17 +185,16 @@ describe('consumer workflow update permissions', () => {
 });
 
 describe('consumer toolchain safeguards', () => {
-  test('keeps major CLI and provider upgrades on the latest validated automerge path', () => {
+  test('keeps major CLI and provider upgrades behind coordinator authorization', () => {
     expect(
       resolveRules(
         consumerPreset.packageRules,
         dependency('@ankhorage/devtools', { updateType: 'major' }),
       ),
     ).toMatchObject({
-      automerge: true,
-      enabled: true,
-      groupName: 'Ankhorage CLI and Devtools toolchain',
-      labels: ['dependencies', 'renovate:automerge'],
+      enabled: false,
+      groupName: 'Ankhorage release wave',
+      labels: ['dependencies', 'release-wave'],
       separateMajorMinor: false,
     });
   });

@@ -23,7 +23,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: package-release-rollout-${{ github.event.client_payload.package_name || inputs.package_name }}
+  # Serialize every settled publisher event through the one release-wave lane. Renovate reuses the
+  # stable branch below, so delayed/reordered events amend one consumer PR instead of fanning out.
+  group: coordinated-release-wave
   cancel-in-progress: false
 
 jobs:
@@ -113,41 +115,15 @@ jobs:
               }
             }
 
-            const registry = JSON.parse(fs.readFileSync('release-consumers.json', 'utf8'));
-            if (!Array.isArray(registry.repositories) || registry.repositories.length === 0) {
-              throw new Error('The package release consumer registry must contain repositories.');
-            }
-            const uniqueRepositories = new Set(registry.repositories);
-            if (uniqueRepositories.size !== registry.repositories.length) {
-              throw new Error('The package release consumer registry must not contain duplicates.');
-            }
-            for (const repository of registry.repositories) {
-              if (typeof repository !== 'string' || !/^ankhorage\/[a-z0-9-]+$/.test(repository)) {
-                throw new Error('The package release consumer registry contains an invalid repository.');
-              }
-            }
-
             const installationRepositories = await github.paginate(
               github.rest.apps.listReposAccessibleToInstallation,
               { per_page: 100 },
             );
-            const accessibleRepositories = new Set(
-              installationRepositories.map((repository) => repository.full_name),
-            );
-            const inaccessibleRepositories = registry.repositories.filter(
-              (repository) => !accessibleRepositories.has(repository),
-            );
-            if (inaccessibleRepositories.length > 0) {
-              throw new Error(
-                'The ankhorage-renovate-sync GitHub App installation does not include registered package consumers: ' +
-                  inaccessibleRepositories.join(', ') +
-                  '. Add these repositories to the selected-repository App installation before treating them as managed-release ready. Bootstrap policy: https://github.com/ankhorage/renovate/issues/115',
-              );
-            }
-
-            const candidateRepositories = registry.repositories.filter(
-              (repository) => repository !== sourceRepository,
-            );
+            const candidateRepositories = installationRepositories
+              .filter((repository) => repository.owner?.login === 'ankhorage')
+              .map((repository) => repository.full_name)
+              .filter((repository) => repository !== sourceRepository)
+              .toSorted();
             const readyRepositories = [];
             const waitingRepositories = [];
             for (const repository of candidateRepositories) {
@@ -405,12 +381,12 @@ jobs:
           permission-pull-requests: write
           permission-workflows: write
 
-      - name: Run Renovate immediately for the released package
+      - name: Update the coordinated Ankhorage release-wave pull request
         env:
           RENOVATE_AUTODISCOVER: 'false'
           RENOVATE_ONBOARDING: 'false'
           RENOVATE_PACKAGE_RULES: >-
-            [{"matchDatasources":["npm"],"matchPackageNames":["*"],"enabled":false},{"matchDatasources":["npm"],"matchPackageNames":["${{ needs.validate.outputs.package_name }}"],"enabled":true,"rangeStrategy":"bump","allowedVersions":"${{ needs.validate.outputs.version }}","recreateWhen":"always"}]
+            [{"matchDatasources":["npm"],"matchPackageNames":["*"],"enabled":false},{"matchDatasources":["npm"],"matchPackageNames":["@ankhorage/**"],"enabled":true,"rangeStrategy":"bump","groupName":"Ankhorage release wave","groupSlug":"ankhorage-release-wave","automerge":false,"platformAutomerge":false,"recreateWhen":"always"}]
           RENOVATE_PLATFORM: github
           RENOVATE_PR_HOURLY_LIMIT: '0'
           RENOVATE_REPOSITORIES: ${{ matrix.repository }}
@@ -419,5 +395,5 @@ jobs:
           ROLLOUT_PACKAGE_NAME: ${{ needs.validate.outputs.package_name }}
           ROLLOUT_VERSION: ${{ needs.validate.outputs.version }}
         run: |
-          echo "Rolling out exactly $ROLLOUT_PACKAGE_NAME@$ROLLOUT_VERSION to $RENOVATE_REPOSITORIES"
+          echo "Reconciling the coordinated release-wave PR after $ROLLOUT_PACKAGE_NAME@$ROLLOUT_VERSION for $RENOVATE_REPOSITORIES"
           bun x renovate

@@ -86,31 +86,14 @@
       "allowedVersions": "<7"
     },
     {
-      "description": "Group Ankhorage library updates and propagate every release downstream.",
+      "description": "Reserve Ankhorage package updates for an authorized release-wave executor.",
       "matchDatasources": ["npm"],
       "matchPackageNames": ["@ankhorage/**"],
-      "enabled": true,
-      "labels": ["dependencies", "renovate:automerge"],
-      "groupName": "Ankhorage libraries",
-      "groupSlug": "ankhorage-libraries",
+      "enabled": false,
+      "labels": ["dependencies", "release-wave"],
+      "groupName": "Ankhorage release wave",
+      "groupSlug": "ankhorage-release-wave",
       "rangeStrategy": "bump",
-      "automerge": true,
-      "automergeType": "pr",
-      "platformAutomerge": true,
-      "separateMajorMinor": false
-    },
-    {
-      "description": "Update the canonical Ankh CLI and Devtools provider as one toolchain.",
-      "matchDatasources": ["npm"],
-      "matchPackageNames": ["@ankhorage/ankh", "@ankhorage/devtools"],
-      "enabled": true,
-      "labels": ["dependencies", "renovate:automerge"],
-      "groupName": "Ankhorage CLI and Devtools toolchain",
-      "groupSlug": "ankhorage-cli-and-devtools-toolchain",
-      "rangeStrategy": "bump",
-      "automerge": true,
-      "automergeType": "pr",
-      "platformAutomerge": true,
       "separateMajorMinor": false
     },
     {

@@ -2,20 +2,18 @@ name: Reconcile Renovate state
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
       - .github/workflows/changeset.yml
       - .github/workflows/reconcile.yml
       - default.json
       - devtools-owner.json
       - policy-owner.json
-      - release-consumers.json
+      - release-wave-exclusions.json
   schedule:
     - cron: '17 3 * * *'
   repository_dispatch:
-    types:
-      - renovate-reconcile
+    types: [renovate-reconcile]
   workflow_dispatch:
 
 permissions:
@@ -29,77 +27,10 @@ jobs:
   prepare:
     runs-on: ubuntu-latest
     outputs:
-      repositories: ${{ steps.registry.outputs.repositories }}
+      repositories: ${{ steps.inventory.outputs.repositories }}
     steps:
       - name: Check out canonical Renovate policy
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-
-      - name: Validate reconciliation registry
-        id: registry
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
-        with:
-          script: |
-            const fs = require('node:fs');
-            const registry = JSON.parse(fs.readFileSync('release-consumers.json', 'utf8'));
-            if (!Array.isArray(registry.repositories) || registry.repositories.length === 0) {
-              throw new Error('The Renovate reconciliation registry must contain repositories.');
-            }
-            const uniqueRepositories = new Set(registry.repositories);
-            if (uniqueRepositories.size !== registry.repositories.length) {
-              throw new Error('The Renovate reconciliation registry must not contain duplicates.');
-            }
-            for (const repository of registry.repositories) {
-              if (typeof repository !== 'string' || !/^ankhorage\/[a-z0-9-]+$/.test(repository)) {
-                throw new Error('The Renovate reconciliation registry contains an invalid repository.');
-              }
-            }
-            const requestedRepository =
-              context.eventName === 'repository_dispatch'
-                ? context.payload.client_payload?.repository
-                : undefined;
-            if (requestedRepository !== undefined) {
-              if (
-                typeof requestedRepository !== 'string' ||
-                !/^ankhorage\/[a-z0-9-]+$/.test(requestedRepository)
-              ) {
-                throw new Error('Targeted Renovate reconciliation requires one valid repository.');
-              }
-              if (!uniqueRepositories.has(requestedRepository)) {
-                throw new Error(
-                  'Targeted Renovate reconciliation repository is not registered: ' +
-                    requestedRepository,
-                );
-              }
-              core.setOutput('repositories', JSON.stringify([requestedRepository]));
-              return;
-            }
-            core.setOutput('repositories', JSON.stringify(registry.repositories));
-
-  reconcile:
-    needs: prepare
-    strategy:
-      fail-fast: false
-      max-parallel: 4
-      matrix:
-        repository: ${{ fromJSON(needs.prepare.outputs.repositories) }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out canonical Renovate policy
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: '1.4.2'
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-
-      - name: Install the pinned Renovate runner
-        run: bun install --frozen-lockfile --ignore-scripts
-
       - name: Mint the organization Renovate Sync App token
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
@@ -111,15 +42,83 @@ jobs:
           permission-issues: write
           permission-pull-requests: write
           permission-workflows: write
-
+      - name: Enumerate the selected Renovate Sync App installation
+        id: inventory
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            const fs = require('node:fs');
+            const requestedRepository = context.eventName === 'repository_dispatch' ? context.payload.client_payload?.repository : undefined;
+            if (requestedRepository !== undefined && (typeof requestedRepository !== 'string' || !/^ankhorage\/[a-z0-9-]+$/.test(requestedRepository))) throw new Error('Targeted Renovate reconciliation requires one valid repository.');
+            const exclusions = JSON.parse(fs.readFileSync('release-wave-exclusions.json', 'utf8'));
+            if (!exclusions?.repositories || typeof exclusions.repositories !== 'object' || Array.isArray(exclusions.repositories)) throw new Error('Release-wave exclusions must be an object keyed by repository.');
+            const installationRepositories = await github.paginate(github.rest.apps.listReposAccessibleToInstallation, { per_page: 100 });
+            const selected = installationRepositories.filter((repository) => repository.owner?.login === 'ankhorage').toSorted((left, right) => left.full_name.localeCompare(right.full_name));
+            const selectedNames = new Set(selected.map((repository) => repository.full_name));
+            if (requestedRepository !== undefined && !selectedNames.has(requestedRepository)) throw new Error('Targeted reconciliation repository is not selected in the Renovate Sync App installation: ' + requestedRepository);
+            const candidates = requestedRepository === undefined ? selected : selected.filter((repository) => repository.full_name === requestedRepository);
+            const ready = [];
+            const pendingBootstrap = [];
+            const excluded = [];
+            for (const repository of candidates) {
+              if (repository.archived) { excluded.push(repository.full_name + ': archived'); continue; }
+              if (typeof exclusions.repositories[repository.full_name] === 'string') { excluded.push(repository.full_name + ': excluded: ' + exclusions.repositories[repository.full_name]); continue; }
+              try {
+                const [owner, repo] = repository.full_name.split('/');
+                const { data } = await github.rest.repos.getContent({ owner, repo, path: '.github/workflows/renovate.yml' });
+                const workflow = Array.isArray(data) || data.type !== 'file' || !data.content ? '' : Buffer.from(data.content, 'base64').toString('utf8');
+                if (!workflow.includes("github.event.pull_request.user.login == 'ankhorage-renovate-sync[bot]'")) { pendingBootstrap.push(repository.full_name); continue; }
+                ready.push(repository.full_name);
+              } catch (error) {
+                pendingBootstrap.push(repository.full_name);
+                core.warning('Pending bootstrap for ' + repository.full_name + ': ' + error.message);
+              }
+            }
+            core.notice('Selected App inventory: ' + selected.length + '; ready: ' + ready.length + '; pending bootstrap: ' + pendingBootstrap.length + '; excluded: ' + excluded.length + '.');
+            for (const entry of [...pendingBootstrap.map((repository) => repository + ': pending-bootstrap'), ...excluded]) core.notice(entry);
+            core.setOutput('repositories', JSON.stringify(ready));
+  reconcile:
+    needs: prepare
+    if: needs.prepare.outputs.repositories != '[]'
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        repository: ${{ fromJSON(needs.prepare.outputs.repositories) }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out canonical Renovate policy
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: '1.4.2'
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install the pinned Renovate runner
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Mint the organization Renovate Sync App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.ANKHORAGE_RENOVATE_SYNC_CLIENT_ID }}
+          private-key: ${{ secrets.ANKHORAGE_RENOVATE_SYNC_PRIVATE_KEY }}
+          owner: ankhorage
+          permission-contents: write
+          permission-issues: write
+          permission-pull-requests: write
+          permission-workflows: write
       - name: Reconcile full Renovate state
         env:
           RENOVATE_AUTODISCOVER: 'false'
           RENOVATE_ONBOARDING: 'false'
+          RENOVATE_PACKAGE_RULES: >-
+            [{"matchDatasources":["npm"],"matchPackageNames":["@ankhorage/**"],"enabled":false}]
           RENOVATE_PLATFORM: github
           RENOVATE_REPOSITORIES: ${{ matrix.repository }}
           RENOVATE_REQUIRE_CONFIG: required
           RENOVATE_TOKEN: ${{ steps.app-token.outputs.token }}
-        run: |
-          echo "Reconciling full Renovate state for $RENOVATE_REPOSITORIES"
-          bun x renovate
+        run: bun x renovate

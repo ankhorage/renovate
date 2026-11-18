@@ -58,6 +58,7 @@
     "format": "ankhorage-prettier --write .",
     "format:check": "ankhorage-prettier --check .",
     "knip:check": "ankhorage-knip",
+    "release:plan": "bun src/cli/commands/release/plan.ts",
     "test:standalone": "bun test src/index.test.ts"
   },
   "devDependencies": {
@@ -65,6 +66,7 @@
     "@ankhorage/paradox": "^0.5.0",
     "@types/bun": "^1.4.2",
     "@types/node": "^26.6.6",
+    "semver": "^7.8.6",
     "renovate": "^44.252.2",
     "typescript": "~6.0.3"
   },
