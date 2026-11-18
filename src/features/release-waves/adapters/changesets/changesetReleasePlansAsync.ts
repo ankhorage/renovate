@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -44,9 +45,7 @@ export async function changesetReleasePlansAsync(
 async function changesetReleasePlanAsync(
   checkout: ReleaseWaveCheckout,
 ): Promise<ChangesetReleasePlan | undefined> {
-  if ((await gitRevisionAsync(checkout.path)) !== checkout.revision) {
-    throw new Error('Changesets checkout revision is not immutable.');
-  }
+  await assertImmutableCheckoutAsync(checkout);
   const directory = await mkdtemp(join(tmpdir(), 'ankhorage-changeset-status-'));
   const outputPath = join(directory, 'status.json');
   try {
@@ -62,26 +61,44 @@ async function changesetReleasePlanAsync(
         'Changesets status command failed: ' + (await new Response(subprocess.stderr).text()),
       );
     }
-    if ((await gitRevisionAsync(checkout.path)) !== checkout.revision) {
-      throw new Error('Changesets checkout revision changed during collection.');
-    }
-    const [status, manifest] = await Promise.all([
-      readFile(outputPath, 'utf8').then((content) => JSON.parse(content) as ChangesetStatus),
+    const [statusOutput, manifest] = await Promise.all([
+      readFile(outputPath, 'utf8'),
       readFile(join(checkout.path, 'package.json'), 'utf8').then(
         (content) => JSON.parse(content) as PackageManifest,
       ),
     ]);
-    return releasePlan(status, manifest);
+    await assertImmutableCheckoutAsync(checkout);
+    return releasePlan(JSON.parse(statusOutput) as ChangesetStatus, manifest, statusOutput);
   } finally {
     await rm(directory, { force: true, recursive: true });
   }
 }
 
+/*** Reject any mutable checkout state before and after Changesets can read it. */
+async function assertImmutableCheckoutAsync(checkout: ReleaseWaveCheckout): Promise<void> {
+  if ((await gitRevisionAsync(checkout.path)) !== checkout.revision)
+    throw new Error('Changesets checkout revision is not immutable.');
+  const status = await gitOutputAsync(
+    ['status', '--porcelain=v1', '--untracked-files=all', '--ignore-submodules=none'],
+    checkout.path,
+  );
+  if (status.length > 0) throw new Error('Changesets checkout is not clean.');
+}
+
 /*** Resolve the checkout revision through Git rather than trusting a mutable filesystem label. */
 async function gitRevisionAsync(path: string): Promise<string> {
-  const subprocess = Bun.spawn(['git', 'rev-parse', 'HEAD'], { cwd: path, stdout: 'pipe' });
+  return gitOutputAsync(['rev-parse', 'HEAD'], path, 'Changesets checkout is not a Git revision.');
+}
+
+/*** Run a bounded Git inspection without accepting a failed checkout command as evidence. */
+async function gitOutputAsync(
+  command: readonly string[],
+  path: string,
+  failure?: string,
+): Promise<string> {
+  const subprocess = Bun.spawn(['git', ...command], { cwd: path, stdout: 'pipe' });
   if ((await subprocess.exited) !== 0)
-    throw new Error('Changesets checkout is not a Git revision.');
+    throw new Error(failure ?? 'Changesets checkout is not inspectable.');
   return (await new Response(subprocess.stdout).text()).trim();
 }
 
@@ -89,6 +106,7 @@ async function gitRevisionAsync(path: string): Promise<string> {
 function releasePlan(
   status: ChangesetStatus,
   manifest: PackageManifest,
+  statusOutput: string,
 ): ChangesetReleasePlan | undefined {
   const releases = status.releases ?? [];
   if (releases.length !== 1) return undefined;
@@ -108,6 +126,7 @@ function releasePlan(
     packageName: release.name,
     releases: [{ packageName: release.name, type: 'patch' }],
     version: release.newVersion,
+    statusHash: createHash('sha256').update(statusOutput).digest('hex'),
   };
 }
 

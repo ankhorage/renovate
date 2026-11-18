@@ -5,6 +5,8 @@ const artifactIntegrity = 'sha512-' + createHash('sha512').update(artifact).dige
 
 /*** Produce deterministic GitHub/npm provider fixtures without a live mutation target. */
 export function githubReleaseWaveResponseFor(url: string): Response {
+  const codeowners = codeownerResponse(url);
+  if (codeowners !== undefined) return codeowners;
   const direct = directResponse(url);
   if (direct !== undefined) return direct;
   const content = candidateContentResponse(url);
@@ -66,6 +68,13 @@ function directResponse(url: string): Response | undefined {
   return undefined;
 }
 
+/*** Serve immutable CODEOWNERS discovery separately from the general provider fixture. */
+function codeownerResponse(url: string): Response | undefined {
+  return url.includes('/git/trees/base-sha')
+    ? json({ tree: [{ path: '.github/CODEOWNERS' }] })
+    : undefined;
+}
+
 /*** Serve immutable base and candidate content exactly as the GitHub Contents API encodes it. */
 function candidateContentResponse(url: string): Response | undefined {
   if (
@@ -77,6 +86,7 @@ function candidateContentResponse(url: string): Response | undefined {
     return content("---\n'@ankhorage/example': patch\n---\n\nRelease wave.\n");
   if (url.includes('/contents/bun.lock?ref=candidate-sha'))
     return content(lockfileFor('@ankhorage/example', '1.2.4'));
+  if (url.includes('/contents/.github/CODEOWNERS?ref=base-sha')) return content('* @reviewer');
   return undefined;
 }
 

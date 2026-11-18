@@ -22,6 +22,8 @@ export interface PublishedPackage {
 export interface ChangesetReleasePlan {
   readonly packageName: string;
   readonly releases: readonly ChangesetRelease[];
+  /** SHA-256 of the exact Changesets status document collected from the clean pinned checkout. */
+  readonly statusHash?: string;
   readonly version: string;
 }
 
