@@ -1,6 +1,13 @@
-import type { ReleaseWaveRepository } from '../../../../types/releaseWave.js';
+import { createHash } from 'node:crypto';
+
+import { gt, valid } from 'semver';
+
+import type { ChangesetReleasePlan, ReleaseWaveRepository } from '../../../../types/releaseWave.js';
 import type { ReleaseWavePublisherEpoch } from '../../ports/releaseWavePublicationCohort.js';
-import type { ReleaseWavePublisherEpochPort } from '../../ports/releaseWavePublisherEpoch.js';
+import type {
+  ReleaseWavePublisherEpochPort,
+  ReleaseWavePublisherEpochWriterPort,
+} from '../../ports/releaseWavePublisherEpoch.js';
 
 interface GitHubReleaseWavePublisherEpochAdapterInput {
   readonly apiBaseUrl: string;
@@ -13,11 +20,65 @@ interface GitHubReleaseWavePublisherEpochAdapterInput {
 /*** Read the signed-in Renovate App's immutable release-plan schedule from its control repository. */
 export function GitHubReleaseWavePublisherEpochAdapter(
   input: GitHubReleaseWavePublisherEpochAdapterInput,
-): ReleaseWavePublisherEpochPort {
+): ReleaseWavePublisherEpochPort & ReleaseWavePublisherEpochWriterPort {
   return {
+    adoptReleaseWavePublisherEpochAsync: (request) =>
+      adoptReleaseWavePublisherEpochAsync(input, request),
     loadReleaseWavePublisherEpochsAsync: ({ inventoryId, repositories }) =>
       loadReleaseWavePublisherEpochsAsync(input, inventoryId, repositories),
   };
+}
+
+/** Create or adopt one CAS-fenced epoch from selected-App revisions and verified Changesets intent. */
+async function adoptReleaseWavePublisherEpochAsync(
+  input: GitHubReleaseWavePublisherEpochAdapterInput,
+  request: Parameters<
+    ReleaseWavePublisherEpochWriterPort['adoptReleaseWavePublisherEpochAsync']
+  >[0],
+): Promise<ReleaseWavePublisherEpoch> {
+  const epoch = plannedEpoch(request.inventoryId, request.repositories, request.publicationPlans);
+  const current = await readReleasePlanAsync(input, true);
+  const existing = current.plan.epochs.find((candidate) => candidate.id === epoch.id);
+  if (existing !== undefined) {
+    if (!sameEpoch(existing, epoch))
+      throw new Error('Release-wave epoch identity has conflicting content.');
+    if (current.revision === undefined)
+      throw new Error('Release-wave publisher epoch adoption lost its immutable revision.');
+    return { ...existing, sourceRevision: current.revision };
+  }
+  const scheduledPackages = new Set(epoch.publishers.map((publisher) => publisher.packageName));
+  if (
+    current.plan.epochs.some((candidate) =>
+      candidate.publishers.some((publisher) => scheduledPackages.has(publisher.packageName)),
+    )
+  )
+    throw new Error('Release-wave publisher epoch overlaps an unacknowledged immutable epoch.');
+  const plan = { epochs: [...current.plan.epochs, epoch] };
+  const response = await input.requestAsync(
+    input.apiBaseUrl + '/repos/' + input.repository + '/contents/' + epochPath(),
+    {
+      body: JSON.stringify({
+        branch: input.branch,
+        content: Buffer.from(JSON.stringify(plan) + '\n').toString('base64'),
+        message: 'chore(release-wave): adopt publisher epoch',
+        sha: current.revision,
+      }),
+      headers: {
+        accept: 'application/vnd.github+json',
+        authorization: 'Bearer ' + input.token,
+        'content-type': 'application/json',
+      },
+      method: 'PUT',
+    },
+  );
+  if (!response.ok) {
+    if ([409, 422].includes(response.status))
+      throw new Error('Release-wave publisher epoch CAS conflict.');
+    throw new Error('Release-wave publisher epoch could not be persisted.');
+  }
+  const saved: unknown = await response.json();
+  const revision = contentRevision(saved);
+  return { ...epoch, sourceRevision: revision };
 }
 
 /*** Load a revisioned release plan and refuse schedules not bound to the selected inventory. */
@@ -28,22 +89,38 @@ async function loadReleaseWavePublisherEpochsAsync(
 ): Promise<readonly ReleaseWavePublisherEpoch[]> {
   if (repositories.length === 0)
     throw new Error('Release-wave selected installation inventory is empty.');
+  const { plan, revision } = await readReleasePlanAsync(input, false);
+  if (revision === undefined)
+    throw new Error('Release-wave publisher epoch plan has no immutable revision.');
+  const epochs = plan.epochs.filter((epoch) => epoch.inventoryId === inventoryId);
+  if (epochs.length === 0)
+    throw new Error('Release-wave publisher epoch plan does not cover the selected installation.');
+  return epochs.map((epoch) => ({ ...epoch, sourceRevision: revision }));
+}
+
+/** Load an existing immutable document; first creation is allowed only by the authoritative producer. */
+async function readReleasePlanAsync(
+  input: GitHubReleaseWavePublisherEpochAdapterInput,
+  allowAbsent: boolean,
+): Promise<{
+  readonly plan: { readonly epochs: readonly Omit<ReleaseWavePublisherEpoch, 'sourceRevision'>[] };
+  readonly revision: string | undefined;
+}> {
   const response = await input.requestAsync(
     input.apiBaseUrl +
       '/repos/' +
       input.repository +
-      '/contents/.github/release-wave-publisher-epochs.json?ref=' +
+      '/contents/' +
+      epochPath() +
+      '?ref=' +
       encodeURIComponent(input.branch),
     { headers: { accept: 'application/vnd.github+json', authorization: 'Bearer ' + input.token } },
   );
+  if (response.status === 404 && allowAbsent) return { plan: { epochs: [] }, revision: undefined };
   if (!response.ok)
     throw new Error('Release-wave publisher epoch plan could not be authenticated.');
-  const content: unknown = await response.json();
-  const plan = parseReleasePlan(content);
-  const epochs = plan.epochs.filter((epoch) => epoch.inventoryId === inventoryId);
-  if (epochs.length === 0)
-    throw new Error('Release-wave publisher epoch plan does not cover the selected installation.');
-  return epochs.map((epoch) => ({ ...epoch, sourceRevision: plan.revision }));
+  const parsed = parseReleasePlan(await response.json());
+  return { plan: { epochs: parsed.epochs }, revision: parsed.revision };
 }
 
 /*** Decode only a complete, immutable plan document; malformed provider state is never treated as empty. */
@@ -74,19 +151,111 @@ function isEpoch(value: unknown): value is Omit<ReleaseWavePublisherEpoch, 'sour
   return (
     isRecord(value) &&
     typeof value.id === 'string' &&
-    value.id.length > 0 &&
+    /^[a-f0-9]{64}$/.test(value.id) &&
     typeof value.inventoryId === 'string' &&
-    value.inventoryId.length > 0 &&
+    /^[a-f0-9]{64}$/.test(value.inventoryId) &&
     Array.isArray(value.publishers) &&
     value.publishers.length > 0 &&
     value.publishers.every(
       (publisher) =>
         isRecord(publisher) &&
         typeof publisher.packageName === 'string' &&
+        /^@ankhorage\/[a-z0-9][a-z0-9-]*$/.test(publisher.packageName) &&
         typeof publisher.sourceRepository === 'string' &&
-        typeof publisher.version === 'string',
+        /^ankhorage\/[a-z0-9][a-z0-9-]*$/.test(publisher.sourceRepository) &&
+        typeof publisher.version === 'string' &&
+        valid(publisher.version) === publisher.version,
     )
   );
+}
+
+/** Derive the only admissible schedule from exact selected source revisions and patch Changesets intent. */
+function plannedEpoch(
+  inventoryId: string,
+  repositories: readonly ReleaseWaveRepository[],
+  publicationPlans: ReadonlyMap<string, ChangesetReleasePlan>,
+): Omit<ReleaseWavePublisherEpoch, 'sourceRevision'> {
+  if (!/^[a-f0-9]{64}$/.test(inventoryId))
+    throw new Error('Release-wave publisher epoch inventory identity is invalid.');
+  const selected = new Map(repositories.map((repository) => [repository.fullName, repository]));
+  if (selected.size !== repositories.length)
+    throw new Error('Selected installation has duplicate repositories.');
+  const publishers = [...publicationPlans.entries()].map(([repositoryName, plan]) =>
+    publisherFromPlan(selected.get(repositoryName), plan),
+  );
+  if (publishers.length === 0)
+    throw new Error('Release-wave publisher epoch has no trusted release intent.');
+  if (new Set(publishers.map((publisher) => publisher.packageName)).size !== publishers.length)
+    throw new Error('Release-wave publisher epoch has duplicate package identities.');
+  const canonical = [...publishers].sort((left, right) =>
+    left.packageName.localeCompare(right.packageName),
+  );
+  return {
+    id: createHash('sha256')
+      .update(
+        inventoryId +
+          '\n' +
+          canonical.map((publisher) => Object.values(publisher).join('\n')).join('\n\n'),
+      )
+      .digest('hex'),
+    inventoryId,
+    publishers: canonical,
+  };
+}
+
+/** Translate only an exact selected Changesets decision into a future publisher identity. */
+function publisherFromPlan(
+  repository: ReleaseWaveRepository | undefined,
+  plan: ChangesetReleasePlan,
+): ReleaseWavePublisherEpoch['publishers'][number] {
+  const [release] = plan.releases;
+  if (
+    repository?.publishable !== true ||
+    repository.packageName !== plan.packageName ||
+    repository.packageVersion === undefined ||
+    repository.sourceRevision !== plan.revision ||
+    valid(plan.version) !== plan.version ||
+    !gt(plan.version, repository.packageVersion) ||
+    release === undefined ||
+    plan.releases.length !== 1 ||
+    release.packageName !== plan.packageName ||
+    release.type !== 'patch'
+  )
+    throw new Error(
+      'Release-wave publisher intent is not bound to a selected immutable Changesets source.',
+    );
+  return {
+    packageName: plan.packageName,
+    sourceRepository: repository.fullName,
+    version: plan.version,
+  };
+}
+
+/** Compare every immutable scheduling field before treating a previously written epoch as an adoption. */
+function sameEpoch(
+  left: Omit<ReleaseWavePublisherEpoch, 'sourceRevision'>,
+  right: Omit<ReleaseWavePublisherEpoch, 'sourceRevision'>,
+): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+/** Extract the exact new Git blob revision returned by the Contents CAS write. */
+function contentRevision(value: unknown): string {
+  if (
+    !isRecord(value) ||
+    !isRecord(value.content) ||
+    typeof value.content.sha !== 'string' ||
+    !/^[a-f0-9]{40}$/.test(value.content.sha)
+  )
+    throw new Error(
+      'Release-wave publisher epoch write did not return an immutable content revision.',
+    );
+  return value.content.sha;
+}
+
+/** Keep one provider-controlled path for both immutable reads and CAS writes. */
+function epochPath(): string {
+  return '.github/release-wave-publisher-epochs.json';
 }
 
 /*** Narrow external JSON without leaking provider types into the release-wave port. */
