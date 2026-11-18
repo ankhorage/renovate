@@ -59,7 +59,8 @@
     "format:check": "ankhorage-prettier --check .",
     "knip:check": "ankhorage-knip",
     "release:plan": "bun src/cli/commands/release/plan.ts",
-    "test:standalone": "bun test src/index.test.ts"
+    "test:standalone": "bun test src/index.test.ts",
+    "test:release-wave:provider-acceptance": "bun test src/features/release-waves/acceptance"
   },
   "devDependencies": {
     "@ankhorage/devtools": "^2.3.47",
