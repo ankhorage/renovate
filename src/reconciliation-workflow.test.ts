@@ -36,7 +36,13 @@ describe('Renovate reconciliation workflow', () => {
     expect(workflow).toContain('"@ankhorage/**"');
   });
 
-  test('stands down legacy reconciliation when the coordinator is explicitly enabled', () => {
-    expect(workflow).toContain("ANKHORAGE_RELEASE_WAVE_COORDINATOR_ENABLED != 'true'");
+  test('queues reconcile work and requires durable legacy admission before mutation', () => {
+    expect(workflow).toContain('group: release-wave-mutation');
+    expect(workflow).toContain('cancel-in-progress: false');
+    expect(workflow).toContain(
+      'Admit this legacy reconcile mutation through the durable cutover fence',
+    );
+    expect(workflow).toContain('fence.ts acquire legacy');
+    expect(workflow).toContain('fence.ts release');
   });
 });
