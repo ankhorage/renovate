@@ -1,4 +1,7 @@
-import type { ChangesetReleasePlan, ReleaseWaveRepository } from '../../../types/releaseWave.js';
+import type {
+  ChangesetReleaseDecision,
+  ReleaseWaveRepository,
+} from '../../../types/releaseWave.js';
 import type { ReleaseWavePublisherEpoch } from './releaseWavePublicationCohort.js';
 
 /** Read immutable publisher schedules from the authoritative release-plan boundary. */
@@ -13,8 +16,11 @@ export interface ReleaseWavePublisherEpochPort {
 export interface ReleaseWavePublisherEpochWriterPort {
   adoptReleaseWavePublisherEpochAsync(input: {
     readonly inventoryId: string;
-    /** Trusted, candidate-scoped Changesets decisions keyed by selected repository. */
-    readonly publicationPlans: ReadonlyMap<string, ChangesetReleasePlan>;
+    /**
+     * Exhaustive, clean-checkout Changesets decisions keyed by selected
+     * publishable repository.  An unchanged source is present with no plan.
+     */
+    readonly publicationDecisions: ReadonlyMap<string, ChangesetReleaseDecision>;
     readonly repositories: readonly ReleaseWaveRepository[];
   }): Promise<ReleaseWavePublisherEpoch>;
 }

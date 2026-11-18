@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 
 import { expect, test } from 'bun:test';
 
+import type { ChangesetReleaseDecision } from '../../../../types/releaseWave.js';
 import { GitHubReleaseWavePublisherEpochAdapter } from './GitHubReleaseWavePublisherEpochAdapter.js';
 
 test('binds immutable scheduled publishers to the selected inventory and GitHub file revision', () => {
@@ -82,39 +83,98 @@ test('creates a complete selected-app epoch through GitHub Contents CAS', async 
   expect(Buffer.from(body.content, 'base64').toString('utf8')).toContain('ankhorage/base');
 });
 
+test('refuses a malicious base-only plan when selected left is also scheduled', () => {
+  const adapter = GitHubReleaseWavePublisherEpochAdapter({
+    apiBaseUrl: 'https://api.github.test',
+    branch: 'main',
+    repository: 'ankhorage/renovate',
+    token: 'token',
+    requestAsync: () => Promise.resolve(new Response(null, { status: 404 })),
+  });
+  const request = publisherRequest();
+  return expect(
+    adapter.adoptReleaseWavePublisherEpochAsync({
+      ...request,
+      repositories: [
+        ...request.repositories,
+        publisherRepository('ankhorage/left', '@ankhorage/left'),
+      ],
+    }),
+  ).rejects.toThrow('decisions are incomplete');
+});
+
+test('accepts an unchanged selected baseline only when its clean status decision is present', async () => {
+  const writes: RequestInit[] = [];
+  const adapter = GitHubReleaseWavePublisherEpochAdapter({
+    apiBaseUrl: 'https://api.github.test',
+    branch: 'main',
+    repository: 'ankhorage/renovate',
+    token: 'token',
+    requestAsync: (_url, init) => {
+      if (init?.method === 'PUT') {
+        writes.push(init);
+        return Promise.resolve(json({ content: { sha: 'b'.repeat(40) } }));
+      }
+      return Promise.resolve(new Response(null, { status: 404 }));
+    },
+  });
+  const request = publisherRequest();
+  await adapter.adoptReleaseWavePublisherEpochAsync({
+    ...request,
+    publicationDecisions: new Map<string, ChangesetReleaseDecision>([
+      ...request.publicationDecisions,
+      ['ankhorage/left', { revision: 'c'.repeat(40), statusHash: 'd'.repeat(64) }],
+    ]),
+    repositories: [
+      ...request.repositories,
+      {
+        ...publisherRepository('ankhorage/left', '@ankhorage/left'),
+        sourceRevision: 'c'.repeat(40),
+      },
+    ],
+  });
+  expect(writes).toHaveLength(1);
+});
+
 function publisherRequest() {
   return {
     inventoryId: digest('selected-app'),
-    publicationPlans: new Map([
+    publicationDecisions: new Map([
       [
         'ankhorage/base',
         {
-          packageName: '@ankhorage/base',
-          releases: [{ packageName: '@ankhorage/base', type: 'patch' as const }],
           revision: 'a'.repeat(40),
           statusHash: 'b'.repeat(64),
-          version: '1.1.0',
+          releasePlan: {
+            packageName: '@ankhorage/base',
+            releases: [{ packageName: '@ankhorage/base', type: 'patch' as const }],
+            revision: 'a'.repeat(40),
+            statusHash: 'b'.repeat(64),
+            version: '1.1.0',
+          },
         },
       ],
     ]),
-    repositories: [
-      {
-        archived: false,
-        bootstrapReady: true,
-        dependencies: {
-          dependencies: {},
-          devDependencies: {},
-          optionalDependencies: {},
-          peerDependencies: {},
-        },
-        fullName: 'ankhorage/base',
-        packageName: '@ankhorage/base',
-        packageVersion: '1.0.0',
-        private: false,
-        publishable: true,
-        sourceRevision: 'a'.repeat(40),
-      },
-    ],
+    repositories: [publisherRepository('ankhorage/base', '@ankhorage/base')],
+  };
+}
+
+function publisherRepository(fullName: string, packageName: string) {
+  return {
+    archived: false,
+    bootstrapReady: true,
+    dependencies: {
+      dependencies: {},
+      devDependencies: {},
+      optionalDependencies: {},
+      peerDependencies: {},
+    },
+    fullName,
+    packageName,
+    packageVersion: '1.0.0',
+    private: false,
+    publishable: true,
+    sourceRevision: 'a'.repeat(40),
   };
 }
 

@@ -2,12 +2,16 @@ import { createHash } from 'node:crypto';
 
 import { gt, valid } from 'semver';
 
-import type { ChangesetReleasePlan, ReleaseWaveRepository } from '../../../../types/releaseWave.js';
+import type {
+  ChangesetReleaseDecision,
+  ReleaseWaveRepository,
+} from '../../../../types/releaseWave.js';
 import type { ReleaseWavePublisherEpoch } from '../../ports/releaseWavePublicationCohort.js';
 import type {
   ReleaseWavePublisherEpochPort,
   ReleaseWavePublisherEpochWriterPort,
 } from '../../ports/releaseWavePublisherEpoch.js';
+import { assertCompleteReleaseWavePublisherDecisions } from './githubReleaseWavePublisherDecisions.js';
 
 interface GitHubReleaseWavePublisherEpochAdapterInput {
   readonly apiBaseUrl: string;
@@ -36,16 +40,14 @@ async function adoptReleaseWavePublisherEpochAsync(
     ReleaseWavePublisherEpochWriterPort['adoptReleaseWavePublisherEpochAsync']
   >[0],
 ): Promise<ReleaseWavePublisherEpoch> {
-  const epoch = plannedEpoch(request.inventoryId, request.repositories, request.publicationPlans);
+  const epoch = plannedEpoch(
+    request.inventoryId,
+    request.repositories,
+    request.publicationDecisions,
+  );
   const current = await readReleasePlanAsync(input, true);
-  const existing = current.plan.epochs.find((candidate) => candidate.id === epoch.id);
-  if (existing !== undefined) {
-    if (!sameEpoch(existing, epoch))
-      throw new Error('Release-wave epoch identity has conflicting content.');
-    if (current.revision === undefined)
-      throw new Error('Release-wave publisher epoch adoption lost its immutable revision.');
-    return { ...existing, sourceRevision: current.revision };
-  }
+  const existing = adoptedEpoch(current, epoch);
+  if (existing !== undefined) return existing;
   const scheduledPackages = new Set(epoch.publishers.map((publisher) => publisher.packageName));
   if (
     current.plan.epochs.some((candidate) =>
@@ -79,6 +81,25 @@ async function adoptReleaseWavePublisherEpochAsync(
   const saved: unknown = await response.json();
   const revision = contentRevision(saved);
   return { ...epoch, sourceRevision: revision };
+}
+
+/*** Reuse only an exactly matching persisted epoch with its immutable write revision. */
+function adoptedEpoch(
+  current: {
+    readonly plan: {
+      readonly epochs: readonly Omit<ReleaseWavePublisherEpoch, 'sourceRevision'>[];
+    };
+    readonly revision: string | undefined;
+  },
+  epoch: Omit<ReleaseWavePublisherEpoch, 'sourceRevision'>,
+): ReleaseWavePublisherEpoch | undefined {
+  const existing = current.plan.epochs.find((candidate) => candidate.id === epoch.id);
+  if (existing === undefined) return undefined;
+  if (!sameEpoch(existing, epoch))
+    throw new Error('Release-wave epoch identity has conflicting content.');
+  if (current.revision === undefined)
+    throw new Error('Release-wave publisher epoch adoption lost its immutable revision.');
+  return { ...existing, sourceRevision: current.revision };
 }
 
 /*** Load a revisioned release plan and refuse schedules not bound to the selected inventory. */
@@ -185,15 +206,18 @@ function isScheduledPublisher(
 function plannedEpoch(
   inventoryId: string,
   repositories: readonly ReleaseWaveRepository[],
-  publicationPlans: ReadonlyMap<string, ChangesetReleasePlan>,
+  publicationDecisions: ReadonlyMap<string, ChangesetReleaseDecision>,
 ): Omit<ReleaseWavePublisherEpoch, 'sourceRevision'> {
   if (!/^[a-f0-9]{64}$/.test(inventoryId))
     throw new Error('Release-wave publisher epoch inventory identity is invalid.');
   const selected = new Map(repositories.map((repository) => [repository.fullName, repository]));
   if (selected.size !== repositories.length)
     throw new Error('Selected installation has duplicate repositories.');
-  const publishers = [...publicationPlans.entries()].map(([repositoryName, plan]) =>
-    publisherFromPlan(selected.get(repositoryName), plan),
+  assertCompleteReleaseWavePublisherDecisions(selected, publicationDecisions);
+  const publishers = [...publicationDecisions.entries()].flatMap(([repositoryName, decision]) =>
+    decision.releasePlan === undefined
+      ? []
+      : [publisherFromPlan(selected.get(repositoryName), decision)],
   );
   if (publishers.length === 0)
     throw new Error('Release-wave publisher epoch has no trusted release intent.');
@@ -210,16 +234,17 @@ function plannedEpoch(
 /** Translate only an exact selected Changesets decision into a future publisher identity. */
 function publisherFromPlan(
   repository: ReleaseWaveRepository | undefined,
-  plan: ChangesetReleasePlan,
+  decision: ChangesetReleaseDecision,
 ): ReleaseWavePublisherEpoch['publishers'][number] {
+  const plan = decision.releasePlan;
+  if (plan === undefined) throw new Error('Release-wave publisher plan is missing.');
   const [release] = plan.releases;
   if (
     repository?.publishable !== true ||
     repository.packageName !== plan.packageName ||
     repository.packageVersion === undefined ||
     repository.sourceRevision !== plan.revision ||
-    plan.statusHash === undefined ||
-    !/^[a-f0-9]{64}$/.test(plan.statusHash) ||
+    plan.statusHash !== decision.statusHash ||
     valid(plan.version) !== plan.version ||
     !gt(plan.version, repository.packageVersion) ||
     release === undefined ||

@@ -5,7 +5,11 @@ import { join } from 'node:path';
 
 import { inc, valid } from 'semver';
 
-import type { ChangesetReleasePlan, ReleaseWaveCheckout } from '../../../../types/releaseWave.js';
+import type {
+  ChangesetReleaseDecision,
+  ChangesetReleasePlan,
+  ReleaseWaveCheckout,
+} from '../../../../types/releaseWave.js';
 
 interface ChangesetStatus {
   readonly releases?: readonly ChangesetStatusRelease[];
@@ -28,23 +32,31 @@ interface PackageManifest {
 export async function changesetReleasePlansAsync(
   checkouts: Readonly<Record<string, ReleaseWaveCheckout>>,
 ): Promise<ReadonlyMap<string, ChangesetReleasePlan>> {
-  const entries = await Promise.all(
-    Object.entries(checkouts).map(
-      async ([repository, checkout]) =>
-        [repository, await changesetReleasePlanAsync(checkout)] as const,
-    ),
-  );
+  const decisions = await changesetReleaseDecisionsAsync(checkouts);
   return new Map(
-    entries.flatMap(([repository, plan]) =>
-      plan === undefined ? [] : [[repository, plan] as const],
+    [...decisions.entries()].flatMap(([repository, decision]) =>
+      decision.releasePlan === undefined ? [] : [[repository, decision.releasePlan] as const],
     ),
   );
 }
 
+/*** Collect one explicit status decision per pinned checkout, including unchanged baselines. */
+export async function changesetReleaseDecisionsAsync(
+  checkouts: Readonly<Record<string, ReleaseWaveCheckout>>,
+): Promise<ReadonlyMap<string, ChangesetReleaseDecision>> {
+  const entries = await Promise.all(
+    Object.entries(checkouts).map(
+      async ([repository, checkout]) =>
+        [repository, await changesetReleaseDecisionAsync(checkout)] as const,
+    ),
+  );
+  return new Map(entries);
+}
+
 /*** Execute Changesets against one exact checkout and retain only a sole patch publication decision. */
-async function changesetReleasePlanAsync(
+async function changesetReleaseDecisionAsync(
   checkout: ReleaseWaveCheckout,
-): Promise<ChangesetReleasePlan | undefined> {
+): Promise<ChangesetReleaseDecision> {
   await assertImmutableCheckoutAsync(checkout);
   const directory = await mkdtemp(join(tmpdir(), 'ankhorage-changeset-status-'));
   const outputPath = join(directory, 'status.json');
@@ -68,12 +80,16 @@ async function changesetReleasePlanAsync(
       ),
     ]);
     await assertImmutableCheckoutAsync(checkout);
-    return releasePlan(
-      JSON.parse(statusOutput) as ChangesetStatus,
-      manifest,
-      statusOutput,
-      checkout.revision,
-    );
+    return {
+      releasePlan: releasePlan(
+        JSON.parse(statusOutput) as ChangesetStatus,
+        manifest,
+        statusOutput,
+        checkout.revision,
+      ),
+      revision: checkout.revision,
+      statusHash: createHash('sha256').update(statusOutput).digest('hex'),
+    };
   } finally {
     await rm(directory, { force: true, recursive: true });
   }

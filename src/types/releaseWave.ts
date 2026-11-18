@@ -31,6 +31,19 @@ export interface ChangesetReleasePlan {
   readonly version: string;
 }
 
+/**
+ * Exhaustive Changesets status evidence for one selected publishable source.
+ *
+ * An absent `releasePlan` is a verified unchanged baseline, not a missing
+ * collection result.  The epoch writer requires one decision for every
+ * eligible selected publisher before it can freeze a schedule.
+ */
+export interface ChangesetReleaseDecision {
+  readonly releasePlan?: ChangesetReleasePlan;
+  readonly revision: string;
+  readonly statusHash: string;
+}
+
 /** Immutable local consumer checkout identity used to collect managed Changesets output. */
 export interface ReleaseWaveCheckout {
   readonly path: string;
