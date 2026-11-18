@@ -20,8 +20,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: renovate-reconciliation-${{ github.event.client_payload.repository || 'all' }}
-  cancel-in-progress: true
+  # A queue, not a replacement slot: a scheduled or dispatched reconcile cannot drop another run.
+  group: release-wave-mutation
+  cancel-in-progress: false
 
 jobs:
   prepare:
@@ -80,8 +81,7 @@ jobs:
             core.setOutput('repositories', JSON.stringify(ready));
   reconcile:
     needs: prepare
-    # Coordinator activation fences all legacy Renovate mutation paths, including scheduled repair.
-    if: vars.ANKHORAGE_RELEASE_WAVE_COORDINATOR_ENABLED != 'true' && needs.prepare.outputs.repositories != '[]'
+    if: needs.prepare.outputs.repositories != '[]'
     strategy:
       fail-fast: false
       max-parallel: 4
@@ -112,6 +112,13 @@ jobs:
           permission-issues: write
           permission-pull-requests: write
           permission-workflows: write
+      - name: Admit this legacy reconcile mutation through the durable cutover fence
+        id: mutation-fence
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          RELEASE_WAVE_MUTATION_LEASE_ID: ${{ github.run_id }}-${{ strategy.job-index }}
+          RELEASE_WAVE_STATE_BRANCH: ${{ vars.ANKHORAGE_RELEASE_WAVE_STATE_BRANCH }}
+        run: bun src/cli/commands/release/fence.ts acquire legacy
       - name: Reconcile full Renovate state
         env:
           RENOVATE_AUTODISCOVER: 'false'
@@ -123,3 +130,10 @@ jobs:
           RENOVATE_REQUIRE_CONFIG: required
           RENOVATE_TOKEN: ${{ steps.app-token.outputs.token }}
         run: bun x renovate
+      - name: Release this legacy reconcile mutation lease
+        if: always() && steps.mutation-fence.outcome == 'success'
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          RELEASE_WAVE_MUTATION_LEASE_ID: ${{ github.run_id }}-${{ strategy.job-index }}
+          RELEASE_WAVE_STATE_BRANCH: ${{ vars.ANKHORAGE_RELEASE_WAVE_STATE_BRANCH }}
+        run: bun src/cli/commands/release/fence.ts release
