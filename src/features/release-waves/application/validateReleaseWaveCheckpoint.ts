@@ -1,3 +1,5 @@
+import { valid } from 'semver';
+
 import type {
   ReleaseWaveLedger,
   ReleaseWaveOperation,
@@ -37,7 +39,10 @@ export function validateReleaseWaveCheckpoint(
   if (
     Object.entries(checkpoint.ledger.candidatePublications ?? {}).some(
       ([repository, publication]) =>
-        !enrolled.has(repository) || !isCandidatePublication(publication),
+        !isCandidatePublicationForNode(
+          plan.nodes.find((node) => node.repository === repository),
+          publication,
+        ),
     )
   )
     throw new Error('Persisted release-wave candidate publication is invalid.');
@@ -96,7 +101,28 @@ function isOperation(value: unknown): boolean {
 }
 
 /*** Restrict durable candidate evidence to immutable status output for exactly one patch decision. */
-function isCandidatePublication(value: unknown): boolean {
+function isCandidatePublicationForNode(
+  node: ReleaseWavePlan['nodes'][number] | undefined,
+  value: unknown,
+): boolean {
+  return (
+    node !== undefined &&
+    isCandidatePublicationMetadata(value) &&
+    value.packageName === node.packageName &&
+    /^[0-9a-f]{40}$/u.test(String(value.revision)) &&
+    Array.isArray(value.releases) &&
+    value.releases.length === 1 &&
+    /^[a-f0-9]{64}$/u.test(String(value.statusHash)) &&
+    typeof value.version === 'string' &&
+    valid(value.version) !== null &&
+    value.releases.every((release) => isCandidatePatchRelease(release, node.packageName))
+  );
+}
+
+/** Narrow persisted candidate fields before their exact package and patch invariants are evaluated. */
+function isCandidatePublicationMetadata(
+  value: unknown,
+): value is Record<string, unknown> & { readonly releases: readonly unknown[] } {
   return (
     typeof value === 'object' &&
     value !== null &&
@@ -105,11 +131,18 @@ function isCandidatePublication(value: unknown): boolean {
     'releases' in value &&
     'statusHash' in value &&
     'version' in value &&
-    typeof value.packageName === 'string' &&
-    /^[0-9a-f]{40}$/u.test(String(value.revision)) &&
-    Array.isArray(value.releases) &&
-    value.releases.length === 1 &&
-    /^[a-f0-9]{64}$/u.test(String(value.statusHash)) &&
-    typeof value.version === 'string'
+    Array.isArray(value.releases)
+  );
+}
+
+/** Verify the one persisted release remains the owning node's sole patch declaration. */
+function isCandidatePatchRelease(value: unknown, packageName: string): boolean {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'packageName' in value &&
+    'type' in value &&
+    value.packageName === packageName &&
+    value.type === 'patch'
   );
 }

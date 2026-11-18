@@ -29,6 +29,8 @@ export interface ReleaseWaveExecutionPort {
     readonly runId: string;
   }): Promise<void>;
   verifyReleaseWaveRepositoryAsync(input: {
+    /** Immutable Changesets evidence whose candidate revision every review and CI record must match. */
+    readonly candidatePublication: ChangesetReleasePlan;
     readonly node: ReleaseWaveNode;
     readonly runId: string;
   }): Promise<ReleaseWaveVerification>;

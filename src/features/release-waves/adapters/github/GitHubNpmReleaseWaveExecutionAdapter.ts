@@ -38,14 +38,16 @@ export function GitHubNpmReleaseWaveExecutionAdapter(
         node.repository,
       );
       if (plan === undefined) throw new Error('candidate-changeset-plan-missing');
+      if ((await candidate.headRevisionAsync(node, operationId)) !== revision)
+        throw new Error('candidate-head-changed-during-changeset-collection');
       return plan;
     },
     reconcileReleaseWaveRepositoryAsync: ({ node, operationId }) =>
       candidate.reconcileAsync(node, operationId),
     ensureReleaseWaveRepositoryAsync: ({ node, operationId }) =>
       candidate.ensureAsync(node, operationId),
-    verifyReleaseWaveRepositoryAsync: ({ node, runId }) =>
-      githubReleaseWaveVerificationAsync(input, node, runId),
+    verifyReleaseWaveRepositoryAsync: ({ candidatePublication, node, runId }) =>
+      githubReleaseWaveVerificationAsync(input, node, runId, candidatePublication.revision),
   };
 }
 

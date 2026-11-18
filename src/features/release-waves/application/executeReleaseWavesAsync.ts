@@ -301,6 +301,7 @@ async function verifyClaimedReleaseWaveRepositoryAsync(
     expectedPublication: { version: publication.version },
   };
   const verification = await input.executionPort.verifyReleaseWaveRepositoryAsync({
+    candidatePublication: publication,
     node: verifiedNode,
     runId: input.plan.runId,
   });
