@@ -54,12 +54,13 @@ export async function githubReleaseWaveVerificationAsync(
   input: GitHubNpmReleaseWaveExecutionAdapterInput,
   node: ReleaseWaveNode,
   runId: string,
+  candidateRevision: string,
 ): Promise<ReleaseWaveVerification> {
   const candidate = githubReleaseWaveCandidate(input);
   const state = await candidate.reconcileAsync(node, runId + ':' + node.repository);
   if (state !== 'released') return incomplete;
   try {
-    return await verificationAsync(input, node, runId);
+    return await verificationAsync(input, node, runId, candidateRevision);
   } catch {
     return incomplete;
   }
@@ -70,11 +71,13 @@ async function verificationAsync(
   input: GitHubNpmReleaseWaveExecutionAdapterInput,
   node: ReleaseWaveNode,
   runId: string,
+  candidateRevision: string,
 ): Promise<ReleaseWaveVerification> {
   const client = githubReleaseWaveClient(input);
   const pull = await labelledPullAsync(client, node.repository, runId + ':' + node.repository);
   if (pull === undefined || pull.merged_at === null || pull.merge_commit_sha === null)
     return incomplete;
+  if (pull.head.sha !== candidateRevision) return incomplete;
   const evidence = await githubEvidenceAsync(input, client, node, pull, pull.merge_commit_sha);
   const releaseRevision = evidence.releaseRun?.head_sha;
   const releaseWorkflowPassed = releaseRevision !== undefined;

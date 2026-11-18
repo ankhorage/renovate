@@ -16,7 +16,6 @@ export async function collectReleaseWaveCandidatePublicationAsync(
   operationId: string,
   claim: ReleaseWaveOperation,
 ): Promise<void> {
-  if ((await candidatePublicationAsync(input, node.repository, false)) !== undefined) return;
   const publication = await input.executionPort.collectReleaseWaveCandidatePublicationAsync({
     node,
     operationId,
@@ -24,21 +23,44 @@ export async function collectReleaseWaveCandidatePublicationAsync(
   });
   if (!isCandidatePublication(node, publication))
     throw new Error('Release-wave candidate Changesets publication is invalid.');
+  const existing = await candidatePublicationAsync(input, node.repository, false);
+  if (sameCandidatePublication(existing, publication)) return;
   await updateReleaseWaveCheckpointAsync(
     input,
     node.repository,
-    (checkpoint) => ({
-      ...checkpoint,
-      ledger: {
-        ...checkpoint.ledger,
-        candidatePublications: Object.fromEntries(
-          Object.entries(checkpoint.ledger.candidatePublications ?? {}).concat([
-            [node.repository, publication],
-          ]),
-        ),
-      },
-    }),
+    (checkpoint, status) =>
+      status === 'verified' || status === 'released'
+        ? checkpoint
+        : {
+            ...checkpoint,
+            ledger: {
+              ...checkpoint.ledger,
+              candidatePublications: {
+                ...checkpoint.ledger.candidatePublications,
+                [node.repository]: publication,
+              },
+            },
+          },
     claim,
+  );
+}
+
+/** Compare all immutable evidence fields before deciding a CAS replacement is necessary. */
+function sameCandidatePublication(
+  existing: ChangesetReleasePlan | undefined,
+  next: ChangesetReleasePlan,
+): boolean {
+  const [existingRelease] = existing?.releases ?? [];
+  const [nextRelease] = next.releases;
+  return (
+    existingRelease !== undefined &&
+    nextRelease !== undefined &&
+    existing?.packageName === next.packageName &&
+    existing.revision === next.revision &&
+    existing.statusHash === next.statusHash &&
+    existing.version === next.version &&
+    existingRelease.packageName === nextRelease.packageName &&
+    existingRelease.type === nextRelease.type
   );
 }
 

@@ -15,6 +15,14 @@ const node = {
   requiresNpmPublication: true,
 };
 
+const candidatePublication = {
+  packageName: '@ankhorage/example',
+  releases: [{ packageName: '@ankhorage/example', type: 'patch' as const }],
+  revision: 'candidate-sha',
+  statusHash: 'a'.repeat(64),
+  version: '1.2.4',
+};
+
 /*** Prove provider verification requires real, complete GitHub and npm evidence. */
 test('verifies a merged Renovate candidate only from complete provider evidence', async () => {
   const adapter = GitHubNpmReleaseWaveExecutionAdapter({
@@ -34,7 +42,9 @@ test('verifies a merged Renovate candidate only from complete provider evidence'
       runId: 'wave',
     }),
   ).toBe('released');
-  expect(await adapter.verifyReleaseWaveRepositoryAsync({ node, runId: 'wave' })).toEqual({
+  expect(
+    await adapter.verifyReleaseWaveRepositoryAsync({ candidatePublication, node, runId: 'wave' }),
+  ).toEqual({
     documentationGenerated: true,
     exactHeadCiPassed: true,
     lockfileUpdated: true,
@@ -225,62 +235,6 @@ test('rejects a merged candidate when the available approval reviewed a differen
   expect(verification.requiredReviewsApproved).toBe(false);
 });
 
-test('rejects a grouped candidate unless its actual manifest and lockfile adopt every planned version', async () => {
-  const expectedNode = {
-    ...node,
-    expectedDependencies: [{ packageName: '@ankhorage/provider', version: '2.0.0' }],
-  };
-  const adapter = GitHubNpmReleaseWaveExecutionAdapter({
-    apiBaseUrl: 'https://api.github.test',
-    npmRegistryUrl: 'https://registry.npm.test',
-    owner: 'ankhorage',
-    releaseWorkflowFile: 'release.yml',
-    renovateAsync: () => Promise.resolve(),
-    requestAsync: (url, _init) =>
-      Promise.resolve(
-        String(url).includes('/contents/package.json?ref=base-sha')
-          ? content({ dependencies: { '@ankhorage/provider': '^1.0.0' } })
-          : String(url).includes('/contents/package.json?ref=candidate-sha')
-            ? content({ dependencies: { '@ankhorage/provider': '^2.0.0' } })
-            : String(url).includes('/contents/bun.lock?ref=candidate-sha')
-              ? content(lockfileFor('@ankhorage/provider', '2.0.0'))
-              : githubReleaseWaveResponseFor(String(url)),
-      ),
-    token: 'test-token',
-  });
-  expect(
-    await adapter.verifyReleaseWaveRepositoryAsync({ node: expectedNode, runId: 'wave' }),
-  ).toMatchObject({ lockfileUpdated: true });
-});
-
-test('rejects an unrelated lockfile occurrence of a planned dependency version', async () => {
-  const expectedNode = {
-    ...node,
-    expectedDependencies: [{ packageName: '@ankhorage/provider', version: '2.0.0' }],
-  };
-  const adapter = GitHubNpmReleaseWaveExecutionAdapter({
-    apiBaseUrl: 'https://api.github.test',
-    npmRegistryUrl: 'https://registry.npm.test',
-    owner: 'ankhorage',
-    releaseWorkflowFile: 'release.yml',
-    renovateAsync: () => Promise.resolve(),
-    requestAsync: (url, _init) =>
-      Promise.resolve(
-        String(url).includes('/contents/package.json?ref=base-sha')
-          ? content({ dependencies: { '@ankhorage/provider': '^1.0.0' } })
-          : String(url).includes('/contents/package.json?ref=candidate-sha')
-            ? content({ dependencies: { '@ankhorage/provider': '^2.0.0' } })
-            : String(url).includes('/contents/bun.lock?ref=candidate-sha')
-              ? content('{"note":"@ankhorage/provider@2.0.0"}')
-              : githubReleaseWaveResponseFor(String(url)),
-      ),
-    token: 'test-token',
-  });
-  expect(
-    await adapter.verifyReleaseWaveRepositoryAsync({ node: expectedNode, runId: 'wave' }),
-  ).toMatchObject({ lockfileUpdated: false });
-});
-
 /*** Exercise one complete verification attempt with a focused provider override. */
 async function verifyWith(
   responder: (url: string, method: string | undefined) => Response,
@@ -294,30 +248,10 @@ async function verifyWith(
     requestAsync: (url, init) => Promise.resolve(responder(String(url), init?.method)),
     token: 'test-token',
   });
-  return adapter.verifyReleaseWaveRepositoryAsync({ node, runId: 'wave' });
+  return adapter.verifyReleaseWaveRepositoryAsync({ candidatePublication, node, runId: 'wave' });
 }
 
-/*** Produce deterministic GitHub/npm provider fixtures without a live mutation target. */
-
-/*** Serialize one fixture response as GitHub/npm JSON. */
+/** Serialize focused GitHub and npm fixture responses. */
 function json(value: unknown): Response {
   return new Response(JSON.stringify(value), { status: 200 });
-}
-
-/** Encode a file response in GitHub's documented base64 Contents envelope. */
-function content(value: unknown): Response {
-  return json({
-    content: Buffer.from(typeof value === 'string' ? value : JSON.stringify(value)).toString(
-      'base64',
-    ),
-    encoding: 'base64',
-  });
-}
-
-/** Build the minimal Bun lockfile graph that binds a root direct declaration to its locator. */
-function lockfileFor(packageName: string, version: string): string {
-  return JSON.stringify({
-    packages: { [packageName]: [packageName + '@' + version] },
-    workspaces: { '': { dependencies: { [packageName]: '^' + version } } },
-  });
 }

@@ -80,6 +80,57 @@ test('keeps a merged candidate non-terminal until npm evidence completes', async
   expect(result.ledger.nodes['ankhorage/consumer']).toBe('awaiting-review');
 });
 
+test('replaces stale candidate Changesets evidence under its lease before delayed review can settle', async () => {
+  const revisionA = 'a'.repeat(40);
+  const revisionB = 'c'.repeat(40);
+  const publications = [
+    { ...candidatePublication, revision: revisionA },
+    { ...candidatePublication, revision: revisionB, statusHash: 'd'.repeat(64), version: '1.0.2' },
+  ];
+  const calls: string[] = [];
+  const executionPort: ReleaseWaveExecutionPort = {
+    collectReleaseWaveCandidatePublicationAsync: () => {
+      const publication = publications.shift();
+      if (publication === undefined)
+        throw new Error('candidate evidence was unexpectedly recollected');
+      calls.push('collect:' + publication.revision);
+      return Promise.resolve(publication);
+    },
+    ensureReleaseWaveRepositoryAsync: () => Promise.resolve(),
+    reconcileReleaseWaveRepositoryAsync: () => Promise.resolve('awaiting-review'),
+    verifyReleaseWaveRepositoryAsync: ({ candidatePublication: publication }) => {
+      calls.push('verify:' + publication.revision);
+      return Promise.resolve(
+        publication.revision === revisionB
+          ? completeVerification
+          : { ...completeVerification, exactHeadCiPassed: false },
+      );
+    },
+  };
+  const input = executionInput(consumerPlan(), checkpointPort(), executionPort);
+
+  const delayed = await executeReleaseWavesAsync(input);
+  const recovered = await executeReleaseWavesAsync({
+    ...input,
+    now: () => new Date('2026-11-18T01:00:00.000Z'),
+  });
+
+  expect(delayed.ledger.nodes['ankhorage/consumer']).toBe('awaiting-review');
+  expect(recovered.ledger.nodes['ankhorage/consumer']).toBe('released');
+  expect(recovered.ledger.candidatePublications?.['ankhorage/consumer']).toEqual({
+    ...candidatePublication,
+    revision: revisionB,
+    statusHash: 'd'.repeat(64),
+    version: '1.0.2',
+  });
+  expect(calls).toEqual([
+    'collect:' + revisionA,
+    'verify:' + revisionA,
+    'collect:' + revisionB,
+    'verify:' + revisionB,
+  ]);
+});
+
 test('records candidate and candidate-Changeset failures without trusting a release', async () => {
   const plan = consumerPlan();
   for (const executionPort of [
