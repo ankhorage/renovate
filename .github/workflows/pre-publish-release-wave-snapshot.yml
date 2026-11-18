@@ -1,0 +1,46 @@
+name: Acknowledge pre-publish release-wave snapshot
+
+on:
+  repository_dispatch:
+    types:
+      - pre-publish-release-wave-snapshot
+
+permissions:
+  contents: read
+
+# This endpoint is intentionally independent of both publisher release lanes and release-wave mutation.
+concurrency:
+  group: release-wave-pre-publish-snapshot-${{ github.event.client_payload.requestId }}
+  cancel-in-progress: false
+
+jobs:
+  acknowledge:
+    runs-on: ubuntu-latest
+    steps:
+      # GitHub repository_dispatch resolves workflow definitions from the repository default branch.
+      - name: Check out the default-branch snapshot entry point
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: '1.4.0'
+
+      - name: Install the pinned release-wave tooling
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Mint the selected-installation token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.ANKHORAGE_RENOVATE_SYNC_CLIENT_ID }}
+          private-key: ${{ secrets.ANKHORAGE_RENOVATE_SYNC_PRIVATE_KEY }}
+          owner: ankhorage
+          permission-contents: write
+
+      - name: Persist and acknowledge the selected publisher epoch
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          RELEASE_WAVE_PUBLISHER_SNAPSHOT_REQUEST: ${{ toJSON(github.event.client_payload) }}
+          RELEASE_WAVE_STATE_BRANCH: ${{ vars.ANKHORAGE_RELEASE_WAVE_STATE_BRANCH }}
+        run: bun src/cli/commands/release/snapshot.ts

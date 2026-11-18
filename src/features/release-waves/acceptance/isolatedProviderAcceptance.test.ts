@@ -4,6 +4,7 @@ import { expect, test } from 'bun:test';
 
 import { GitHubNpmReleaseWaveExecutionAdapter } from '../adapters/github/GitHubNpmReleaseWaveExecutionAdapter.js';
 import { GitHubNpmReleaseWavePublicationEvidenceAdapter } from '../adapters/github/GitHubNpmReleaseWavePublicationEvidenceAdapter.js';
+import { acknowledgeReleaseWavePublisherSnapshotAsync } from '../application/acknowledgeReleaseWavePublisherSnapshotAsync.js';
 import { ingestReleaseWaveEventAsync } from '../application/ingestReleaseWaveEventAsync.js';
 import { runReleaseWaveCoordinatorAsync } from '../application/runReleaseWaveCoordinatorAsync.js';
 import {
@@ -20,6 +21,7 @@ import {
   githubApi,
   integrity,
   json,
+  lostAckSnapshotInput,
   npmRegistry,
   publicationManifest,
   publicationResponse,
@@ -50,6 +52,21 @@ test('accepts every paginated selected repository from authenticated epoch-plan 
   expect(
     cohort?.repositories.find((repository) => repository.fullName === 'ankhorage/blocked'),
   ).toMatchObject({ bootstrapReady: false });
+});
+
+test('does not admit a publisher which is absent from the selected App inventory', async () => {
+  const adapter = cohortAdapter([]);
+  const unselected = eventFor({
+    package_name: '@ankhorage/unselected',
+    source_repository: 'ankhorage/unselected',
+    version: '1.1.0',
+  });
+
+  expect(
+    await adapter.collectReleaseWavePublicationCohortAsync({
+      pendingEvents: [{ ...unselected, eventId: releaseWaveEventIdentity(unselected) }],
+    }),
+  ).toBeUndefined();
 });
 
 test('requires tag, named release workflow, npm gitHead, and tarball integrity before event admission', async () => {
@@ -103,13 +120,17 @@ test('settles delayed diamond publishers once across reordered dispatch, restart
   const queue = eventQueue([1, 4]);
   const calls: string[] = [];
   const input = coordinatorInput(queue, calls);
-  for (const publisher of [
-    event('left', '1.1.0'),
-    event('base', '1.1.0'),
-    event('base', '1.1.0'),
-  ]) {
+  await ingestReleaseWaveEventAsync({
+    event: event('base', '1.1.0'),
+    maximumRetries: 3,
+    queuePort: queue,
+  });
+
+  expect(await runReleaseWaveCoordinatorAsync(input)).toBeUndefined();
+  expect((await queue.loadReleaseWaveEventQueueAsync())?.queue.events).toHaveLength(1);
+
+  for (const publisher of [event('left', '1.1.0'), event('base', '1.1.0')])
     await ingestReleaseWaveEventAsync({ event: publisher, maximumRetries: 3, queuePort: queue });
-  }
 
   const first = await runReleaseWaveCoordinatorAsync(input);
   const restarted = await runReleaseWaveCoordinatorAsync(input);
@@ -118,6 +139,36 @@ test('settles delayed diamond publishers once across reordered dispatch, restart
   expect(restarted).toBeUndefined();
   expect(calls.filter((call) => call === 'ensure:ankhorage/consumer')).toHaveLength(1);
   expect((await queue.loadReleaseWaveEventQueueAsync())?.queue.events).toEqual([]);
+});
+
+test('persists a request-bound pre-publish acknowledgement before a lost response and rejects stale replay evidence', async () => {
+  const { epochs, input, request } = lostAckSnapshotInput();
+
+  expect(acknowledgeReleaseWavePublisherSnapshotAsync(input)).rejects.toThrow(
+    'simulated lost ACK response',
+  );
+  expect(await acknowledgeReleaseWavePublisherSnapshotAsync(input)).toMatchObject({
+    epochId: 'd'.repeat(64),
+    ...request,
+  });
+  expect(epochs()).toBe(1);
+  expect(
+    acknowledgeReleaseWavePublisherSnapshotAsync({
+      ...input,
+      request: { ...request, sourceSha: 'f'.repeat(40) },
+    }),
+  ).rejects.toThrow('replayed with different evidence');
+  expect(
+    acknowledgeReleaseWavePublisherSnapshotAsync({
+      ...input,
+      request: {
+        ...request,
+        requestId: 'provider-snapshot-request-0002',
+        sourceSha: 'f'.repeat(40),
+      },
+    }),
+  ).rejects.toThrow('source revision is stale or unselected');
+  expect(epochs()).toBe(1);
 });
 
 test('blocks a stale protected candidate approval and tampered Changeset evidence', async () => {

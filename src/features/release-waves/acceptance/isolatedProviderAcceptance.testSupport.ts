@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto';
 
 import { GitHubReleaseWavePublicationCohortAdapter } from '../adapters/github/GitHubReleaseWavePublicationCohortAdapter.js';
 import { githubReleaseWaveResponseFor } from '../adapters/github/githubReleaseWaveResponse.testSupport.js';
+import type { acknowledgeReleaseWavePublisherSnapshotAsync } from '../application/acknowledgeReleaseWavePublisherSnapshotAsync.js';
+import type { ReleaseWavePublisherSnapshotAck } from '../ports/releaseWavePublisherSnapshot.js';
 
 export const githubApi = 'https://api.github.provider-contract.test';
 export const npmRegistry = 'https://registry.npm.provider-contract.test';
@@ -133,6 +135,118 @@ export function candidateResponse(url: string): Response {
 
 export function integrity(value: string): string {
   return 'sha512-' + createHash('sha512').update(value).digest('base64');
+}
+
+/** Create durable ACK state whose first provider response is lost after persistence. */
+export function lostAckSnapshotInput() {
+  const request = {
+    changesetsStatusHash: 'c'.repeat(64),
+    requestId: 'provider-snapshot-request-0001',
+    sourceRepository: 'ankhorage/base',
+    sourceSha: 'b'.repeat(40),
+  };
+  const persistence = lostAckPersistence();
+  return { epochs: persistence.epochs, input: snapshotInput(request, persistence), request };
+}
+
+/** Retain the independently durable ACK and epoch writer across a simulated process restart. */
+function lostAckPersistence() {
+  const acknowledgements = new Map<string, ReleaseWavePublisherSnapshotAck>();
+  let epochCount = 0;
+  let loseResponse = true;
+  return {
+    ackPort: {
+      loadReleaseWavePublisherSnapshotAckAsync: (requestId: string) =>
+        Promise.resolve(acknowledgements.get(requestId)),
+      saveReleaseWavePublisherSnapshotAckAsync: (ack: ReleaseWavePublisherSnapshotAck) => {
+        acknowledgements.set(ack.requestId, ack);
+        if (loseResponse) {
+          loseResponse = false;
+          return Promise.reject(new Error('simulated lost ACK response'));
+        }
+        return Promise.resolve(ack);
+      },
+    },
+    epochs: () => epochCount,
+    publisherEpochWriterPort: {
+      adoptReleaseWavePublisherEpochAsync: () => {
+        epochCount += 1;
+        return Promise.resolve({
+          id: 'd'.repeat(64),
+          inventoryId: 'a'.repeat(64),
+          publishers: [],
+          sourceRevision: 'e'.repeat(40),
+        });
+      },
+    },
+  };
+}
+
+/** Bind the durable ACK fixture to one selected immutable publisher and complete decision. */
+function snapshotInput(
+  request: {
+    readonly changesetsStatusHash: string;
+    readonly requestId: string;
+    readonly sourceRepository: string;
+    readonly sourceSha: string;
+  },
+  persistence: ReturnType<typeof lostAckPersistence>,
+) {
+  return {
+    ackPort: persistence.ackPort,
+    inventoryId: 'a'.repeat(64),
+    publicationDecisions: snapshotDecisions(request),
+    publisherEpochWriterPort: persistence.publisherEpochWriterPort,
+    repositories: [snapshotRepository(request)],
+    request,
+  } satisfies Parameters<typeof acknowledgeReleaseWavePublisherSnapshotAsync>[0];
+}
+
+/** Supply the only complete patch decision which can enter the epoch. */
+function snapshotDecisions(request: {
+  readonly changesetsStatusHash: string;
+  readonly sourceRepository: string;
+  readonly sourceSha: string;
+}) {
+  return new Map([
+    [
+      request.sourceRepository,
+      {
+        releasePlan: {
+          packageName: '@ankhorage/base',
+          releases: [{ packageName: '@ankhorage/base', type: 'patch' as const }],
+          revision: request.sourceSha,
+          statusHash: request.changesetsStatusHash,
+          version: '1.0.1',
+        },
+        revision: request.sourceSha,
+        statusHash: request.changesetsStatusHash,
+      },
+    ],
+  ]);
+}
+
+/** Keep source SHA validation bound to the selected repository profile. */
+function snapshotRepository(request: {
+  readonly sourceRepository: string;
+  readonly sourceSha: string;
+}) {
+  return {
+    archived: false,
+    bootstrapReady: true,
+    dependencies: {
+      dependencies: {},
+      devDependencies: {},
+      optionalDependencies: {},
+      peerDependencies: {},
+    },
+    fullName: request.sourceRepository,
+    packageName: '@ankhorage/base',
+    packageVersion: '1.0.0',
+    private: false,
+    publishable: true,
+    sourceRevision: request.sourceSha,
+  };
 }
 
 function content(value: unknown): Response {

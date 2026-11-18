@@ -8,6 +8,12 @@ workflow evidence, npm provenance/integrity, delayed diamond publishers, duplica
 events, queue compare-and-swap contention, restart, stale approval, tampered Changeset, and the
 active legacy-workflow exclusion.
 
+The acceptance track also executes the pre-publish acknowledgement boundary: an incomplete epoch
+retains its post-publish event without acknowledgement, a persisted request-bound ACK survives a
+lost response and restart, and a replay with changed source evidence is rejected. Its durable
+cutover test exercises the same Contents-backed fence for legacy reconcile and coordinator work,
+including the irreversible rollback boundary after a coordinator mutation.
+
 This is executable provider-contract coverage, not real-provider E2E evidence. A full provider run
 remains blocked until a separately owned isolated GitHub App installation, selected private/nonpackage
 test repositories, an isolated npm scope/registry, protected test branch, and non-production release
@@ -17,7 +23,8 @@ tarball integrity, required-review/check evidence, candidate PR/Changeset, and r
 
 The isolated epoch-plan fixture proves authenticated GitHub Contents create, read, and update
 compare-and-swap behavior; immutable revision binding; append-only independent epochs; and rejection
-of CAS races, overlapping cohorts, and source decisions not bound to selected immutable Changesets
-input. Candidate verification uses a complete immutable patch Changeset publication fixture so stale
-approval, altered Changeset, and npm-lag assertions reach their intended security gates. It does not
-create a GitHub candidate, obtain protected-branch approval, or publish to npm.
+of CAS races, overlapping cohorts, source downgrades, and source decisions not bound to selected
+immutable Changesets input. Candidate verification uses a complete immutable patch Changeset
+publication fixture so stale approval, altered Changeset, and npm-lag assertions reach their
+intended security gates. It does not create a GitHub candidate, obtain protected-branch approval,
+or publish to npm.
