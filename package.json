@@ -67,7 +67,7 @@
     "@types/bun": "^1.4.2",
     "@types/node": "^26.6.6",
     "semver": "^7.8.6",
-    "renovate": "^44.252.0",
+    "renovate": "^44.252.2",
     "typescript": "~6.0.3"
   },
   "packageManager": "bun@1.4.2"
