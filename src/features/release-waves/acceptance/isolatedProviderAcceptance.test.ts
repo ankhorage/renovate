@@ -186,13 +186,20 @@ test('blocks a partial npm publication even after otherwise complete GitHub evid
   expect(verification.npmVersionVerified).toBe(false);
 });
 
-test('keeps the legacy dispatch workflow excluded from the inactive coordinator path', () => {
-  const workflow = readFileSync(
+test('requires durable mutation-fence admission for legacy and coordinator workflow mutations', () => {
+  const rolloutWorkflow = readFileSync(
     new URL('../../../../.github/workflows/rollout-package-release.yml', import.meta.url),
     'utf8',
   );
+  const reconcileWorkflow = readFileSync(
+    new URL('../../../../.github/workflows/reconcile.yml', import.meta.url),
+    'utf8',
+  );
 
-  expect(workflow).toContain('group: coordinated-release-wave');
-  expect(workflow).not.toContain('runReleaseWaveCoordinatorAsync');
-  expect(workflow).not.toContain('release-wave-checkpoints');
+  expect(rolloutWorkflow).toContain('fence.ts acquire legacy');
+  expect(rolloutWorkflow).toContain('fence.ts acquire coordinator');
+  expect(rolloutWorkflow).toContain('RELEASE_WAVE_MUTATION_LEASE_ID');
+  expect(rolloutWorkflow).toContain('release/coordinate.ts');
+  expect(reconcileWorkflow).toContain('fence.ts acquire legacy');
+  expect(reconcileWorkflow).toContain('RELEASE_WAVE_MUTATION_LEASE_ID');
 });
