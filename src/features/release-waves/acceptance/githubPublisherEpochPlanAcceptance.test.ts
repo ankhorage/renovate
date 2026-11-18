@@ -148,6 +148,20 @@ test('rejects concurrent CAS writers, overlapping schedules, and source decision
   ).toContain('not bound');
 });
 
+test('rejects a source downgrade even when its decision has a complete Changesets shape', async () => {
+  const base = publisherRepository('@ankhorage/base');
+
+  expect(
+    await failureMessageAsync(
+      epochWriter(githubContentsFixture().requestAsync).adoptReleaseWavePublisherEpochAsync({
+        inventoryId,
+        publicationDecisions: new Map([[base.fullName, publisherDecision(base, '0.9.0')]]),
+        repositories: [base],
+      }),
+    ),
+  ).toContain('not bound');
+});
+
 function load(response: Response, inventoryId: string) {
   return GitHubReleaseWavePublisherEpochAdapter({
     apiBaseUrl: 'https://api.github.provider-contract.test',
