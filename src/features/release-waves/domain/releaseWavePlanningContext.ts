@@ -54,7 +54,7 @@ function eligibilityProblem(
   if (published === undefined)
     return repository.fullName + ': no verified stable published package version';
   const plan = publicationPlans.get(repository.fullName);
-  if (!hasCanonicalPlan(repository, published, plan))
+  if (plan !== undefined && !hasCanonicalPlan(repository, published, plan))
     return repository.fullName + ': missing canonical Changesets publication plan';
   return gte(published.version, repository.packageVersion)
     ? undefined

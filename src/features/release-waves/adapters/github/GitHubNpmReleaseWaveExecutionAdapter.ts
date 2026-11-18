@@ -1,9 +1,15 @@
+import type { ReleaseWaveCheckout } from '../../../../types/releaseWave.js';
 import type { ReleaseWaveExecutionPort } from '../../ports/releaseWaveExecution.js';
+import { changesetReleasePlansAsync } from '../changesets/changesetReleasePlansAsync.js';
 import { githubReleaseWaveCandidate } from './githubReleaseWaveCandidate.js';
 import { githubReleaseWaveVerificationAsync } from './githubReleaseWaveVerification.js';
 
 export interface GitHubNpmReleaseWaveExecutionAdapterInput {
   readonly apiBaseUrl: string;
+  readonly candidateCheckoutAsync?: (input: {
+    readonly repository: string;
+    readonly revision: string;
+  }) => Promise<ReleaseWaveCheckout>;
   readonly npmRegistryUrl: string;
   readonly owner: string;
   readonly releaseWorkflowFile: string;
@@ -19,6 +25,21 @@ export function GitHubNpmReleaseWaveExecutionAdapter(
   validateAdapterInput(input);
   const candidate = githubReleaseWaveCandidate(input);
   return {
+    collectReleaseWaveCandidatePublicationAsync: async ({ node, operationId }) => {
+      const revision = await candidate.headRevisionAsync(node, operationId);
+      if (input.candidateCheckoutAsync === undefined)
+        throw new Error('candidate-checkout-unavailable');
+      const checkout = await input.candidateCheckoutAsync({
+        repository: node.repository,
+        revision,
+      });
+      if (checkout.revision !== revision) throw new Error('candidate-checkout-revision-mismatch');
+      const plan = (await changesetReleasePlansAsync({ [node.repository]: checkout })).get(
+        node.repository,
+      );
+      if (plan === undefined) throw new Error('candidate-changeset-plan-missing');
+      return plan;
+    },
     reconcileReleaseWaveRepositoryAsync: ({ node, operationId }) =>
       candidate.reconcileAsync(node, operationId),
     ensureReleaseWaveRepositoryAsync: ({ node, operationId }) =>

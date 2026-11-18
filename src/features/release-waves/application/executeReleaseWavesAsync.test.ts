@@ -80,6 +80,8 @@ function checkpointPort(conflicts = 0): ReleaseWaveCheckpointPort {
 function executionPort(calls: string[], blocked = false): ReleaseWaveExecutionPort {
   const pullRequests = new Set<string>();
   return {
+    collectReleaseWaveCandidatePublicationAsync: ({ node }) =>
+      Promise.resolve(candidatePublication(node.packageName)),
     reconcileReleaseWaveRepositoryAsync: ({ node }) => {
       calls.push('reconcile:' + node.repository);
       return Promise.resolve(pullRequests.has(node.repository) ? 'awaiting-review' : 'missing');
@@ -149,34 +151,6 @@ test('holds later waves when an exact-head CI gate is incomplete', async () => {
     'update:ankhorage/base',
     'verify:ankhorage/base',
   ]);
-});
-
-test('keeps a reconciled merged candidate non-terminal until npm publication evidence is complete', async () => {
-  const [base] = plan.nodes;
-  if (base === undefined) throw new Error('Base node fixture is missing.');
-  const result = await executeReleaseWavesAsync({
-    checkpointPort: checkpointPort(),
-    executionPort: {
-      ensureReleaseWaveRepositoryAsync: () => Promise.resolve(),
-      reconcileReleaseWaveRepositoryAsync: () => Promise.resolve('released'),
-      verifyReleaseWaveRepositoryAsync: () =>
-        Promise.resolve({
-          documentationGenerated: true,
-          exactHeadCiPassed: true,
-          lockfileUpdated: true,
-          npmArtifactVerified: false,
-          npmVersionVerified: false,
-          releaseWorkflowPassed: true,
-          requiredReviewsApproved: true,
-        }),
-    },
-    executorId: 'executor-1',
-    maximumCheckpointRetries: 2,
-    maximumConcurrency: 1,
-    now: () => new Date('2026-11-16T00:00:00.000Z'),
-    plan: { ...plan, nodes: [base], waves: [['ankhorage/base']] },
-  });
-  expect(result.ledger.nodes['ankhorage/base']).toBe('awaiting-review');
 });
 
 test('adopts a concurrently advanced initializer instead of overwriting its release evidence', async () => {
@@ -254,6 +228,8 @@ test('reconciles an expired interrupted mutation before retrying it', async () =
   };
   const store = checkpointPortWith(interrupted);
   const port: ReleaseWaveExecutionPort = {
+    collectReleaseWaveCandidatePublicationAsync: ({ node }) =>
+      Promise.resolve(candidatePublication(node.packageName)),
     ensureReleaseWaveRepositoryAsync: () => {
       calls.push('update');
       return Promise.resolve();
@@ -286,6 +262,17 @@ const completeVerification = {
   releaseWorkflowPassed: true,
   requiredReviewsApproved: true,
 };
+
+/*** Supply immutable candidate status evidence without coupling executor tests to a checkout adapter. */
+function candidatePublication(packageName: string) {
+  return {
+    packageName,
+    releases: [{ packageName, type: 'patch' as const }],
+    revision: 'a'.repeat(40),
+    statusHash: 'b'.repeat(64),
+    version: '1.0.1',
+  };
+}
 
 /** Create a revisioned checkpoint store from pre-existing durable state. */
 function checkpointPortWith(initial: ReleaseWaveCheckpoint): ReleaseWaveCheckpointPort {

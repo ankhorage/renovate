@@ -42,6 +42,7 @@ test('does not concurrently verify an awaiting-review candidate with a live leas
   const verificationStarted = Promise.withResolvers<void>();
   const verificationReleased = Promise.withResolvers<void>();
   const port: ReleaseWaveExecutionPort = {
+    collectReleaseWaveCandidatePublicationAsync: () => Promise.resolve(candidatePublication()),
     ensureReleaseWaveRepositoryAsync: () => Promise.resolve(),
     reconcileReleaseWaveRepositoryAsync: () => Promise.resolve('awaiting-review'),
     verifyReleaseWaveRepositoryAsync: () => {
@@ -153,12 +154,24 @@ function executionInput(
 /*** Keep candidate reconciliation inert while recording verification-only calls. */
 function verificationPort(calls: string[]): ReleaseWaveExecutionPort {
   return {
+    collectReleaseWaveCandidatePublicationAsync: () => Promise.resolve(candidatePublication()),
     ensureReleaseWaveRepositoryAsync: () => Promise.resolve(),
     reconcileReleaseWaveRepositoryAsync: () => Promise.resolve('awaiting-review'),
     verifyReleaseWaveRepositoryAsync: () => {
       calls.push('verify');
       return Promise.resolve(completeVerification);
     },
+  };
+}
+
+/*** Supply bound candidate evidence for executor-only concurrency tests. */
+function candidatePublication() {
+  return {
+    packageName: '@ankhorage/base',
+    releases: [{ packageName: '@ankhorage/base', type: 'patch' as const }],
+    revision: 'a'.repeat(40),
+    statusHash: 'b'.repeat(64),
+    version: '1.0.1',
   };
 }
 
