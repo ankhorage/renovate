@@ -1,13 +1,13 @@
+import type {
+  ChangesetReleaseDecision,
+  ReleaseWaveRepository,
+} from '../../../types/releaseWave.js';
 import type { ReleaseWavePublisherEpochWriterPort } from '../ports/releaseWavePublisherEpoch.js';
 import type {
   ReleaseWavePublisherSnapshotAck,
   ReleaseWavePublisherSnapshotAckPort,
   ReleaseWavePublisherSnapshotRequest,
 } from '../ports/releaseWavePublisherSnapshot.js';
-import type {
-  ChangesetReleaseDecision,
-  ReleaseWaveRepository,
-} from '../../../types/releaseWave.js';
 
 /** Persist one complete pre-publish epoch and only then issue its idempotent request-bound acknowledgement. */
 export async function acknowledgeReleaseWavePublisherSnapshotAsync(input: {
