@@ -54,7 +54,9 @@ export async function runReleaseWaveCoordinatorAsync(input: {
     cohort: {
       epochId: epoch.id,
       inventoryId: epoch.inventoryId,
-      epochRevision: epoch.sourceRevision,
+      // The Contents document revision protects its CAS write only.  It changes whenever an
+      // unrelated epoch is appended, so it must never fence an individual epoch's recovery.
+      epochRevision: epoch.id,
       publisherEventIds: events.map((event) => event.eventId).sort(),
     },
   };
@@ -200,15 +202,13 @@ function completeCohortEvents(
   return matching;
 }
 
-/*** Use the immutable complete cohort, rather than a transient queue snapshot, as checkpoint identity. */
+/*** Use the immutable epoch identity, rather than its mutable index-document revision, as recovery identity. */
 function logicalWaveId(epoch: ReleaseWavePublisherEpoch): string {
   return (
     'wave-' +
     createHash('sha256')
       .update(
         epoch.id +
-          '\n' +
-          epoch.sourceRevision +
           '\n' +
           epoch.publishers
             .map((publisher) =>

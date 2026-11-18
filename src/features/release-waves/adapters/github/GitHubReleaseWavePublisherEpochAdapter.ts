@@ -148,24 +148,36 @@ function parseReleasePlan(value: unknown): {
 
 /*** Validate every schedule field before it can fence a durable consumer release. */
 function isEpoch(value: unknown): value is Omit<ReleaseWavePublisherEpoch, 'sourceRevision'> {
+  if (
+    !isRecord(value) ||
+    typeof value.id !== 'string' ||
+    !/^[a-f0-9]{64}$/.test(value.id) ||
+    typeof value.inventoryId !== 'string' ||
+    !/^[a-f0-9]{64}$/.test(value.inventoryId) ||
+    !Array.isArray(value.publishers) ||
+    value.publishers.length === 0 ||
+    !value.publishers.every(isScheduledPublisher)
+  )
+    return false;
+  return value.id === epochIdentity(value.inventoryId, canonicalPublishers(value.publishers));
+}
+
+/*** Narrow a provider schedule before its immutable identity is recomputed. */
+function isScheduledPublisher(
+  value: unknown,
+): value is ReleaseWavePublisherEpoch['publishers'][number] {
   return (
     isRecord(value) &&
-    typeof value.id === 'string' &&
-    /^[a-f0-9]{64}$/.test(value.id) &&
-    typeof value.inventoryId === 'string' &&
-    /^[a-f0-9]{64}$/.test(value.inventoryId) &&
-    Array.isArray(value.publishers) &&
-    value.publishers.length > 0 &&
-    value.publishers.every(
-      (publisher) =>
-        isRecord(publisher) &&
-        typeof publisher.packageName === 'string' &&
-        /^@ankhorage\/[a-z0-9][a-z0-9-]*$/.test(publisher.packageName) &&
-        typeof publisher.sourceRepository === 'string' &&
-        /^ankhorage\/[a-z0-9][a-z0-9-]*$/.test(publisher.sourceRepository) &&
-        typeof publisher.version === 'string' &&
-        valid(publisher.version) === publisher.version,
-    )
+    typeof value.packageName === 'string' &&
+    /^@ankhorage\/[a-z0-9][a-z0-9-]*$/.test(value.packageName) &&
+    typeof value.planRevision === 'string' &&
+    /^[a-f0-9]{40}$/.test(value.planRevision) &&
+    typeof value.planStatusHash === 'string' &&
+    /^[a-f0-9]{64}$/.test(value.planStatusHash) &&
+    typeof value.sourceRepository === 'string' &&
+    /^ankhorage\/[a-z0-9][a-z0-9-]*$/.test(value.sourceRepository) &&
+    typeof value.version === 'string' &&
+    valid(value.version) === value.version
   );
 }
 
@@ -187,17 +199,9 @@ function plannedEpoch(
     throw new Error('Release-wave publisher epoch has no trusted release intent.');
   if (new Set(publishers.map((publisher) => publisher.packageName)).size !== publishers.length)
     throw new Error('Release-wave publisher epoch has duplicate package identities.');
-  const canonical = [...publishers].sort((left, right) =>
-    left.packageName.localeCompare(right.packageName),
-  );
+  const canonical = canonicalPublishers(publishers);
   return {
-    id: createHash('sha256')
-      .update(
-        inventoryId +
-          '\n' +
-          canonical.map((publisher) => Object.values(publisher).join('\n')).join('\n\n'),
-      )
-      .digest('hex'),
+    id: epochIdentity(inventoryId, canonical),
     inventoryId,
     publishers: canonical,
   };
@@ -214,6 +218,8 @@ function publisherFromPlan(
     repository.packageName !== plan.packageName ||
     repository.packageVersion === undefined ||
     repository.sourceRevision !== plan.revision ||
+    plan.statusHash === undefined ||
+    !/^[a-f0-9]{64}$/.test(plan.statusHash) ||
     valid(plan.version) !== plan.version ||
     !gt(plan.version, repository.packageVersion) ||
     release === undefined ||
@@ -226,6 +232,8 @@ function publisherFromPlan(
     );
   return {
     packageName: plan.packageName,
+    planRevision: plan.revision,
+    planStatusHash: plan.statusHash,
     sourceRepository: repository.fullName,
     version: plan.version,
   };
@@ -237,6 +245,37 @@ function sameEpoch(
   right: Omit<ReleaseWavePublisherEpoch, 'sourceRevision'>,
 ): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
+}
+
+/*** Recompute the canonical epoch digest before immutable provider state can govern a release. */
+function epochIdentity(
+  inventoryId: string,
+  publishers: readonly ReleaseWavePublisherEpoch['publishers'][number][],
+): string {
+  return createHash('sha256')
+    .update(
+      inventoryId +
+        '\n' +
+        publishers
+          .map((publisher) =>
+            [
+              publisher.packageName,
+              publisher.planRevision,
+              publisher.planStatusHash,
+              publisher.sourceRepository,
+              publisher.version,
+            ].join('\n'),
+          )
+          .join('\n\n'),
+    )
+    .digest('hex');
+}
+
+/*** Sort every persisted identity field before hashing or serializing an epoch. */
+function canonicalPublishers(
+  publishers: readonly ReleaseWavePublisherEpoch['publishers'][number][],
+): readonly ReleaseWavePublisherEpoch['publishers'][number][] {
+  return [...publishers].sort((left, right) => left.packageName.localeCompare(right.packageName));
 }
 
 /** Extract the exact new Git blob revision returned by the Contents CAS write. */

@@ -11,6 +11,54 @@ import {
   repository,
 } from './test-support/releaseWaveFixtures.js';
 
+test('resumes epoch A with its original checkpoint after an unrelated epoch B changes the index revision', async () => {
+  const queue = eventQueue();
+  const calls: string[] = [];
+  const state = { epoch: cohortEpoch('epoch-a', ['base', 'left'], 'a'.repeat(40)) };
+  const input = {
+    ...coordinatorInput(queue, calls),
+    cohortPort: {
+      collectReleaseWavePublicationCohortAsync: () =>
+        Promise.resolve({
+          epoch: state.epoch,
+          publications: [
+            { ...event('base', '1.1.0'), name: '@ankhorage/base' },
+            { ...event('left', '1.1.0'), name: '@ankhorage/left' },
+          ],
+          repositories: [
+            repository('base'),
+            repository('left'),
+            {
+              ...repository('consumer'),
+              dependencies: {
+                dependencies: { '@ankhorage/base': '^1.0.0', '@ankhorage/left': '^1.0.0' },
+                devDependencies: {},
+                optionalDependencies: {},
+                peerDependencies: {},
+              },
+            },
+          ],
+        }),
+    },
+  };
+  await ingestReleaseWaveEventAsync({
+    event: event('base', '1.1.0'),
+    maximumRetries: 2,
+    queuePort: queue,
+  });
+  await ingestReleaseWaveEventAsync({
+    event: event('left', '1.1.0'),
+    maximumRetries: 2,
+    queuePort: queue,
+  });
+  const first = await runReleaseWaveCoordinatorAsync(input);
+  state.epoch = cohortEpoch('epoch-a', ['base', 'left'], 'b'.repeat(40));
+  const resumed = await runReleaseWaveCoordinatorAsync(input);
+  expect(resumed).toBeUndefined();
+  expect(first?.runId).toBeDefined();
+  expect(calls.filter((call) => call === 'ensure:ankhorage/consumer')).toHaveLength(1);
+});
+
 test('waits for complete settlement when base arrives first, then creates exactly one consumer release', async () => {
   const queue = eventQueue();
   const calls: string[] = [];

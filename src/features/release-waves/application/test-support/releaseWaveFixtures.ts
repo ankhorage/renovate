@@ -56,13 +56,15 @@ export function event(name: string, version: string) {
 }
 
 /** Provide an immutable release-plan epoch without deriving schedule membership from arrivals. */
-export function cohortEpoch(id: string, names: readonly string[]) {
+export function cohortEpoch(id: string, names: readonly string[], sourceRevision = 'c'.repeat(40)) {
   return {
     id,
     inventoryId: 'inventory-1',
-    sourceRevision: 'c'.repeat(40),
+    sourceRevision,
     publishers: names.map((name) => ({
       packageName: '@ankhorage/' + name,
+      planRevision: 'a'.repeat(40),
+      planStatusHash: 'b'.repeat(64),
       sourceRepository: 'ankhorage/' + name,
       version: '1.1.0',
     })),

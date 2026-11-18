@@ -23,7 +23,10 @@ export interface ReleaseWavePublisherEpoch {
   readonly id: string;
   /** Digest of the selected installation identities and immutable graph inputs. */
   readonly inventoryId: string;
-  /** Immutable GitHub Contents revision of the authenticated release-plan document. */
+  /**
+   * Authenticated Contents revision observed while reading the mutable epoch index. It protects
+   * the provider read but is deliberately not an epoch identity or recovery fence.
+   */
   readonly sourceRevision: string;
   /** Exact package identities that must provide verified publication evidence before execution. */
   readonly publishers: readonly ReleaseWaveScheduledPublisher[];
@@ -32,6 +35,10 @@ export interface ReleaseWavePublisherEpoch {
 /** A planned publisher identity; stable dependencies deliberately do not occur here. */
 export interface ReleaseWaveScheduledPublisher {
   readonly packageName: string;
+  /** SHA-256 of the exact Changesets status document that authorized this publisher. */
+  readonly planStatusHash: string;
+  /** Immutable selected source revision whose Changesets status was collected. */
+  readonly planRevision: string;
   readonly sourceRepository: string;
   readonly version: string;
 }

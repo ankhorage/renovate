@@ -85,6 +85,8 @@ function cohortAdapter(
             sourceRevision: 'c'.repeat(40),
             publishers: ['base', 'left'].map((name) => ({
               packageName: '@ankhorage/' + name,
+              planRevision: 'a'.repeat(40),
+              planStatusHash: 'b'.repeat(64),
               sourceRepository: 'ankhorage/' + name,
               version: '1.1.0',
             })),

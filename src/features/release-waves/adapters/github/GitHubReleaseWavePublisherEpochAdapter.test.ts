@@ -92,6 +92,7 @@ function publisherRequest() {
           packageName: '@ankhorage/base',
           releases: [{ packageName: '@ankhorage/base', type: 'patch' as const }],
           revision: 'a'.repeat(40),
+          statusHash: 'b'.repeat(64),
           version: '1.1.0',
         },
       ],
@@ -118,13 +119,28 @@ function publisherRequest() {
 }
 
 function epoch(inventoryId: string) {
+  const resolvedInventoryId =
+    inventoryId === 'inventory-1' || inventoryId === 'other' ? digest(inventoryId) : inventoryId;
+  const publisher = {
+    packageName: '@ankhorage/base',
+    planRevision: 'a'.repeat(40),
+    planStatusHash: 'b'.repeat(64),
+    sourceRepository: 'ankhorage/base',
+    version: '1.1.0',
+  };
   return {
-    id: digest('epoch-' + inventoryId),
-    inventoryId:
-      inventoryId === 'inventory-1' || inventoryId === 'other' ? digest(inventoryId) : inventoryId,
-    publishers: [
-      { packageName: '@ankhorage/base', sourceRepository: 'ankhorage/base', version: '1.1.0' },
-    ],
+    id: digest(
+      [
+        resolvedInventoryId,
+        publisher.packageName,
+        publisher.planRevision,
+        publisher.planStatusHash,
+        publisher.sourceRepository,
+        publisher.version,
+      ].join('\n'),
+    ),
+    inventoryId: resolvedInventoryId,
+    publishers: [publisher],
   };
 }
 

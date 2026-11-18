@@ -70,7 +70,7 @@ export interface ReleaseWavePlan {
   /** Immutable cohort identity persisted with the checkpoint to fence inventory and graph drift. */
   readonly cohort?: {
     readonly epochId: string;
-    /** Immutable source revision of the provider-authenticated release plan. */
+    /** Immutable epoch identity; the mutable provider index revision is not a recovery fence. */
     readonly epochRevision: string;
     readonly inventoryId: string;
     readonly publisherEventIds: readonly string[];
