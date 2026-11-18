@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 
 import { expect, test } from 'bun:test';
@@ -6,7 +5,6 @@ import { expect, test } from 'bun:test';
 import { GitHubNpmReleaseWaveExecutionAdapter } from '../adapters/github/GitHubNpmReleaseWaveExecutionAdapter.js';
 import { GitHubNpmReleaseWavePublicationEvidenceAdapter } from '../adapters/github/GitHubNpmReleaseWavePublicationEvidenceAdapter.js';
 import { GitHubReleaseWavePublicationCohortAdapter } from '../adapters/github/GitHubReleaseWavePublicationCohortAdapter.js';
-import { githubReleaseWaveResponseFor } from '../adapters/github/githubReleaseWaveResponse.testSupport.js';
 import { ingestReleaseWaveEventAsync } from '../application/ingestReleaseWaveEventAsync.js';
 import { runReleaseWaveCoordinatorAsync } from '../application/runReleaseWaveCoordinatorAsync.js';
 import {
@@ -15,31 +13,43 @@ import {
   eventQueue,
 } from '../application/test-support/releaseWaveFixtures.js';
 import { releaseWaveEventIdentity } from '../domain/releaseWaveEventIdentity.js';
+import {
+  candidatePublication,
+  candidateResponse,
+  eventFor,
+  githubApi,
+  integrity,
+  inventoryResponse,
+  json,
+  npmRegistry,
+  publicationManifest,
+  publicationResponse,
+} from './isolatedProviderAcceptance.testSupport.js';
 
-const githubApi = 'https://api.github.provider-contract.test';
-const npmRegistry = 'https://registry.npm.provider-contract.test';
-
-test('accepts every paginated selected repository, including private and nonpackage profiles', async () => {
+test('accepts every paginated selected repository from authenticated epoch-plan evidence', async () => {
   const paths: string[] = [];
   const adapter = GitHubReleaseWavePublicationCohortAdapter({
     apiBaseUrl: githubApi,
     publicationEvidencePort: {
       enrichPackageReleaseAsync: (dispatch) => Promise.resolve(eventFor(dispatch)),
     },
-    publisherEpochsAsync: ({ inventoryId }) =>
-      Promise.resolve([
-        {
-          id: 'isolated-provider-epoch',
-          inventoryId,
-          publishers: [
-            {
-              packageName: '@ankhorage/base',
-              sourceRepository: 'ankhorage/base',
-              version: '1.1.0',
-            },
-          ],
-        },
-      ]),
+    publisherEpochPort: {
+      loadReleaseWavePublisherEpochsAsync: ({ inventoryId }) =>
+        Promise.resolve([
+          {
+            id: 'isolated-provider-epoch',
+            inventoryId,
+            publishers: [
+              {
+                packageName: '@ankhorage/base',
+                sourceRepository: 'ankhorage/base',
+                version: '1.1.0',
+              },
+            ],
+            sourceRevision: 'e'.repeat(40),
+          },
+        ]),
+    },
     requestAsync: (url) => {
       paths.push(String(url));
       return Promise.resolve(inventoryResponse(String(url)));
@@ -149,6 +159,7 @@ test('blocks a stale protected candidate approval and tampered Changeset evidenc
     token: 'isolated-installation-token',
   });
   const verification = await adapter.verifyReleaseWaveRepositoryAsync({
+    candidatePublication,
     node: {
       dependencies: [],
       expectedDependencies: [],
@@ -187,6 +198,7 @@ test('blocks a partial npm publication even after otherwise complete GitHub evid
     token: 'isolated-installation-token',
   });
   const verification = await adapter.verifyReleaseWaveRepositoryAsync({
+    candidatePublication,
     node: {
       dependencies: [],
       expectedDependencies: [],
@@ -213,95 +225,3 @@ test('keeps the legacy dispatch workflow excluded from the inactive coordinator 
   expect(workflow).not.toContain('release-wave-checkpoints');
 });
 
-function eventFor(dispatch: {
-  readonly package_name: string;
-  readonly source_repository: string;
-  readonly version: string;
-}) {
-  return {
-    npmArtifactIntegrity: integrity('base artifact'),
-    packageName: dispatch.package_name,
-    releaseId: 'provider-release-1',
-    releaseTag: 'v' + dispatch.version,
-    sourceRepository: dispatch.source_repository,
-    version: dispatch.version,
-  };
-}
-
-function inventoryResponse(url: string): Response {
-  const page = new URL(url).searchParams.get('page');
-  if (url.includes('/installation/repositories')) {
-    const names =
-      page === '1'
-        ? ['base', ...Array.from({ length: 99 }, (_, index) => 'selected-' + index)]
-        : ['blocked', 'nonpackage', 'private'];
-    return json({ repositories: names.map(inventoryRepository) });
-  }
-  const repository = /repos\/ankhorage\/([^/]+)/.exec(url)?.[1];
-  if (repository === undefined) return new Response(null, { status: 404 });
-  if (url.includes('/git/ref/heads/'))
-    return json({ object: { sha: repository + '-sha', type: 'commit' } });
-  if (url.includes('renovate.yml') && repository === 'blocked') return content('unmanaged');
-  if (url.includes('renovate.yml'))
-    return content("github.event.pull_request.user.login == 'ankhorage-renovate-sync[bot]'");
-  if (repository === 'nonpackage') return new Response(null, { status: 404 });
-  if (url.includes('/contents/package.json'))
-    return content({
-      name: '@ankhorage/' + repository,
-      private: repository === 'private',
-      version: '1.0.0',
-    });
-  return new Response(null, { status: 404 });
-}
-
-function inventoryRepository(name: string) {
-  return { archived: false, default_branch: 'main', full_name: 'ankhorage/' + name };
-}
-
-function publicationResponse(url: string): Response {
-  if (url.startsWith(npmRegistry)) return json(publicationManifest());
-  if (url.includes('/releases/tags/'))
-    return json({ id: 1, tag_name: 'v1.1.0', target_commitish: 'commit' });
-  if (url.includes('/git/ref/tags/')) return json({ object: { sha: 'commit', type: 'commit' } });
-  if (url.includes('/actions/workflows/release.yml/runs'))
-    return json({ workflow_runs: [{ conclusion: 'success', head_sha: 'commit' }] });
-  return new Response(null, { status: 404 });
-}
-
-function publicationManifest() {
-  return {
-    dist: { integrity: integrity('base artifact') },
-    gitHead: 'commit',
-    name: '@ankhorage/base',
-    repository: { url: 'https://github.com/ankhorage/base.git' },
-    version: '1.1.0',
-  };
-}
-
-function candidateResponse(url: string): Response {
-  if (url.includes('/pulls/42/reviews'))
-    return json([
-      { commit_id: 'stale-head', state: 'APPROVED', user: { login: 'reviewer', type: 'User' } },
-    ]);
-  if (url.includes('/pulls/42/files')) return json([{ filename: '.changeset/tampered.md' }]);
-  return githubReleaseWaveResponseFor(
-    url
-      .replace(githubApi, 'https://api.github.test')
-      .replace(npmRegistry, 'https://registry.npm.test'),
-  );
-}
-
-function integrity(value: string): string {
-  return 'sha512-' + createHash('sha512').update(value).digest('base64');
-}
-
-function content(value: unknown): Response {
-  return json({
-    content: Buffer.from(JSON.stringify(value)).toString('base64'),
-    encoding: 'base64',
-  });
-}
-
-function json(value: unknown): Response {
-  return new Response(JSON.stringify(value), { status: 200 });
-}
