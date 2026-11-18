@@ -11,13 +11,7 @@ const source = readFileSync(
 );
 
 test('uses the controlled Ankhorage-only non-automerge Renovate candidate policy', () => {
-  expect(source).toContain('RENOVATE_PACKAGE_RULES: releaseWavePackageRules()');
-  expect(source).toContain('"matchPackageNames":["*"]');
-  expect(source).toContain('"matchPackageNames":["@ankhorage/**"]');
-  expect(source).toContain('"groupSlug":"ankhorage-release-wave"');
-  expect(source).toContain('"automerge":false');
-  expect(source).toContain('"platformAutomerge":false');
-  expect(source).toContain('"matchUpdateTypes":["major","minor","patch"]');
+  expect(source).toContain('runReleaseWaveRenovateAsync(repository, input.configuration.token)');
 });
 
 test('limits registry evidence and candidate checkouts to eligible selected profiles', () => {
@@ -25,4 +19,13 @@ test('limits registry evidence and candidate checkouts to eligible selected prof
   expect(source).toContain('Release-wave candidate is not eligible for checkout.');
   expect(source).toContain('repository.bootstrapReady');
   expect(source).toContain('repository.excludedReason !== undefined');
+});
+
+test('composes durable epoch recovery, verified ingress, and fenced coordinator execution', () => {
+  expect(source).toContain('prepareReleaseWavePublisherEpochAsync({');
+  expect(source).toContain('admitVerifiedPackageReleaseEventAsync({');
+  expect(source).toContain('releaseWaveMutationFenceFromEnvironment(environment)');
+  expect(source).toContain('FencedReleaseWaveExecutionAdapter({');
+  expect(source).toContain('leaseId: input.configuration.mutationLeaseId');
+  expect(source).toContain('executionPort: GitHubNpmReleaseWaveExecutionAdapter({');
 });

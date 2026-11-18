@@ -1,4 +1,5 @@
 import type { PublishedPackage, ReleaseWaveRepository } from '../../../types/releaseWave.js';
+import { FencedReleaseWaveExecutionAdapter } from '../adapters/fence/FencedReleaseWaveExecutionAdapter.js';
 import { acquireGitHubReleaseWaveCheckoutAsync } from '../adapters/github/acquireGitHubReleaseWaveCheckoutsAsync.js';
 import { GitHubNpmReleaseWaveExecutionAdapter } from '../adapters/github/GitHubNpmReleaseWaveExecutionAdapter.js';
 import { GitHubNpmReleaseWavePublicationEvidenceAdapter } from '../adapters/github/GitHubNpmReleaseWavePublicationEvidenceAdapter.js';
@@ -9,9 +10,11 @@ import {
   GitHubReleaseWavePublicationCohortAdapter,
 } from '../adapters/github/GitHubReleaseWavePublicationCohortAdapter.js';
 import { GitHubReleaseWavePublisherEpochAdapter } from '../adapters/github/GitHubReleaseWavePublisherEpochAdapter.js';
-import { ingestPackageReleaseEventAsync } from '../application/ingestPackageReleaseEventAsync.js';
+import { runReleaseWaveRenovateAsync } from '../adapters/renovate/runReleaseWaveRenovateAsync.js';
 import { runReleaseWaveCoordinatorAsync } from '../application/runReleaseWaveCoordinatorAsync.js';
+import { admitVerifiedPackageReleaseEventAsync } from './admitVerifiedPackageReleaseEventAsync.js';
 import { prepareReleaseWavePublisherEpochAsync } from './prepareReleaseWavePublisherEpochAsync.js';
+import { releaseWaveMutationFenceFromEnvironment } from './releaseWaveMutationFenceFromEnvironment.js';
 
 type RequestAsync = (input: string | URL, init?: RequestInit) => Promise<Response>;
 interface GitHubContentInput {
@@ -30,6 +33,7 @@ type GitHubContentWriteInput = GitHubContentInput & {
 /*** Compose the authenticated durable release-wave coordinator from the stable publisher dispatch contract. */
 export async function coordinateReleaseWaveAsync(environment: NodeJS.ProcessEnv): Promise<void> {
   const configuration = releaseWaveConfiguration(environment);
+  const now = () => new Date();
   const requestAsync = (input: string | URL, init?: RequestInit) => fetch(input, init);
   const { checkpointPort, cohortInput, epochPort, publicationEvidencePort, queuePort } =
     releaseWavePorts(configuration, requestAsync);
@@ -40,7 +44,7 @@ export async function coordinateReleaseWaveAsync(environment: NodeJS.ProcessEnv)
     repositories: inventory.repositories,
     token: configuration.token,
   });
-  await ingestPackageReleaseEventAsync({
+  await admitVerifiedPackageReleaseEventAsync({
     maximumRetries: 4,
     packageName: configuration.packageName,
     publicationEvidencePort,
@@ -52,7 +56,9 @@ export async function coordinateReleaseWaveAsync(environment: NodeJS.ProcessEnv)
     checkpointPort,
     cohortInput,
     configuration,
+    fencePort: releaseWaveMutationFenceFromEnvironment(environment),
     inventory,
+    now,
     queuePort,
   });
 }
@@ -103,7 +109,9 @@ async function executeCoordinatorAsync(input: {
   readonly checkpointPort: ReturnType<typeof GitHubReleaseWaveCheckpointAdapter>;
   readonly cohortInput: Parameters<typeof GitHubReleaseWavePublicationCohortAdapter>[0];
   readonly configuration: ReturnType<typeof releaseWaveConfiguration>;
+  readonly fencePort: ReturnType<typeof releaseWaveMutationFenceFromEnvironment>;
   readonly inventory: Awaited<ReturnType<typeof collectGitHubReleaseWaveInventoryAsync>>;
+  readonly now: () => Date;
   readonly queuePort: ReturnType<typeof GitHubReleaseWaveEventQueueAdapter>;
 }) {
   const repositories = new Map(
@@ -112,22 +120,28 @@ async function executeCoordinatorAsync(input: {
   await runReleaseWaveCoordinatorAsync({
     checkpointPort: input.checkpointPort,
     cohortPort: GitHubReleaseWavePublicationCohortAdapter(input.cohortInput),
-    executionPort: GitHubNpmReleaseWaveExecutionAdapter({
-      apiBaseUrl: input.configuration.apiBaseUrl,
-      candidateCheckoutAsync: ({ repository, revision }) =>
-        candidateCheckoutAsync(repositories, repository, revision, input.configuration.token),
-      npmRegistryUrl: input.configuration.npmRegistryUrl,
-      owner: 'ankhorage',
-      releaseWorkflowFile: 'release.yml',
-      renovateAsync: (repository) => renovateAsync(repository, input.configuration),
-      requestAsync: input.cohortInput.requestAsync,
-      token: input.configuration.token,
+    executionPort: FencedReleaseWaveExecutionAdapter({
+      executionPort: GitHubNpmReleaseWaveExecutionAdapter({
+        apiBaseUrl: input.configuration.apiBaseUrl,
+        candidateCheckoutAsync: ({ repository, revision }) =>
+          candidateCheckoutAsync(repositories, repository, revision, input.configuration.token),
+        npmRegistryUrl: input.configuration.npmRegistryUrl,
+        owner: 'ankhorage',
+        releaseWorkflowFile: 'release.yml',
+        renovateAsync: (repository) =>
+          runReleaseWaveRenovateAsync(repository, input.configuration.token),
+        requestAsync: input.cohortInput.requestAsync,
+        token: input.configuration.token,
+      }),
+      fencePort: input.fencePort,
+      leaseId: input.configuration.mutationLeaseId,
+      now: input.now,
     }),
     executorId: input.configuration.executorId,
     maximumCheckpointRetries: 4,
     maximumConcurrency: 4,
     maximumQueueRetries: 4,
-    now: () => new Date(),
+    now: input.now,
     publicationPlans: new Map(),
     publishedPackages: await publishedPackagesAsync(
       input.inventory.repositories,
@@ -186,36 +200,6 @@ async function publishedPackageAsync(name: string, registry: string): Promise<Pu
   if (typeof value['dist-tags']?.latest !== 'string')
     throw new Error('Release-wave registry latest version is invalid.');
   return { name, version: value['dist-tags'].latest };
-}
-
-/*** Run Renovate only through the fenced execution adapter and one selected repository. */
-async function renovateAsync(
-  repository: string,
-  configuration: ReturnType<typeof releaseWaveConfiguration>,
-): Promise<void> {
-  const subprocess = Bun.spawn(['bun', 'x', 'renovate'], {
-    env: {
-      ...process.env,
-      RENOVATE_AUTODISCOVER: 'false',
-      RENOVATE_ONBOARDING: 'false',
-      RENOVATE_PACKAGE_RULES: releaseWavePackageRules(),
-      RENOVATE_PLATFORM: 'github',
-      RENOVATE_REPOSITORIES: repository,
-      RENOVATE_REQUIRE_CONFIG: 'required',
-      RENOVATE_TOKEN: configuration.token,
-    },
-    stderr: 'pipe',
-    stdout: 'inherit',
-  });
-  if ((await subprocess.exited) !== 0)
-    throw new Error(
-      'Release-wave Renovate execution failed: ' + (await new Response(subprocess.stderr).text()),
-    );
-}
-
-/*** Preserve the one non-automerge Ankhorage-only policy used for a controlled release-wave candidate. */
-function releaseWavePackageRules(): string {
-  return '[{"matchDatasources":["npm"],"matchPackageNames":["*"],"enabled":false},{"matchDatasources":["npm"],"matchPackageNames":["@ankhorage/**"],"matchUpdateTypes":["major","minor","patch"],"enabled":true,"rangeStrategy":"bump","groupName":"Ankhorage release wave","groupSlug":"ankhorage-release-wave","automerge":false,"platformAutomerge":false,"recreateWhen":"always"}]';
 }
 
 /*** Adapt the narrow authenticated Contents operations required by durable ports. */
@@ -301,6 +285,7 @@ function releaseWaveConfiguration(environment: NodeJS.ProcessEnv) {
   const value = {
     apiBaseUrl: environment.GITHUB_API_URL ?? 'https://api.github.com',
     executorId: environment.GITHUB_RUN_ID ?? '',
+    mutationLeaseId: environment.RELEASE_WAVE_MUTATION_LEASE_ID ?? '',
     npmRegistryUrl: environment.NPM_REGISTRY_URL ?? 'https://registry.npmjs.org',
     packageName: environment.PACKAGE_NAME ?? '',
     sourceRepository: environment.SOURCE_REPOSITORY ?? '',
