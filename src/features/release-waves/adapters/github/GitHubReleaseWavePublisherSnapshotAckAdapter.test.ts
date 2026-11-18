@@ -31,46 +31,42 @@ test('rejects a request-id replay with different immutable evidence', async () =
   const port = GitHubReleaseWavePublisherSnapshotAckAdapter(contents.input());
   await port.saveReleaseWavePublisherSnapshotAckAsync(ack);
 
-  await expect(
-    port.saveReleaseWavePublisherSnapshotAckAsync({ ...ack, sourceSha: 'd'.repeat(40) }),
-  ).rejects.toThrow('replayed');
+  try {
+    await port.saveReleaseWavePublisherSnapshotAckAsync({ ...ack, sourceSha: 'd'.repeat(40) });
+    throw new Error('Expected immutable replay rejection.');
+  } catch (error) {
+    expect(error).toHaveProperty(
+      'message',
+      'Release-wave publisher snapshot request id was replayed with different evidence.',
+    );
+  }
 });
 
 test('fails closed when the epoch was not persisted with matching publisher evidence', async () => {
   const contents = fakeContents({ epoch: { epochs: [] } });
   const port = GitHubReleaseWavePublisherSnapshotAckAdapter(contents.input());
 
-  await expect(port.saveReleaseWavePublisherSnapshotAckAsync(ack)).rejects.toThrow('verifiable');
+  try {
+    await port.saveReleaseWavePublisherSnapshotAckAsync(ack);
+    throw new Error('Expected epoch verification rejection.');
+  } catch (error) {
+    expect(error).toHaveProperty(
+      'message',
+      'Release-wave publisher snapshot acknowledgement epoch is not durably verifiable.',
+    );
+  }
 });
 
 function fakeContents(input: { readonly conflictOnce?: boolean; readonly epoch?: unknown } = {}) {
   const files = new Map<string, string>();
-  files.set(
-    '.github/release-wave-publisher-epochs.json',
-    JSON.stringify(
-      input.epoch ?? {
-        epochs: [
-          {
-            id: ack.epochId,
-            publishers: [
-              {
-                planRevision: ack.sourceSha,
-                planStatusHash: ack.changesetsStatusHash,
-                sourceRepository: ack.sourceRepository,
-              },
-            ],
-          },
-        ],
-      },
-    ),
-  );
+  files.set('.github/release-wave-publisher-epochs.json', JSON.stringify(input.epoch ?? epoch()));
   let conflict = input.conflictOnce === true;
   return {
     input: () => ({
       branch: 'release-wave-state',
       client: {
         repos: {
-          createOrUpdateFileContents: async ({
+          createOrUpdateFileContents: ({
             content,
             path,
           }: {
@@ -80,27 +76,45 @@ function fakeContents(input: { readonly conflictOnce?: boolean; readonly epoch?:
             if (conflict) {
               conflict = false;
               files.set(path, Buffer.from(content, 'base64').toString('utf8'));
-              throw Object.assign(new Error('conflict'), { status: 422 });
+              return Promise.reject(Object.assign(new Error('conflict'), { status: 422 }));
             }
             files.set(path, Buffer.from(content, 'base64').toString('utf8'));
-            return { data: { content: { sha: 'd'.repeat(40) } } };
+            return Promise.resolve({ data: { content: { sha: 'd'.repeat(40) } } });
           },
-          getContent: async ({ path }: { readonly path: string }) => {
+          getContent: ({ path }: { readonly path: string }) => {
             const source = files.get(path);
-            if (source === undefined) throw Object.assign(new Error('not found'), { status: 404 });
-            return {
+            if (source === undefined)
+              return Promise.reject(Object.assign(new Error('not found'), { status: 404 }));
+            return Promise.resolve({
               data: {
                 content: Buffer.from(source).toString('base64'),
                 encoding: 'base64',
                 sha: 'e'.repeat(40),
                 type: 'file',
               },
-            };
+            });
           },
         },
       },
       owner: 'ankhorage',
       repository: 'renovate',
     }),
+  };
+}
+
+function epoch() {
+  return {
+    epochs: [
+      {
+        id: ack.epochId,
+        publishers: [
+          {
+            planRevision: ack.sourceSha,
+            planStatusHash: ack.changesetsStatusHash,
+            sourceRepository: ack.sourceRepository,
+          },
+        ],
+      },
+    ],
   };
 }
