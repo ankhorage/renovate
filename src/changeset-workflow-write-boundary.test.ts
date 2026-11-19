@@ -15,6 +15,7 @@ describe('trusted Renovate write boundary', () => {
       '.github/workflows/ci.yml',
       '.github/workflows/release.yml',
       '.github/workflows/renovate.yml',
+      '.github/scripts/ci-impact.ts',
       '.agents/.devtools-manifest.json',
       '.gitignore',
       '.prettierignore',
