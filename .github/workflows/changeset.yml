@@ -13,6 +13,7 @@ on:
 env:
   ANKHORAGE_RENOVATE_CONSUMER_MANAGED_PATHS: |
     .agents/.devtools-manifest.json
+    .github/scripts/ci-impact.ts
     .github/workflows/ci.yml
     .github/workflows/release.yml
     .github/workflows/renovate.yml
