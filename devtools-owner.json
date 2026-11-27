@@ -2,7 +2,36 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "description": ["Devtools-owner dependency update policy for ankhorage/devtools."],
   "extends": ["./default"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Track the Devtools bootstrap copy of the immutable Renovate workflow digest.",
+      "managerFilePatterns": ["/^src\\/tools\\/workflows\\/files\\/renovate\\.yml$/"],
+      "matchStrings": [
+        "uses:\\s+ankhorage/renovate/\\.github/workflows/changeset\\.yml@(?<currentDigest>[0-9a-f]{40})"
+      ],
+      "currentValueTemplate": "main",
+      "depNameTemplate": "ankhorage/renovate",
+      "datasourceTemplate": "github-digest",
+      "autoReplaceStringTemplate": "uses: ankhorage/renovate/.github/workflows/changeset.yml@{{{newDigest}}}"
+    }
+  ],
   "packageRules": [
+    {
+      "description": "Update the Devtools bootstrap digest in the same PR as its installed caller.",
+      "matchDatasources": ["github-digest"],
+      "matchManagers": ["custom.regex"],
+      "matchPackageNames": ["ankhorage/renovate"],
+      "matchFileNames": ["src/tools/workflows/files/renovate.yml"],
+      "enabled": true,
+      "labels": ["dependencies", "renovate:automerge"],
+      "groupName": "Ankhorage Renovate workflow",
+      "groupSlug": "ankhorage-renovate-workflow",
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": true,
+      "matchRepositories": ["ankhorage/devtools"]
+    },
     {
       "description": "Group dependencies owned and validated by the Devtools repository.",
       "matchManagers": ["bun"],
