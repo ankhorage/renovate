@@ -11,17 +11,25 @@ test('keeps the bootstrap TypeScript API intentionally empty', () => {
   expect(Object.keys(packageApi)).toEqual([]);
 });
 
-test('lets GitHub merge every validated Renovate pull request without concurrency caps', () => {
-  expect(defaultPreset).toContain('"prConcurrentLimit": 0');
-  expect(defaultPreset).toContain('"branchConcurrentLimit": 0');
-
-  for (const preset of [defaultPreset, ...ownerPresets]) {
-    expect(preset).not.toContain('"platformAutomerge": false');
-
-    const automergeRuleCount = [...preset.matchAll(/"automerge": true/gu)].length;
-    const platformAutomergeRuleCount = [...preset.matchAll(/"platformAutomerge": true/gu)].length;
-
-    expect(automergeRuleCount).toBeGreaterThan(0);
-    expect(platformAutomergeRuleCount).toBe(automergeRuleCount);
+test('automerge policy keeps non-patch checks and delegates patches to the trusted gate', () => {
+  const base = JSON.parse(defaultPreset) as {
+    branchConcurrentLimit: number;
+    prConcurrentLimit: number;
+    packageRules: {
+      automerge?: boolean;
+      matchUpdateTypes?: string[];
+      platformAutomerge?: boolean;
+    }[];
+  };
+  expect(base.prConcurrentLimit).toBe(0);
+  expect(base.branchConcurrentLimit).toBe(0);
+  for (const rule of base.packageRules) {
+    if (rule.matchUpdateTypes?.includes('patch')) {
+      expect(rule.automerge).toBe(false);
+      expect(rule.platformAutomerge).toBe(false);
+    } else if (rule.automerge === true) {
+      expect(rule.platformAutomerge).toBe(true);
+    }
   }
+  expect(ownerPresets).toHaveLength(1);
 });

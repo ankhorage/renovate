@@ -7,7 +7,7 @@
   "labels": ["dependencies"],
   "prConcurrentLimit": 0,
   "branchConcurrentLimit": 0,
-  "rebaseWhen": "behind-base-branch",
+  "rebaseWhen": "conflicted",
   "pruneStaleBranches": true,
   "ignorePaths": [
     "**/node_modules/**",
@@ -201,6 +201,41 @@
       "automergeType": "pr",
       "platformAutomerge": true,
       "separateMajorMinor": false
+    },
+    {
+      "description": "Isolate patch-only external npm dependencies for trusted automerge without PR CI.",
+      "matchDatasources": ["npm"],
+      "matchUpdateTypes": ["patch"],
+      "labels": ["dependencies", "renovate:automerge", "renovate:patch"],
+      "groupName": "Patch external npm dependencies",
+      "groupSlug": "patch-external-npm-dependencies",
+      "automerge": false,
+      "platformAutomerge": false,
+      "ignoreTests": true
+    },
+    {
+      "description": "Keep internal patch dependencies in a separate trusted sync lane.",
+      "matchDatasources": ["npm"],
+      "matchPackageNames": ["@ankhorage/**"],
+      "matchUpdateTypes": ["patch"],
+      "labels": ["dependencies", "renovate:automerge", "renovate:patch"],
+      "groupName": "Patch Ankhorage libraries",
+      "groupSlug": "patch-ankhorage-libraries",
+      "automerge": false,
+      "platformAutomerge": false,
+      "ignoreTests": true
+    },
+    {
+      "description": "Keep Ankhorage toolchain patch updates together for managed Devtools synchronization.",
+      "matchDatasources": ["npm"],
+      "matchPackageNames": ["@ankhorage/ankh", "@ankhorage/devtools"],
+      "matchUpdateTypes": ["patch"],
+      "labels": ["dependencies", "renovate:automerge", "renovate:patch"],
+      "groupName": "Patch Ankhorage CLI and Devtools toolchain",
+      "groupSlug": "patch-ankhorage-cli-and-devtools-toolchain",
+      "automerge": false,
+      "platformAutomerge": false,
+      "ignoreTests": true
     }
   ]
 }

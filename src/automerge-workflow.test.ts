@@ -21,6 +21,10 @@ describe('trusted Renovate automerge', () => {
     expect(mergeJob).toContain("event === 'labeled'");
     expect(mergeJob).toContain("app?.slug === 'github-actions' && name === 'validate'");
     expect(mergeJob).toContain("validate.conclusion !== 'success'");
+    expect(mergeJob).toContain("trustedPatch && validate.conclusion === 'skipped'");
+    expect(mergeJob).toContain("labels.has('renovate:patch')");
+    expect(mergeJob).toContain("await readTrustedLabel('renovate:patch')");
+    expect(mergeJob).toContain("startsWith('renovate/patch-')");
     expect(mergeJob).toContain("review.reviewDecision === 'CHANGES_REQUESTED'");
     expect(mergeJob).toContain('review.unresolved');
     expect(mergeJob).toContain('pull.head.sha !== expectedHead');
