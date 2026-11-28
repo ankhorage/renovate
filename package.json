@@ -61,7 +61,7 @@
     "test:standalone": "bun test src/index.test.ts"
   },
   "devDependencies": {
-    "@ankhorage/devtools": "^2.10.9",
+    "@ankhorage/devtools": "^2.12.5",
     "@ankhorage/paradox": "^0.6.1",
     "@types/bun": "^1.4.2",
     "@types/node": "^26.6.11",
