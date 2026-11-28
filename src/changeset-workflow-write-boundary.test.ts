@@ -21,6 +21,7 @@ describe('trusted Renovate write boundary', () => {
       '.prettierignore',
       '.prettierrc.js',
       '.vscode/extensions.json',
+      '.vscode/launch.json',
       '.vscode/settings.json',
       'AGENTS.md',
       'bun.lock',
